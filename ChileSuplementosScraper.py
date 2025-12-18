@@ -1,6 +1,7 @@
 # Scapper para la pagina web ChileSuplementos
 # Contiene Infinite Scroll y se debe usar attached, ya que los productos se agregan dinamicamente
-# Y hay un momento en que se agregan los productos y no se ven visualmente.
+# Y hay un momento en que se agregan los productos y no se ven visualmente cada vez que hacemos un scroll
+
 from BaseScraper import BaseScraper
 from rich import print
 from datetime import datetime
