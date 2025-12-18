@@ -1,3 +1,6 @@
+# Scapper para la pagina web ChileSuplementos
+# Contiene Infinite Scroll y se debe usar attached, ya que los productos se agregan dinamicamente
+# Y hay un momento en que se agregan los productos y no se ven visualmente.
 from BaseScraper import BaseScraper
 from rich import print
 from datetime import datetime
@@ -48,7 +51,7 @@ class ChileSuplementosScraper(BaseScraper):
                 while True:
                     # Esperar a que carguen los productos (o que haya al menos 1 si es el inicio)
                     try:
-                        if last_product_count == 0:
+                        if last_product_count == 0: # Significa que es la primera vez que se ejecuta el bucle
                             print("  > Esperando selector de productos (.porto-tb-item)...")
                             page.wait_for_selector(self.selectors['product_card'], state="attached", timeout=30000)
                     except:
@@ -124,7 +127,7 @@ class ChileSuplementosScraper(BaseScraper):
                                     if strong_rating.count() > 0:
                                         rating = strong_rating.first.inner_text().strip()
 
-                            # Reviews
+                            # Reviews (No disponible desde el grid al menos...)
                             reviews = "0"
                             
                             # Active Discount
@@ -149,10 +152,10 @@ class ChileSuplementosScraper(BaseScraper):
                             }
                         
                         last_product_count = current_product_count
-                        no_change_counter = 0 # Reset counter found new items
+                        no_change_counter = 0 # Cada vez que se encuentra un nuevo producto, se resetea el contador.
                     
                     else:
-                        no_change_counter += 1
+                        no_change_counter += 1 # Cada vez que no se encuentra un nuevo producto, se incrementa el contador.
                         
                     # Lógica de Infinite Scroll
                     print(f"Scroll hacia abajo... (Productos encontrados: {current_product_count})")
