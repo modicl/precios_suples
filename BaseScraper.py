@@ -30,7 +30,7 @@ class BaseScraper:
             csv_filename = f"productos_{self.site_name.replace(' ', '_').lower()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
             csv_file = os.path.join(output_dir, csv_filename)
             
-            csv_headers = ['date', 'site_name', 'category', 'product_name', 'brand', 'price', 'link', 'rating', 'reviews', 'active_discount']
+            csv_headers = ['date', 'site_name', 'category', 'subcategory', 'product_name', 'brand', 'price', 'link', 'rating', 'reviews', 'active_discount']
             
             print(f"Guardando datos en {csv_file}...")
             
