@@ -1,4 +1,4 @@
-# Scraper para la pagina web SupleTech
+# Scraper para la pagina web SupleTech.cl
 
 from BaseScraper import BaseScraper
 from rich import print

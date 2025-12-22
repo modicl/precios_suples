@@ -1,4 +1,4 @@
-# Scapper para la pagina web AllNutrition
+# Scapper para la pagina web AllNutrition.cl
 from BaseScraper import BaseScraper
 from rich import print
 from datetime import datetime

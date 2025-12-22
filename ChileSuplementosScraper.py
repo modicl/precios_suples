@@ -1,4 +1,4 @@
-# Scapper para la pagina web ChileSuplementos
+# Scapper para la pagina web ChileSuplementos.cl
 # Contiene Infinite Scroll y aveces un boton "Cargar más" , por lo que se debe usar attached, ya que los productos se agregan dinamicamente
 # Hay un momento en que se agregan los productos y no se ven visualmente cada vez que hacemos un scroll
 
