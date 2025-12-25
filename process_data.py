@@ -79,7 +79,7 @@ def process_data():
     today_str = datetime.now().strftime("%Y-%m-%d")
     output_file = os.path.join(processed_dir, f"all_products_{today_str}.csv")
     
-    dedup_df.to_csv(output_file, index=False)
+    dedup_df.to_csv(output_file, index=False, encoding='utf-8-sig')
     print(f"[green]Archivo consolidado guardado en: [bold]{output_file}[/bold][/green]")
 
     # 7. Move raw files to 'used'
