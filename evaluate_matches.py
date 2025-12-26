@@ -41,10 +41,15 @@ def evaluate_matches():
         for normalized, originals in merged_clusters:
             print(f"\n[yellow]Cluster: '{normalized}'[/yellow]")
             for orig in originals:
-                # Find sites that have this original name (optional context)
-                sites = df[df['product_name'] == orig]['site_name'].unique()
+                # Find sites and brands for this original name
+                rows = df[df['product_name'] == orig]
+                sites = rows['site_name'].unique()
+                brands = rows['brand'].unique()
+                
                 sites_str = ", ".join(sites)
-                print(f"  - '{orig}' ({sites_str})")
+                brands_str = ", ".join([str(b) for b in brands])
+                
+                print(f"  - '{orig}' ({sites_str}) [Brand: {brands_str}]")
     else:
         print("\n[yellow]No se encontraron fusiones. Todos los productos tienen nombres únicos o el umbral es muy estricto.[/yellow]")
 

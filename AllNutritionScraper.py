@@ -8,7 +8,7 @@ import re
 class AllNutritionScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
         
-        # Categorias y sus URLs (Estructura Diccionario: Categoria -> [URLs])
+        # Categorias y sus URLs
         category_urls = {
             "Proteinas": [
                 "https://allnutrition.cl/collections/whey-protein",
@@ -67,12 +67,13 @@ class AllNutritionScraper(BaseScraper):
 
         selectors = {
             'product_card': '.c-card-product',
-            'title': '.c-card-producto__title h6', # Primario
-            'title_secondary': '.c-card-product__title', # Secundario
+            'title': '.c-card-producto__title h6', 
+            'title_secondary': '.c-card-product__title',
             'vendor': '.c-card-product__vendor',
             'price': '.c-card-product__price',
-            'price_old_nested': '.c-card-product__price-old', # Para limpiar
+            'price_old_nested': '.c-card-product__price-old',
             'link': 'a.link--not-decoration',
+            'thumbnail': '.c-card-product__image img',
             'rating': '.rating .rating-star',
             'reviews': '.rating-text-count',
             'active_discount': '.c-card-product__discount',
@@ -84,22 +85,19 @@ class AllNutritionScraper(BaseScraper):
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en AllNutrition...[/green]")
         
+        context = page.context
+        
         for main_category, urls in self.category_urls.items():
             for url in urls:
-                # Subcategoria extraida de la URL (ej: /collections/whey-protein -> Whey Protein)
                 subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
-                
                 print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {subcategory_name} ({url})")
                 
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=60000)
-                    
                     page_number = 1
                     while True:
                         print(f"--- Página {page_number} ---")
-                        # Esperar a que carguen los productos
                         try:
-                            # Esperar un poco más para asegurar que todo el contenido dinámico esté listo
                             page.wait_for_selector(self.selectors['product_card'], timeout=8000)
                         except:
                             print(f"[red]No se encontraron productos en {url} o tardó demasiado.[/red]")
@@ -113,9 +111,10 @@ class AllNutritionScraper(BaseScraper):
                             producto = producto_cards.nth(i)
                             current_date = datetime.now().strftime("%Y-%m-%d")
                             
+                            # --- GRID EXTRACTION ---
+                            
                             # Title
                             title = "N/D"
-                            # Intentamos selector primario y secundario
                             if producto.locator(self.selectors['title']).count() > 0:
                                 title = producto.locator(self.selectors['title']).first.inner_text().strip()
                             elif producto.locator(self.selectors['title_secondary']).count() > 0:
@@ -132,13 +131,18 @@ class AllNutritionScraper(BaseScraper):
                                 href = producto.locator(self.selectors['link']).first.get_attribute("href")
                                 if href:
                                     link = self.base_url + href if href.startswith('/') else href
+                            
+                            # Thumbnail
+                            thumbnail_url = ""
+                            if producto.locator(self.selectors['thumbnail']).count() > 0:
+                                thumb_src = producto.locator(self.selectors['thumbnail']).first.get_attribute('src')
+                                if thumb_src:
+                                    thumbnail_url = "https:" + thumb_src if thumb_src.startswith('//') else thumb_src
 
                             # Price
                             price = 0
                             price_elem = producto.locator(self.selectors['price'])
                             if price_elem.count() > 0:
-                                # Usamos JS para excluir el texto de .c-card-product__price-old si está anidado
-                                # Esto es necesario porque el precio en oferta y normal comparten contenedor padre
                                 try:
                                     price_text = price_elem.first.evaluate(f"""(el, oldSelector) => {{
                                         const clone = el.cloneNode(true);
@@ -146,29 +150,54 @@ class AllNutritionScraper(BaseScraper):
                                         if (old) old.remove();
                                         return clone.innerText.trim();
                                     }}""", self.selectors['price_old_nested'])
-                                    
                                     clean_price = re.sub(r'[^\d]', '', price_text)
-                                    if clean_price:
-                                        price = int(clean_price)
-                                except Exception as e:
-                                    # Fallback básico por si falla el JS
+                                    if clean_price: price = int(clean_price)
+                                except:
                                     price_text = price_elem.first.inner_text()
                                     clean_price = re.sub(r'[^\d]', '', price_text)
-                                    if clean_price:
-                                        price = int(clean_price)
+                                    if clean_price: price = int(clean_price)
                             
-                            # Rating / Reviews
-                            rating = "0"
-                            if producto.locator(self.selectors['rating']).count() > 0:
-                                # A veces es estilos, a veces texto. En AllNutrition simple suele no salir en tarjeta
-                                pass 
-                            
-                            reviews = "0"
-
-                            # Active Discount
+                            # Discount
                             active_discount = False
                             if producto.locator(self.selectors['active_discount']).count() > 0:
                                 active_discount = True
+
+                            # --- DETAIL EXTRACTION (NEW TAB) ---
+                            image_url = ""
+                            sku = ""
+                            description = ""
+                            
+                            if link != "N/D":
+                                try:
+                                    # Open new tab logic
+                                    detail_page = context.new_page()
+                                    detail_page.goto(link, wait_until="domcontentloaded", timeout=30000)
+                                    
+                                    # 1. Image (HD)
+                                    # Selector refined from inspection: .slide:not(.d-none) img OR .c-gallery-product__item:not(.d-none) img
+                                    img_el = detail_page.locator('.slide:not(.d-none) img, .c-gallery-product__item:not(.d-none) img').first
+                                    if img_el.count() > 0:
+                                        src = img_el.get_attribute('src')
+                                        if src:
+                                            image_url = "https:" + src if src.startswith('//') else src
+                                    
+                                    # 2. SKU
+                                    sku_el = detail_page.locator('.s-main-product__sku, .product-sku').first
+                                    if sku_el.count() > 0:
+                                        sku = sku_el.inner_text().strip()
+                                    
+                                    # 3. Description
+                                    # Combine Benefits + Table if possible, or just benefits
+                                    desc_el = detail_page.locator('.s-main-product__text-wrapper, .c-product-description').first
+                                    if desc_el.count() > 0:
+                                        description = desc_el.inner_text().strip()
+                                        
+                                    detail_page.close()
+                                    
+                                except Exception as e:
+                                    print(f"[yellow]Error loading details for {link}: {e}[/yellow]")
+                                    try: detail_page.close() 
+                                    except: pass
 
                             yield {
                                 'date': current_date,
@@ -179,34 +208,32 @@ class AllNutritionScraper(BaseScraper):
                                 'brand': brand,
                                 'price': price,
                                 'link': link,
-                                'rating': rating,
-                                'reviews': reviews,
-                                'active_discount': active_discount
+                                'rating': "0",
+                                'reviews': "0",
+                                'active_discount': active_discount,
+                                'thumbnail_image_url': thumbnail_url,
+                                'image_url': image_url,
+                                'sku': sku,
+                                'description': description
                             }
-
-                        # Paginación: Buscar botón siguiente
+                            
+                        # Paginación
                         next_btn = page.locator(self.selectors['next_button'])
                         if next_btn.count() > 0 and next_btn.first.is_visible():
-                            href_next = next_btn.first.get_attribute("href")
-                            if href_next:
-                                print("  > Avanzando a la siguiente página...")
-                                page.goto(self.base_url + href_next if href_next.startswith('/') else href_next)
+                            href = next_btn.first.get_attribute("href")
+                            if href:
+                                page.goto(self.base_url + href if href.startswith('/') else href)
                                 page_number += 1
-                                page.wait_for_timeout(2000)
                             else:
-                                print("  > Click en botón Siguiente...")
                                 next_btn.first.click()
                                 page_number += 1
-                                page.wait_for_timeout(3000)
                         else:
-                            print("  > No hay más páginas en esta categoría.")
                             break
                 
                 except Exception as e:
                     print(f"[red]Error procesando {url}: {e}[/red]")
 
 if __name__ == "__main__":
-    # La URL base inicial puede ser cualquiera, pero el extract_process navegará a las categorías
     base_url = "https://allnutrition.cl" 
-    scraper = AllNutritionScraper(base_url=base_url, headless=False)
+    scraper = AllNutritionScraper(base_url=base_url, headless=True)
     scraper.run()

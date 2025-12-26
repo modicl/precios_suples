@@ -9,10 +9,10 @@ echo "Iniciando scrapers en paralelo..."
 python AllNutritionScraper.py &
 python ChileSuplementosScraper.py &
 python OneNutritionScraper.py &
-python StrongestScraper.py &
 python SupleStoreScraper.py &
 python SupleTechScraper.py &
 python SuplesScraper.py &
+python StrongestScraper.py &
 
 # Esperar a que todos terminen
 wait

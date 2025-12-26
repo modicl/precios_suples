@@ -32,7 +32,7 @@ class SupleStoreScraper(BaseScraper):
                 "https://www.suplestore.cl/collection/aminos-bcaa-s"
             ],
             "Perdida de Grasa": [
-                "https://www.suplestore.cl/collection/qm-y-l-carnitina", # Ajuste basado en estructura probable o general
+                "https://www.suplestore.cl/collection/qm-y-l-carnitina",
                 "https://www.suplestore.cl/collection/quemadores",
                 "https://www.suplestore.cl/collection/cafeina"
             ],
@@ -43,14 +43,15 @@ class SupleStoreScraper(BaseScraper):
         }
         
         selectors = {
-            "product_grid": ".row", # Contenedor general suele ser row en bootstrap
+            "product_grid": ".row", 
             'product_card': '.bs-product', 
             'product_name': '.bs-product-info h6',
             'brand': '.bs-product-info .badge-secondary', 
             'price_final': '.bs-product-final-price', 
             'price_old': '.bs-product-old-price',
             'link': '.bs-product-info a', 
-            'next_button': 'a.navegation.next, .pagination .next a' 
+            'next_button': 'a.navegation.next, .pagination .next a',
+            'thumbnail': 'img.card-img-top' # More specific
         }
         
         super().__init__(base_url, headless, category_urls, selectors, site_name="SupleStore")
@@ -58,6 +59,8 @@ class SupleStoreScraper(BaseScraper):
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en SupleStore...[/green]")
         
+        context = page.context
+
         for main_category, urls in self.category_urls.items():
             for url in urls:
                 subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
@@ -71,7 +74,6 @@ class SupleStoreScraper(BaseScraper):
                     while True:
                         print(f"--- Página {page_number} ---")
                         try:
-                            # Esperar producto o mensaje de no productos
                             page.wait_for_selector(self.selectors['product_card'], timeout=5000)
                         except:
                             print(f"[red]No se encontraron productos en {url} o tardó demasiado.[/red]")
@@ -85,11 +87,10 @@ class SupleStoreScraper(BaseScraper):
                             producto = producto_cards.nth(i)
                             current_date = datetime.now().strftime("%Y-%m-%d")
                             
-                            # Obtenemos info básica
+                            # --- Generic Extraction ---
                             
                             # Link
                             link = "N/D"
-                            # El link envuelve el titulo .bs-product-info a
                             if producto.locator(self.selectors['link']).count() > 0:
                                 href = producto.locator(self.selectors['link']).first.get_attribute("href")
                                 if href:
@@ -104,29 +105,72 @@ class SupleStoreScraper(BaseScraper):
                             brand = "N/D"
                             if producto.locator(self.selectors['brand']).count() > 0:
                                 brand = producto.locator(self.selectors['brand']).first.inner_text().strip()
+                            
+                            # Thumbnail
+                            thumbnail_url = ""
+                            if producto.locator(self.selectors['thumbnail']).count() > 0:
+                                t_el = producto.locator(self.selectors['thumbnail']).first
+                                # Prioritize data-src for vanilla-lazyload
+                                t_src = t_el.get_attribute("data-src") or t_el.get_attribute("src")
                                 
+                                if t_src and "base64" not in t_src:
+                                    thumbnail_url = "https:" + t_src if t_src.startswith('//') else t_src
+                                elif not t_src or "base64" in t_src:
+                                    # Fallback: sometimes data-src is missing on load?
+                                    # Try getting src again and see if it updated (unlikely without scroll)
+                                    pass
+
                             # Price
                             price = 0
-                            # Intentar precio final primero
                             price_elem = producto.locator(self.selectors['price_final'])
                             if price_elem.count() > 0:
                                 price_text = price_elem.first.inner_text() 
-                                # Formato "Ahora $ 19.990"
                                 clean_price = re.sub(r'[^\d]', '', price_text)
                                 if clean_price:
                                     price = int(clean_price)
                             
                             # Active Discount
-                            # Si existe active discount, usualmente hay un precio 'old'
                             active_discount = False
                             if producto.locator(self.selectors['price_old']).count() > 0:
                                 active_discount = True
-                                # Opcional: Podríamos extraer el precio normal si quisiéramos comparar
 
-                            # Rating / Reviews - No parecen estar visibles en la tarjeta
-                            rating = "0"
-                            reviews = "0"
-                            
+                            # --- Detail Extraction (Multi-tab) ---
+                            image_url = ""
+                            sku = ""
+                            description = ""
+
+                            if link != "N/D":
+                                try:
+                                    detail_page = context.new_page()
+                                    detail_page.goto(link, wait_until="domcontentloaded", timeout=40000)
+                                    
+                                    # 1. Main Image (HD)
+                                    # Try to find the image zoom or main image
+                                    img_el = detail_page.locator('img.imagenpe, .bs-product-image img').first
+                                    if img_el.count() > 0:
+                                        # Use data-zoom if available for higher res, else src
+                                        src = img_el.get_attribute("data-zoom") or img_el.get_attribute("src")
+                                        if src:
+                                            image_url = "https:" + src if src.startswith('//') else src
+                                    
+                                    # 2. SKU
+                                    sku_el = detail_page.locator('[data-bs="product.sku"]').first
+                                    if sku_el.count() > 0:
+                                        sku_raw = sku_el.inner_text().strip()
+                                        sku = sku_raw.replace("SKU:", "").strip()
+                                    
+                                    # 3. Description
+                                    desc_el = detail_page.locator('#home, .bs-product-description').first
+                                    if desc_el.count() > 0:
+                                        description = desc_el.inner_text().strip()
+                                        
+                                    detail_page.close()
+                                    
+                                except Exception as e:
+                                    print(f"[yellow]Error loading details for {link}: {e}[/yellow]")
+                                    try: detail_page.close()
+                                    except: pass
+
                             yield {
                                 'date': current_date,
                                 'site_name': self.site_name,
@@ -136,34 +180,31 @@ class SupleStoreScraper(BaseScraper):
                                 'brand': brand,
                                 'price': price,
                                 'link': link,
-                                'rating': rating,
-                                'reviews': reviews,
-                                'active_discount': active_discount
+                                'rating': "0",
+                                'reviews': "0",
+                                'active_discount': active_discount,
+                                'thumbnail_image_url': thumbnail_url,
+                                'image_url': image_url,
+                                'sku': sku,
+                                'description': description
                             }
                         
                         # Paginación
-                        # Buscar botón "Siguiente"
-                        # Selector: a.navegation.next
                         next_btn = page.locator(self.selectors['next_button'])
-                        
-                        # Verificar si existe y es visible (y que no sea disabled si aplica)
                         if next_btn.count() > 0 and next_btn.first.is_visible():
-                            href_next = next_btn.first.get_attribute("href")
-                            if href_next:
+                            href = next_btn.first.get_attribute("href")
+                            if href:
                                 print(f"  > Avanzando a página {page_number + 1}...")
-                                # Navegamos directamente al href para ser más robustos
-                                page.goto(self.base_url + href_next if href_next.startswith('/') else href_next)
+                                page.goto(self.base_url + href if href.startswith('/') else href)
                                 page_number += 1
-                                # Espera pequeña
                                 page.wait_for_timeout(2000)
                             else:
-                                # Si no tiene href (raro en 'a'), click
                                 print("  > Click en botón Siguiente...")
                                 next_btn.first.click()
                                 page.wait_for_timeout(3000)
                                 page_number += 1
                         else:
-                            print("  > No hay más páginas (o botón no encontrado).")
+                            print("  > No hay más páginas.")
                             break
                             
                 except Exception as e:
@@ -171,6 +212,5 @@ class SupleStoreScraper(BaseScraper):
 
 if __name__ == "__main__":
     base_url = "https://www.suplestore.cl"
-    # Testing mode
     scraper = SupleStoreScraper(base_url=base_url, headless=True)
     scraper.run()

@@ -79,7 +79,8 @@ class SuplesScraper(BaseScraper):
             'price_compare': '.price--compare', 
             'price_default': '.price', 
             'link': 'a.product-item__title', 
-            'next_button': '.pagination__next'
+            'next_button': '.pagination__next',
+            'thumbnail': 'img.product-item__primary-image' 
         }
         
         super().__init__(base_url, headless, category_urls, selectors, site_name="Suples.cl")
@@ -87,6 +88,8 @@ class SuplesScraper(BaseScraper):
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en Suples.cl...[/green]")
         
+        context = page.context
+
         for main_category, urls in self.category_urls.items():
             for url in urls:
                 subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
@@ -100,7 +103,8 @@ class SuplesScraper(BaseScraper):
                     while True:
                         print(f"--- Página {page_number} ---")
                         try:
-                            page.wait_for_selector(self.selectors['product_card'], timeout=5000)
+                            # Increasing wait time slightly for robustness
+                            page.wait_for_selector(self.selectors['product_card'], timeout=6000)
                         except:
                             print(f"[red]No se encontraron productos en {url} o tardó demasiado.[/red]")
                             break
@@ -112,6 +116,8 @@ class SuplesScraper(BaseScraper):
                         for i in range(count):
                             producto = producto_cards.nth(i)
                             current_date = datetime.now().strftime("%Y-%m-%d")
+                            
+                            # --- Grid Extraction ---
                             
                             # Link
                             link = "N/D"
@@ -129,8 +135,34 @@ class SuplesScraper(BaseScraper):
                             brand = "N/D"
                             if producto.locator(self.selectors['brand']).count() > 0:
                                 brand = producto.locator(self.selectors['brand']).first.inner_text().strip()
+                            
+                            # Thumbnail
+                            thumbnail_url = ""
+                            if producto.locator(self.selectors['thumbnail']).count() > 0:
+                                t_el = producto.locator(self.selectors['thumbnail']).first
                                 
-                            # Price Logic - Updated
+                                # Try to find real image in lazy-load attributes
+                                t_srcset = t_el.get_attribute("data-srcset")
+                                t_src = t_el.get_attribute("data-src") or t_el.get_attribute("src")
+
+                                final_src = ""
+                                if t_srcset:
+                                    # data-srcset="url1 width1, url2 width2, ..."
+                                    # Take the last one (usually highest res)
+                                    candidates = t_srcset.split(",")
+                                    if candidates:
+                                        final_src = candidates[-1].strip().split(" ")[0]
+                                elif t_src:
+                                    # Often involves {width} template in shopify
+                                    if "{width}" in t_src:
+                                        final_src = t_src.replace("{width}", "500") # Good enough for thumbnail
+                                    else:
+                                        final_src = t_src
+                                
+                                if final_src:
+                                    thumbnail_url = "https:" + final_src if final_src.startswith('//') else final_src
+
+                            # Price
                             price = 0
                             active_discount = False
                             
@@ -138,18 +170,15 @@ class SuplesScraper(BaseScraper):
                             if price_container.count() > 0:
                                 highlight = price_container.locator(self.selectors['price_highlight'])
                                 if highlight.count() > 0:
-                                    # Hay precio oferta
                                     price_text = highlight.first.inner_text()
                                     active_discount = True
                                 else:
-                                    # Precio normal sin oferta
                                     normal = price_container.locator(self.selectors['price_default'])
                                     if normal.count() > 0:
                                         price_text = normal.first.inner_text()
                                     else:
                                         price_text = "0"
                             else:
-                                # Fallback
                                 general_price = producto.locator(self.selectors['price_default'])
                                 if general_price.count() > 0:
                                     price_text = general_price.first.inner_text()
@@ -160,10 +189,48 @@ class SuplesScraper(BaseScraper):
                             if clean_price:
                                 price = int(clean_price)
 
-                            # Rating / Reviews
-                            rating = "0"
-                            reviews = "0"
-                            
+                            # --- Detail Extraction (Multi-tab) ---
+                            image_url = ""
+                            sku = ""
+                            description = ""
+
+                            if link != "N/D":
+                                try:
+                                    detail_page = context.new_page()
+                                    detail_page.goto(link, wait_until="domcontentloaded", timeout=40000)
+                                    
+                                    # 1. Main Image (HD)
+                                    # Try .product-gallery__image img first
+                                    img_el = detail_page.locator('.product-gallery__image img, .product-gallery__featured-image img').first
+                                    if img_el.count() > 0:
+                                        # Details page often has src loaded, or data-zoom
+                                        src = img_el.get_attribute("src")
+                                        if src and "base64" not in src:
+                                            image_url = "https:" + src if src.startswith('//') else src
+                                        else:
+                                             # Try data indicators if src is placeholder
+                                             data_zoom = img_el.get_attribute("data-zoom")
+                                             if data_zoom:
+                                                 image_url = "https:" + data_zoom if data_zoom.startswith('//') else data_zoom
+                                    
+                                    # 2. SKU
+                                    sku_el = detail_page.locator('.product-meta__sku').first
+                                    if sku_el.count() > 0:
+                                        sku_raw = sku_el.inner_text().strip()
+                                        sku = sku_raw.replace("SKU:", "").strip()
+                                    
+                                    # 3. Description
+                                    desc_el = detail_page.locator('.product-description, .rte').first
+                                    if desc_el.count() > 0:
+                                        description = desc_el.inner_text().strip()
+                                        
+                                    detail_page.close()
+                                    
+                                except Exception as e:
+                                    print(f"[yellow]Error loading details for {link}: {e}[/yellow]")
+                                    try: detail_page.close()
+                                    except: pass
+
                             yield {
                                 'date': current_date,
                                 'site_name': self.site_name,
@@ -173,9 +240,13 @@ class SuplesScraper(BaseScraper):
                                 'brand': brand,
                                 'price': price,
                                 'link': link,
-                                'rating': rating,
-                                'reviews': reviews,
-                                'active_discount': active_discount
+                                'rating': "0",
+                                'reviews': "0",
+                                'active_discount': active_discount,
+                                'thumbnail_image_url': thumbnail_url,
+                                'image_url': image_url,
+                                'sku': sku,
+                                'description': description
                             }
                         
                         # Paginación
@@ -183,17 +254,14 @@ class SuplesScraper(BaseScraper):
                         if next_btn.count() > 0 and next_btn.first.is_visible():
                             href_next = next_btn.first.get_attribute("href")
                             if href_next:
-                                print(f"  > Avanzando a página {page_number + 1}...")
                                 page.goto(self.base_url + href_next if href_next.startswith('/') else href_next)
                                 page_number += 1
                                 page.wait_for_timeout(2000)
                             else:
-                                print("  > Click en botón Siguiente (sin href)...")
                                 next_btn.first.click()
                                 page.wait_for_timeout(3000)
                                 page_number += 1
                         else:
-                            print("  > No hay más páginas.")
                             break
                             
                 except Exception as e:

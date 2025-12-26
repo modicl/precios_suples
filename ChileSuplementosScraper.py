@@ -1,6 +1,5 @@
-# Scapper para la pagina web ChileSuplementos.cl
-# Contiene Infinite Scroll y aveces un boton "Cargar más" , por lo que se debe usar attached, ya que los productos se agregan dinamicamente
-# Hay un momento en que se agregan los productos y no se ven visualmente cada vez que hacemos un scroll
+# Scraper para la pagina web ChileSuplementos.cl
+# Contiene Infinite Scroll y a veces un boton "Cargar más"
 
 from BaseScraper import BaseScraper
 from rich import print
@@ -69,58 +68,54 @@ class ChileSuplementosScraper(BaseScraper):
         }
         
         selectors = {
-            'product_card': '.archive-products .porto-tb-item', # Selector específico para la grilla principal
+            'product_card': '.archive-products .porto-tb-item', 
             'product_name': '.post-title',
             'brand': '.tb-meta-pwb-brand',
             'price': '.price',
             'link': '.post-title a',
             'rating': '.star-rating',
             'active_discount': '.onsale',
-            'next_button': '.archive-products .next.page-numbers' # Botón específico de la paginación principal
+            'next_button': '.archive-products .next.page-numbers',
+            'thumbnail': 'img' # Relative to card
         }
         
         super().__init__(base_url, headless, category_urls, selectors, site_name="ChileSuplementos")
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en ChileSuplementos...[/green]")
+        context = page.context
         
         for main_category, urls in self.category_urls.items():
             for url in urls:
-                # Subcategoria extraida de la URL
                 subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
                 print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {subcategory_name} ({url})")
                 
                 try:
                     page.goto(url, wait_until="load", timeout=60000)
-                    print(f"  > Título de la página: {page.title()}")
                     
                     last_product_count = 0
                     no_change_counter = 0
                     
                     while True:
-                        # Esperar a que carguen los productos (o que haya al menos 1 si es el inicio)
                         try:
-                            if last_product_count == 0: # Significa que es la primera vez que se ejecuta el bucle
-                                print("  > Esperando selector de productos (.archive-products .porto-tb-item)...")
+                            if last_product_count == 0: 
+                                print("  > Esperando selector de productos...")
                                 page.wait_for_selector(self.selectors['product_card'], state="attached", timeout=30000)
                         except:
-                            print(f"[red]No se encontraron productos en {url} o tardó demasiado (Timeout 30s).[/red]")
+                            print(f"[red]No se encontraron productos en {url}.[/red]")
                             break
 
                         producto_cards = page.locator(self.selectors['product_card'])
                         current_product_count = producto_cards.count()
                         
-                        # Yield nuevos productos encontrados desde el último conteo
                         if current_product_count > last_product_count:
                             print(f"Indexando productos del {last_product_count + 1} al {current_product_count}...")
                             
                             for i in range(last_product_count, current_product_count):
                                 producto = producto_cards.nth(i)
-                                
-                                # Fecha
                                 current_date = datetime.now().strftime("%Y-%m-%d")
                                 
-                                # Titulo
+                                # Title
                                 title = "N/D"
                                 title_elem = producto.locator(self.selectors['product_name']) 
                                 if title_elem.count() > 0:
@@ -139,24 +134,27 @@ class ChileSuplementosScraper(BaseScraper):
                                     href = link_elem.get_attribute("href")
                                     if href:
                                         link = href
+
+                                # Thumbnail
+                                thumbnail_url = ""
+                                thumb_elem = producto.locator(self.selectors['thumbnail']).first
+                                if thumb_elem.count() > 0:
+                                    src = thumb_elem.get_attribute("src") or thumb_elem.get_attribute("data-src")
+                                    if src:
+                                        thumbnail_url = src
                                 
                                 # Price
                                 price = 0
                                 price_elem = producto.locator(self.selectors['price'])
                                 if price_elem.count() > 0:
-                                    # Estrategia 1: Buscar elementos específicos de monto (.woocommerce-Price-amount)
-                                    # Si hay oferta, suelen haber dos (antiguo y nuevo), el último es el precio final.
                                     amounts = price_elem.locator(".woocommerce-Price-amount")
                                     if amounts.count() > 0:
                                         price_text = amounts.last.inner_text()
                                     else:
-                                        # Fallback: Texto directo del contenedor
                                         price_text = price_elem.first.inner_text()
                                     
-                                    # Manejo de rangos ($18.000 - $19.990) si aún persiste en el texto extraído
                                     if "-" in price_text:
                                         price_text = price_text.split("-")[0]
-                                        
                                     try:
                                         clean_price = re.sub(r'[^\d]', '', price_text)
                                         if clean_price:
@@ -175,15 +173,53 @@ class ChileSuplementosScraper(BaseScraper):
                                         strong_rating = rating_elem.locator("strong.rating")
                                         if strong_rating.count() > 0:
                                             rating = strong_rating.first.inner_text().strip()
-
-                                # Reviews (No disponible desde el grid al menos...)
-                                reviews = "0"
                                 
                                 # Active Discount
                                 active_discount = False
                                 if producto.locator(self.selectors['active_discount']).count() > 0:
                                     active_discount = True
+
+                                # --- Detail Extraction (Multi-tab) ---
+                                image_url = ""
+                                sku = ""
+                                description = ""
                                 
+                                if link != "N/D":
+                                    try:
+                                        detail_page = context.new_page()
+                                        detail_page.goto(link, wait_until="domcontentloaded", timeout=40000)
+                                        
+                                        # 1. Main Image
+                                        img_selectors = ['.woocommerce-product-gallery__image img', '.porto-product-main-image img', '.product-image img']
+                                        for sel in img_selectors:
+                                            img_el = detail_page.locator(sel).first
+                                            if img_el.count() > 0:
+                                                src = img_el.get_attribute("src") or img_el.get_attribute("href")
+                                                if src:
+                                                    image_url = src
+                                                    break
+                                        
+                                        # 2. SKU
+                                        sku_el = detail_page.locator('.sku, [itemprop="sku"]').first
+                                        if sku_el.count() > 0:
+                                            sku = sku_el.inner_text().strip()
+                                        
+                                        # 3. Description
+                                        desc_el = detail_page.locator('.woocommerce-product-details__short-description').first
+                                        if desc_el.count() > 0:
+                                            description = desc_el.inner_text().strip()
+                                        else:
+                                            # Fallback to description tab
+                                            desc_el = detail_page.locator('#tab-description, .description').first
+                                            if desc_el.count() > 0:
+                                                description = desc_el.inner_text().strip()
+
+                                        detail_page.close()
+                                    except Exception as e:
+                                        print(f"[yellow]Error loading details for {link}: {e}[/yellow]")
+                                        try: detail_page.close()
+                                        except: pass
+
                                 yield {
                                     'date': current_date,
                                     'site_name': self.site_name,
@@ -194,63 +230,46 @@ class ChileSuplementosScraper(BaseScraper):
                                     'price': price,
                                     'link': link,
                                     'rating': rating,
-                                    'reviews': reviews,
-                                    'active_discount': active_discount
+                                    'reviews': "0",
+                                    'active_discount': active_discount,
+                                    'thumbnail_image_url': thumbnail_url,
+                                    'image_url': image_url,
+                                    'sku': sku,
+                                    'description': description
                                 }
                             
                             last_product_count = current_product_count
-                            no_change_counter = 0 # Reset counter found new items
-                    
+                            no_change_counter = 0 
                         else:
-                            no_change_counter += 1 # Cada vez que no se encuentra un nuevo producto, se incrementa el contador.
+                            no_change_counter += 1
                         
-                        # Lógica de Paginación Híbrida (Botón "Cargar más" o Scroll)
+                        # Pagination logic
                         load_more_btn = page.locator(self.selectors['next_button'])
-                        
-                        # Verificamos si existe en el DOM
                         if load_more_btn.count() > 0:
-                            print(f"  > Botón 'Cargar más' detectado en el DOM.")
-                            
-                            # Intentar hacerlo visible si no lo es
-                            if not load_more_btn.first.is_visible():
-                                 print("  > El botón no es visible, intentando scroll rápido...")
-                                 try:
-                                     # Timeout reducido a 3000ms (3s) para no esperar 30s si está oculto/bugeado
-                                     load_more_btn.first.scroll_into_view_if_needed(timeout=3000)
-                                 except Exception as e:
-                                     print(f"[yellow]  > No se pudo hacer scroll al botón (posiblemente oculto). Intentando click forzado de todas formas...[/yellow]")
-                            
-                            # Intentar Click
+                            print(f"  > Botón 'Cargar más' detectado.")
                             try:
-                                print(f"  > Haciendo CLICK en 'Cargar más'...")
+                                if not load_more_btn.first.is_visible():
+                                     load_more_btn.first.scroll_into_view_if_needed(timeout=3000)
+                                
                                 load_more_btn.first.click(force=True, timeout=3000)
-                                print("  > Click enviado. Esperando 5 segundos para carga de productos...")
                                 page.wait_for_timeout(5000) 
                             except Exception as e:
                                 print(f"[yellow]  > Falló click normal ({e}). Intentando click JS...[/yellow]")
                                 try:
                                     page.evaluate("arguments[0].click();", load_more_btn.first.element_handle())
-                                    print("  > Click JS enviado. Esperando 5 segundos...")
                                     page.wait_for_timeout(5000)
                                 except Exception as e_js:
                                     print(f"[red]  > Falló click JS también: {e_js}[/red]")
-                                    print("  > Usando Scroll Fallback.")
                                     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                                     page.wait_for_timeout(2000)
                         else:
-                            print(f"  > No se detectó botón 'Cargar más'.")
-                           
-                            print(f"  > Usando Scroll normal...")
+                            print(f"  > No se detectó botón. Buscando scroll...")
                             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                             page.wait_for_timeout(2000)
                         
-                        # Verificar si llegaron nuevos productos
-                        new_count = page.locator(self.selectors['product_card']).count()
-                        
-                        if new_count == last_product_count:
-                            # Si tras el scroll y la espera no hay cambios...
+                        if page.locator(self.selectors['product_card']).count() == last_product_count:
                             if no_change_counter >= 3:
-                                print("Se ha llegado al final del scroll (sin nuevos productos tras 3 intentos).")
+                                print("Se ha llegado al final del scroll.")
                                 break
                     
                 except Exception as e:

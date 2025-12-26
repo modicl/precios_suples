@@ -14,7 +14,7 @@ def extract_sizes(text):
     if not isinstance(text, str): return tuple()
     
     # Regex for common supplement units
-    pattern = r'(\d+(?:[.,]\d+)?)\s*(lbs?|libras?|kgs?|kilos?|gr?|gramos?|oz|onzas?|tabs?|tabletas?|caps?|c[aá]psulas?|softgels?|soft|comprimidos?|servicios?|servs?|svs?|scoops?|sachets?|unid\.|unida?d?e?s?|mcg|mg|iu|ui|ml|l|litros?)'
+    pattern = r'(\d+(?:[.,]\d+)?)\s*(lbs?|libras?|kgs?|kilos?|gr?|gramos?|oz|onzas?|tabs?|tabletas?|caps?|c[aá]psulas?|softgels?|soft|comprimidos?|servicios?|servs?|svs?|scoops?|sachets?|unid\.|unida?d?e?s?|mcg|mg|iu|ui|ml|l|litros?|ampollas?|amp|billions?|billones?)'
     
     unit_map = {
         'lbs': 'lb', 'libra': 'lb', 'libras': 'lb',
@@ -30,7 +30,9 @@ def extract_sizes(text):
         'unid.': 'unid', 'unid': 'unid', 'unidad': 'unid', 'unidades': 'unid', 'und': 'unid',
         'mcg': 'mcg', 'mg': 'mg',
         'iu': 'iu', 'ui': 'iu',
-        'ml': 'ml', 'l': 'l', 'litro': 'l', 'litros': 'l'
+        'ml': 'ml', 'l': 'l', 'litro': 'l', 'litros': 'l',
+        'ampollas': 'amp', 'ampolla': 'amp', 'amp': 'amp',
+        'billion': 'billion', 'billions': 'billion', 'billon': 'billion', 'billones': 'billion'
     }
     
     matches = re.findall(pattern, text.lower())
@@ -66,9 +68,15 @@ def detect_packaging(text):
 
 def extract_pack_quantity(text):
     if not isinstance(text, str): return None
-    match = re.search(r'(?:^|\s)(\d+)\s*[xX]\s', text)
-    if match:
-        return match.group(1)
+    # Matches "5x" or "Pack 2" or "Pack de 2"
+    match_x = re.search(r'(?:^|\s)(\d+)\s*[xX]\s', text)
+    if match_x:
+        return match_x.group(1)
+        
+    match_pack = re.search(r'pack\s+(?:de\s+)?(\d+)', text.lower())
+    if match_pack:
+        return match_pack.group(1)
+        
     return None
 
 def extract_flavors(text):
@@ -83,7 +91,12 @@ def extract_flavors(text):
         'orange', 'naranja', 'limon', 'limón', 'lemon', 'piña', 'pineapple',
         'mango', 'maracuya', 'passion', 'sandia', 'watermelon', 'uva', 'grape',
         'blue', 'razz', 'raspberry', 'frambuesa', 'manzana', 'apple', 'punch', 'fruit',
-        'unflavored', 'sin sabor', 'neutro', 'natural', 'bitter'
+        'mocka', 'mocha', 'cafe', 'café', 'coffee', 'caramel', 'caramelo', 'toffee',
+        'orange', 'naranja', 'limon', 'limón', 'lemon', 'piña', 'pineapple',
+        'mango', 'maracuya', 'passion', 'sandia', 'watermelon', 'uva', 'grape',
+        'blue', 'razz', 'raspberry', 'frambuesa', 'manzana', 'apple', 'punch', 'fruit',
+        'unflavored', 'sin sabor', 'neutro', 'natural', 'bitter',
+        'cocada', 'blanco', 'white'
     ]
     
     found_flavors = set()
@@ -99,10 +112,12 @@ def check_critical_mismatch(text1, text2):
     
     # Use word boundaries for stricter matching
     keywords = [
-        'vegan', 'women', 'deluxe', 'joy', 'milkii', 'wpc80', 'isolate', 
+        'vegan', 'deluxe', 'joy', 'milkii', 'wpc80', 'isolate', 
         'hydro', 'concentrate', 'bar', 'barrita', 'men', 'senior', 'd3', 'b12',
-        'pro', 
-        'creamy', 'crunchy'
+        'pro', 'creamy', 'crunchy', 'hero', 'super', 'dark', 'instant', 'intense',
+        'gold', 'turbo', 'shock', 'storm',
+        # Gender specificity
+        'woman', 'women', 'her', 'hers', 'female', 'mujer'
     ]
     
     for kw in keywords:
@@ -115,7 +130,16 @@ def check_critical_mismatch(text1, text2):
         
         if in1 != in2:
             return True 
+            
+    # Check for "con" vs "sin" mismatch (contextual)
+    # E.g. "sin cafeina" vs "con cafeina"
+    # Simple check: if one has "sin " and the other doesn't (and it's not part of a word like 'sincero' - covered by space)
+    # or "con " vs missing "con ".
     
+    # Actually, simpler: check if "sin " is present in one but not other.
+    if ('sin ' in t1) != ('sin ' in t2):
+        return True
+        
     return False
 
 def normalize_names(threshold=87):
@@ -139,6 +163,10 @@ def normalize_names(threshold=87):
     
     mapping = {}
     normalized_names = [] 
+    
+    # Create brand lookup (taking the first brand found for each product name)
+    # This assumes a product name doesn't change brand across sites (usually true)
+    brand_map = df.drop_duplicates('product_name').set_index('product_name')['brand'].astype(str).to_dict()
     
     def cleaner(text):
         if not isinstance(text, str): return ""
@@ -205,9 +233,24 @@ def normalize_names(threshold=87):
             
             # 5. Flavors
             flavors_rep = extract_flavors(candidate_rep)
+            # 5. Flavors
+            flavors_rep = extract_flavors(candidate_rep)
             if flavors_candidate and flavors_rep:
                 if flavors_candidate != flavors_rep:
                     continue
+            
+            # 6. Brand Strictness
+            # If both have a valid brand, they MUST match.
+            b1 = brand_map.get(name, "N/D").lower()
+            b2 = brand_map.get(candidate_rep, "N/D").lower()
+            
+            invalid_brands = ["n/d", "nan", "none", ""]
+            
+            if b1 not in invalid_brands and b2 not in invalid_brands:
+                # Use fuzzy match for brands to handle "Muscletech" vs "Muscle Tech"
+                if fuzz.ratio(b1, b2) < 85:
+                     continue
+            
             
             best_match_name = candidate_rep
             break

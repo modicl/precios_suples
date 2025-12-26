@@ -90,15 +90,16 @@ class OneNutritionScraper(BaseScraper):
         }
         
         selectors = {
-            "product_grid": "#js-product-list", # Selector específico de la grilla principal
-            'product_card': '#js-product-list .product-miniature', # Items dentro de #js-product-list
+            "product_grid": "#js-product-list", 
+            'product_card': '#js-product-list .product-miniature', 
             'product_name': '.product-title a',
             'brand': '.product-title a', 
             'price_container': '.product-price-and-shipping', 
             'price_current': '.price', 
             'price_regular': '.regular-price', 
             'link': '.product-title a', 
-            'next_button': '.pagination .next' 
+            'next_button': '.pagination .next',
+            'thumbnail': 'a.thumbnail.product-thumbnail img'
         }
         
         super().__init__(base_url, headless, category_urls, selectors, site_name="OneNutrition")
@@ -106,6 +107,8 @@ class OneNutritionScraper(BaseScraper):
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en OneNutrition...[/green]")
         
+        context = page.context
+
         for main_category, urls in self.category_urls.items():
             for url in urls:
                 subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
@@ -119,12 +122,9 @@ class OneNutritionScraper(BaseScraper):
                     while True:
                         print(f"--- Página {page_number} ---")
                         try:
-                            # Esperar grilla de productos específica
                             page.wait_for_selector(self.selectors['product_grid'], timeout=10000)
                         except:
                             print(f"[red]No se encontraron productos en la grilla principal (#js-product-list) de {url}.[/red]")
-                            # Opcional: Tomar screenshot para debug
-                            # page.screenshot(path=f"debug_{subcategory_name}.png")
                             break
 
                         producto_cards = page.locator(self.selectors['product_card'])
@@ -134,6 +134,8 @@ class OneNutritionScraper(BaseScraper):
                         for i in range(count):
                             producto = producto_cards.nth(i)
                             current_date = datetime.now().strftime("%Y-%m-%d")
+                            
+                            # --- Grid Extraction ---
                             
                             # Link
                             link = "N/D"
@@ -149,24 +151,28 @@ class OneNutritionScraper(BaseScraper):
                             if producto.locator(self.selectors['product_name']).count() > 0:
                                 title = producto.locator(self.selectors['product_name']).first.inner_text().strip()
                             
-                            # Brand
+                            # Brand (inferred)
                             brand = title.split(' ')[0] if title != "N/D" else "N/D"
-                                
-                            # Price Logic - Refined
+                            
+                            # Thumbnail
+                            thumbnail_url = ""
+                            if producto.locator(self.selectors['thumbnail']).count() > 0:
+                                t_src = producto.locator(self.selectors['thumbnail']).first.get_attribute("src")
+                                if t_src:
+                                    thumbnail_url = t_src
+                                    
+                            # Price
                             price = 0
                             active_discount = False
                             
                             price_container = producto.locator(self.selectors['price_container'])
                             if price_container.count() > 0:
-                                # Chequear si existe precio regular (tachado) -> Oferta
                                 regular = price_container.locator(self.selectors['price_regular'])
                                 if regular.count() > 0:
                                     active_discount = True
-                                    # El precio final está en .price
                                     current = price_container.locator(self.selectors['price_current'])
                                     price_text = current.first.inner_text() if current.count() > 0 else "0"
                                 else:
-                                    # No hay oferta, precio normal en .price
                                     current = price_container.locator(self.selectors['price_current'])
                                     price_text = current.first.inner_text() if current.count() > 0 else "0"
                             else:
@@ -176,10 +182,43 @@ class OneNutritionScraper(BaseScraper):
                             if clean_price:
                                 price = int(clean_price)
 
-                            # Rating / Reviews
-                            rating = "0"
-                            reviews = "0"
+                            # --- Detail Extraction (Multi-tab) ---
+                            image_url = ""
+                            sku = ""
+                            description = ""
                             
+                            if link != "N/D":
+                                try:
+                                    detail_page = context.new_page()
+                                    detail_page.goto(link, wait_until="domcontentloaded", timeout=40000)
+                                    
+                                    # 1. Main Image (HD)
+                                    img_el = detail_page.locator('.product-cover img').first
+                                    if img_el.count() > 0:
+                                        src = img_el.get_attribute("src")
+                                        if src:
+                                            image_url = src
+                                            
+                                    # 2. SKU
+                                    sku_el = detail_page.locator("span[itemprop='sku'], meta[itemprop='sku']").first
+                                    if sku_el.count() > 0:
+                                        if sku_el.get_attribute("content"):
+                                             sku = sku_el.get_attribute("content")
+                                        else:
+                                             sku = sku_el.inner_text().strip()
+                                    
+                                    # 3. Description
+                                    desc_el = detail_page.locator('#description, .product-description').first
+                                    if desc_el.count() > 0:
+                                        description = desc_el.inner_text().strip()
+                                        
+                                    detail_page.close()
+                                    
+                                except Exception as e:
+                                    print(f"[yellow]Error loading details for {link}: {e}[/yellow]")
+                                    try: detail_page.close()
+                                    except: pass
+
                             yield {
                                 'date': current_date,
                                 'site_name': self.site_name,
@@ -189,18 +228,22 @@ class OneNutritionScraper(BaseScraper):
                                 'brand': brand,
                                 'price': price,
                                 'link': link,
-                                'rating': rating,
-                                'reviews': reviews,
-                                'active_discount': active_discount
+                                'rating': "0",
+                                'reviews': "0",
+                                'active_discount': active_discount,
+                                'thumbnail_image_url': thumbnail_url,
+                                'image_url': image_url,
+                                'sku': sku,
+                                'description': description
                             }
                         
                         # Paginación
                         next_btn = page.locator(self.selectors['next_button'])
                         if next_btn.count() > 0 and next_btn.first.is_visible():
-                            href_next = next_btn.first.get_attribute("href")
-                            if href_next:
+                            href = next_btn.first.get_attribute("href")
+                            if href:
                                 print(f"  > Avanzando a página {page_number + 1}...")
-                                page.goto(href_next)
+                                page.goto(href)
                                 page_number += 1
                                 page.wait_for_timeout(2000)
                             else:
