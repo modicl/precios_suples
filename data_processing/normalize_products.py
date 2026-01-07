@@ -91,12 +91,8 @@ def extract_flavors(text):
         'orange', 'naranja', 'limon', 'limón', 'lemon', 'piña', 'pineapple',
         'mango', 'maracuya', 'passion', 'sandia', 'watermelon', 'uva', 'grape',
         'blue', 'razz', 'raspberry', 'frambuesa', 'manzana', 'apple', 'punch', 'fruit',
-        'mocka', 'mocha', 'cafe', 'café', 'coffee', 'caramel', 'caramelo', 'toffee',
-        'orange', 'naranja', 'limon', 'limón', 'lemon', 'piña', 'pineapple',
-        'mango', 'maracuya', 'passion', 'sandia', 'watermelon', 'uva', 'grape',
-        'blue', 'razz', 'raspberry', 'frambuesa', 'manzana', 'apple', 'punch', 'fruit',
         'unflavored', 'sin sabor', 'neutro', 'natural', 'bitter',
-        'cocada', 'blanco', 'white'
+        'cocada', 'blanco', 'white', 'nuts', 'power', 'crunch', 'crunchy', 'creamy'
     ]
     
     found_flavors = set()
@@ -115,7 +111,8 @@ def check_critical_mismatch(text1, text2):
         'vegan', 'deluxe', 'joy', 'milkii', 'wpc80', 'isolate', 
         'hydro', 'concentrate', 'bar', 'barrita', 'men', 'senior', 'd3', 'b12',
         'pro', 'creamy', 'crunchy', 'hero', 'super', 'dark', 'instant', 'intense',
-        'gold', 'turbo', 'shock', 'storm',
+        'gold', 'turbo', 'shock', 'storm', 'caffeine', 'cafeina', 'sabores',
+        'fusili', 'filini',
         # Gender specificity
         'woman', 'women', 'her', 'hers', 'female', 'mujer'
     ]
@@ -137,10 +134,19 @@ def check_critical_mismatch(text1, text2):
     # or "con " vs missing "con ".
     
     # Actually, simpler: check if "sin " is present in one but not other.
+    # Check for "con" vs "sin" mismatch (contextual)
+    # E.g. "sin cafeina" vs "con cafeina"
     if ('sin ' in t1) != ('sin ' in t2):
         return True
         
     return False
+
+def check_percentage_mismatch(text1, text2):
+    # Extracts numbers followed by %
+    # Returns True if mismatch found
+    p1 = set(re.findall(r'(\d+)%', text1))
+    p2 = set(re.findall(r'(\d+)%', text2))
+    return p1 != p2
 
 def normalize_names(threshold=87):
     processed_dir = "processed_data"
@@ -206,6 +212,10 @@ def normalize_names(threshold=87):
             if check_critical_mismatch(name, candidate_rep):
                 continue
 
+            # 1.1 Percentage Mismatch (70% vs 79%)
+            if check_percentage_mismatch(name, candidate_rep):
+                continue
+
             # 2. Pack Quantity (5x)
             Nx_rep = extract_pack_quantity(candidate_rep)
             if Nx_candidate != Nx_rep:
@@ -235,9 +245,8 @@ def normalize_names(threshold=87):
             flavors_rep = extract_flavors(candidate_rep)
             # 5. Flavors
             flavors_rep = extract_flavors(candidate_rep)
-            if flavors_candidate and flavors_rep:
-                if flavors_candidate != flavors_rep:
-                    continue
+            if flavors_candidate != flavors_rep:
+                continue
             
             # 6. Brand Strictness
             # If both have a valid brand, they MUST match.
