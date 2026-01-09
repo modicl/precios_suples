@@ -72,6 +72,7 @@ with engine.connect() as conn:
     result = conn.execute(sa.text("SELECT * FROM marcas")).fetchall()
     marcas_existentes = {row.nombre_marca for row in result}
 
+
 ## Filtramos las marcas desde el df
 nombres_marcas = df["brand"][df["brand"].notna()].unique().tolist() # Eliminamos las marcas NaN
 nombres_marcas_json = [{"nombre_marca": nombre} for nombre in nombres_marcas if nombre not in marcas_existentes] # Filtramos las marcas que ya existen
@@ -80,34 +81,92 @@ with engine.connect() as conn:
     if len(nombres_marcas_json) > 0:
         conn.execute(sa.text("INSERT INTO marcas (nombre_marca) VALUES(:nombre_marca) ON CONFLICT (nombre_marca) DO NOTHING"), nombres_marcas_json)
         conn.commit()
+
     else:
         print("No hay marcas nuevas para insertar.")
 
 
-# # Insercion subcategorias + su id de categoria(si ya existen no revisamos)
-# ## Subcategorias 
-# nombres_subcategorias = df[["subcategory","category"]].drop_duplicates().values.tolist()
-# nombres_subcategorias_json = [{"nombre_subcategoria": subcategoria , "categoria": categoria, "id_categoria": None} for subcategoria,categoria in nombres_subcategorias]
+# 4.Insercion subcategorias + su id de categoria(si ya existen no revisamos)
 
-# # Para no repetir la busqueda de tupla categoria/subcategoria para obtener la id de la categoria
-# vistos = set()
-# # Buscamos la id de la categoria
-# with engine.connect() as conn:
-#     for subcategoria, categoria in nombres_subcategorias:
-#         if (subcategoria , categoria) not in vistos:
-#             query = f"select id_categoria from categorias c where nombre_categoria = '{categoria}';"
-#             result = conn.execute(sa.text(query))
-#             for row in result:
-#                 nombres_subcategorias_json[nombres_subcategorias.index([subcategoria,categoria])]["id_categoria"] = row[0]
-#             vistos.add((subcategoria , categoria))
-#         else:
-#             print(f"Combinacion categoria-subcategoria: {categoria} - {subcategoria} ya revisada en este proceso.")
+## Combinaciones ya existentes
+with engine.connect() as conn:
+#  Obtenemos todas las combinaciones categoria-subcategoria existentes en una query
+    result = conn.execute(sa.text("SELECT sc.nombre_subcategoria, c.nombre_categoria FROM subcategorias sc JOIN categorias c ON sc.id_categoria = c.id_categoria")).fetchall()
+    subcat_existentes = {(row.nombre_subcategoria, row.nombre_categoria) for row in result}
+## Obtenemos todas las categorias existentes en una query
+    cat_result = conn.execute(sa.text("SELECT nombre_categoria, id_categoria FROM categorias")).fetchall()
+    cat_ids = {row.nombre_categoria: row.id_categoria for row in cat_result}
 
-#     conn.execute(sa.text("INSERT INTO subcategorias (nombre_subcategoria, id_categoria) VALUES(:nombre_subcategoria, :id_categoria) ON CONFLICT (nombre_subcategoria) DO NOTHING"), nombres_subcategorias_json)
-#     conn.commit()
+## Subcategorias y preparacion datos a insertar
+nombres_subcategorias = df[["subcategory","category"]].drop_duplicates().values.tolist()
+nombres_subcategorias_json = []
+
+# Revisamos si la combinacion categoria-subcategoria ya existe
+for subcategoria, categoria in nombres_subcategorias:
+    if (subcategoria , categoria) not in subcat_existentes:
+        nombres_subcategorias_json.append({
+            "nombre_subcategoria": subcategoria,
+            "id_categoria": cat_ids[categoria]
+        })
+        print(f"Nueva combinacion categoria-subcategoria: {categoria} - {subcategoria} agregada para insercion.")
+    else:
+        print(f"Combinacion categoria-subcategoria: {categoria} - {subcategoria} ya existe.")
+
+# Insertamos las nuevas subcategorias
+if len(nombres_subcategorias_json) > 0:
+    with engine.connect() as conn:
+        conn.execute(sa.text("INSERT INTO subcategorias (nombre_subcategoria, id_categoria) VALUES(:nombre_subcategoria, :id_categoria)"), nombres_subcategorias_json)
+        conn.commit()
+
+else:
+    print("No hay subcategorias nuevas para insertar.")
 
 
-# ## Por arreglar, mejorar el filtrado para insercion y evitar consumo de la secuencia innecesaria
+# 5. Insercion de productos
+## Primero obtenemos los ids necesarios para la insercion
+with engine.connect() as conn:
+    ## Obtenemos todas las subcategorias existentes en una query
+    subcat_result = conn.execute(sa.text("SELECT nombre_subcategoria, id_subcategoria FROM subcategorias")).fetchall()
+    subcat_ids = {row.nombre_subcategoria: row.id_subcategoria for row in subcat_result}
+
+    ## Obtenemos las marcas exsitentes en una query
+    marca_result = conn.execute(sa.text("SELECT nombre_marca, id_marca FROM marcas")).fetchall()
+    marca_ids = {row.nombre_marca: row.id_marca for row in marca_result}
+
+    ## Obtenemos los productos ya existentes
+    prod_result = conn.execute(sa.text("SELECT nombre_producto, id_marca, id_subcategoria FROM productos")).fetchall()
+    productos_existentes = {(row.nombre_producto, row.id_marca, row.id_subcategoria) for row in prod_result}
+
+    # Preparamos los datos para insertar
+    productos_json = []
+    ## Filtramos las filas con subcategoria NaN
+    df_productos = df[df["subcategory"].notna()]
+    for index, row in df_productos.iterrows():
+        productos_json.append({"nombre_producto": row["product_name"],
+                        "url_imagen": row["image_url"],
+                        "url_thumb_imagen": row["thumbnail_image_url"],
+                        "descripcion": row["description"],
+                        "id_marca" : marca_ids[row["brand"]] if pd.notna(row["brand"]) and row["brand"] in marca_ids else 14,# Si no tiene marca o no existe en la tabla, asignamos id_marca = 14 (Marca: 'Sin Marca')
+                        "id_subcategoria": subcat_ids[row["subcategory"]]
+                        })
+    
+    # Lista final a insertar
+    productos_insertar_json = []
+    ## Revisamos si cada producto ya existe (implemetnar logica de conflicto por nombre_producto, id_marca, id_subcategoria)
+    for producto in productos_json:
+        nombre_pruducto = producto["nombre_producto"]
+        id_marca = producto["id_marca"]
+        id_subcategoria = producto["id_subcategoria"]
+        if (nombre_pruducto, id_marca,id_subcategoria) not in productos_existentes:
+            productos_insertar_json.append(producto)
+            print(f"El producto {producto['nombre_producto']} con id_marca {producto['id_marca']} y id_subcategoria {producto['id_subcategoria']} agregado para insercion.")
+    
+    # Insertamos los productos
+    if(len(productos_insertar_json) > 0):
+        conn.execute(sa.text("INSERT INTO productos (nombre_producto, url_imagen, url_thumb_imagen, descripcion, id_marca, id_subcategoria) VALUES(:nombre_producto, :url_imagen, :url_thumb_imagen, :descripcion, :id_marca, :id_subcategoria) ON CONFLICT (nombre_producto, id_marca,id_subcategoria) DO NOTHING"), productos_insertar_json)
+        conn.commit()
+    else:
+        print("No hay productos nuevos para insertar.")
 
 
 
