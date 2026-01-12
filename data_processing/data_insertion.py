@@ -30,7 +30,7 @@ except Exception as e:
 
 
 # Cargamos los datos
-df = pd.read_csv("processed_data/fuzzy_matched/normalized_products_2026-01-06.csv")
+df = pd.read_csv("processed_data/fuzzy_matched/normalized_products_2026-01-12.csv")
 
 # 1. Insertamos las categorias si es que no existen
 ## Nos traemos las categorias ya existentes
@@ -141,8 +141,12 @@ with engine.connect() as conn:
     productos_json = []
     ## Filtramos las filas con subcategoria NaN
     df_productos = df[df["subcategory"].notna()]
+    # Usamos normalized_name para el nombre del producto para agrupar variantes
     for index, row in df_productos.iterrows():
-        productos_json.append({"nombre_producto": row["product_name"],
+        # Usamos normalized_name si existe, si no product_name
+        nombre_final = row["normalized_name"] if "normalized_name" in row and pd.notna(row["normalized_name"]) else row["product_name"]
+        
+        productos_json.append({"nombre_producto": nombre_final,
                         "url_imagen": row["image_url"],
                         "url_thumb_imagen": row["thumbnail_image_url"],
                         "descripcion": row["description"],
@@ -153,20 +157,100 @@ with engine.connect() as conn:
     # Lista final a insertar
     productos_insertar_json = []
     ## Revisamos si cada producto ya existe (implemetnar logica de conflicto por nombre_producto, id_marca, id_subcategoria)
+    seen_products = set()
+    
     for producto in productos_json:
-        nombre_pruducto = producto["nombre_producto"]
+        nombre_producto = producto["nombre_producto"]
         id_marca = producto["id_marca"]
         id_subcategoria = producto["id_subcategoria"]
-        if (nombre_pruducto, id_marca,id_subcategoria) not in productos_existentes:
+        
+        # Clave unica para evitar duplicados en la lista de insercion
+        key = (nombre_producto, id_marca, id_subcategoria)
+        
+        if key not in productos_existentes and key not in seen_products:
             productos_insertar_json.append(producto)
-            print(f"El producto {producto['nombre_producto']} con id_marca {producto['id_marca']} y id_subcategoria {producto['id_subcategoria']} agregado para insercion.")
+            seen_products.add(key)
+            # print(f"El producto {nombre_producto} agregado para insercion.") # Reduce spam
     
     # Insertamos los productos
     if(len(productos_insertar_json) > 0):
+        print(f"Insertando {len(productos_insertar_json)} productos nuevos...")
         conn.execute(sa.text("INSERT INTO productos (nombre_producto, url_imagen, url_thumb_imagen, descripcion, id_marca, id_subcategoria) VALUES(:nombre_producto, :url_imagen, :url_thumb_imagen, :descripcion, :id_marca, :id_subcategoria) ON CONFLICT (nombre_producto, id_marca,id_subcategoria) DO NOTHING"), productos_insertar_json)
         conn.commit()
     else:
         print("No hay productos nuevos para insertar.")
 
+# 6. Insercion ProductoTienda
+
+## Tiendas y sus ids
+
+with engine.connect() as conn:
+    tienda_result = conn.execute(sa.text("SELECT id_tienda, nombre_tienda FROM tiendas")).fetchall()
+    tienda_ids = {row.nombre_tienda: row.id_tienda for row in tienda_result}
+
+## Productos y sus ids
+with engine.connect() as conn:
+    prod_result = conn.execute(sa.text("SELECT id_producto, nombre_producto FROM productos")).fetchall()
+    producto_ids = {row.nombre_producto: row.id_producto for row in prod_result}
+
+## ProductoTienda actuales
+with engine.connect() as conn:
+    prod_tiend_result = conn.execute(sa.text("SELECT id_producto, id_tienda FROM producto_tienda")).fetchall()
+    producto_tienda_existentes = {(row.id_producto, row.id_tienda) for row in prod_tiend_result}
+
+## Preparamos los datos para insertar
+productos_tienda_json = []
+productos_tienda_vistos = set() # Evitamos la duplibacion en la primera vez
+for index, row in df.iterrows():
+    # Buscamos el ID usando el normalized_name que es como se guardó en la BD
+    nombre_busqueda = row["normalized_name"] if "normalized_name" in row and pd.notna(row["normalized_name"]) else row["product_name"]
+    id_producto = producto_ids.get(nombre_busqueda)
+    
+    id_tienda = tienda_ids.get(row["site_name"])
+    if id_producto and id_tienda:
+        if (id_producto, id_tienda) not in productos_tienda_vistos and (id_producto, id_tienda) not in producto_tienda_existentes:
+            productos_tienda_json.append({
+                "id_producto": id_producto,
+                "id_tienda": id_tienda,
+            })
+            productos_tienda_vistos.add((id_producto, id_tienda))
+            # print(f"Link {id_producto}-{id_tienda} agregado.")
+
+print(f"Total combinaciones producto-tienda a insertar: {len(productos_tienda_json)}")
+# print(f"Las combinaciones son : {productos_tienda_json}")
 
 
+if len(productos_tienda_json) > 0:
+    with engine.connect() as conn:
+        conn.execute(sa.text("INSERT INTO producto_tienda (id_producto, id_tienda) VALUES(:id_producto, :id_tienda) ON CONFLICT DO NOTHING"), productos_tienda_json)
+        conn.commit()
+
+
+
+# 7. Insercion Historial Precios
+
+## Obtenemos los ids de producto_tienda
+with engine.connect() as conn:
+    prod_tiend_result = conn.execute(sa.text("SELECT id_producto_tienda, id_producto, id_tienda FROM producto_tienda")).fetchall()
+    producto_tienda_ids = {(row.id_producto, row.id_tienda): row.id_producto_tienda for row in prod_tiend_result}
+
+## Preparamos los datos para insertar
+historial_precios_json = []
+for index, row in df.iterrows():
+    # Buscamos ID producto usando normalized_name
+    nombre_busqueda = row["normalized_name"] if "normalized_name" in row and pd.notna(row["normalized_name"]) else row["product_name"]
+    id_producto = producto_ids.get(nombre_busqueda)
+     
+    id_tienda = tienda_ids.get(row["site_name"])
+    id_producto_tienda = producto_tienda_ids.get((id_producto, id_tienda))
+    if id_producto_tienda:
+        historial_precios_json.append({
+            "id_producto_tienda": id_producto_tienda,
+            "precio": row["price"],
+            "fecha_precio": pd.to_datetime(row["date"]).date()
+        })
+# Insertamos los datos
+if len(historial_precios_json) > 0:
+    with engine.connect() as conn:
+        conn.execute(sa.text("INSERT INTO historia_precios (id_producto_tienda, precio, fecha_precio) VALUES(:id_producto_tienda, :precio, :fecha_precio)"), historial_precios_json)
+        conn.commit()

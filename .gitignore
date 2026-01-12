@@ -18,3 +18,7 @@ env/
 
 # Logs
 *.log
+
+# Testing
+testcsv.py
+testsql.py
