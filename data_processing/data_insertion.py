@@ -2,6 +2,8 @@ import os
 import sqlalchemy as sa
 import pandas as pd
 from dotenv import load_dotenv
+import glob
+import shutil
 
 # 1. Cargar variables de entorno
 load_dotenv() # Carga el archivo .env por defecto
@@ -17,6 +19,23 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 # Formato: postgresql://user:password@host:port/dbname
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
+# Directorios de datos
+INPUT_DIR = "processed_data/fuzzy_matched"
+BACKUP_DIR = "processed_data/inserted_data"
+
+# Buscar el archivo más reciente de normalized_products
+csv_files = glob.glob(os.path.join(INPUT_DIR, "normalized_products_*.csv"))
+
+if not csv_files:
+    print(f"No se encontraron archivos normalized_products_*.csv en {INPUT_DIR}")
+    # No salimos con error, solo informamos, a menos que sea crítico
+    exit()
+
+# Ordenar por fecha de modificación para tomar el más reciente
+latest_file = max(csv_files, key=os.path.getmtime)
+print(f"Procesando archivo: {latest_file}")
+
+
 try:
     # 4. Crear motor
     engine = sa.create_engine(DATABASE_URL)
@@ -27,10 +46,11 @@ try:
         
 except Exception as e:
     print(f"Error conectando a la base de datos: {e}")
+    exit()
 
 
 # Cargamos los datos
-df = pd.read_csv("processed_data/fuzzy_matched/normalized_products_2026-01-12.csv")
+df = pd.read_csv(latest_file)
 
 # 1. Insertamos las categorias si es que no existen
 ## Nos traemos las categorias ya existentes
@@ -205,6 +225,8 @@ for index, row in df.iterrows():
     # Buscamos el ID usando el normalized_name que es como se guardó en la BD
     nombre_busqueda = row["normalized_name"] if "normalized_name" in row and pd.notna(row["normalized_name"]) else row["product_name"]
     id_producto = producto_ids.get(nombre_busqueda)
+    # Las urls
+    url_producto = row["link"]
     
     id_tienda = tienda_ids.get(row["site_name"])
     if id_producto and id_tienda:
@@ -212,6 +234,7 @@ for index, row in df.iterrows():
             productos_tienda_json.append({
                 "id_producto": id_producto,
                 "id_tienda": id_tienda,
+                "url_link": url_producto,
             })
             productos_tienda_vistos.add((id_producto, id_tienda))
             # print(f"Link {id_producto}-{id_tienda} agregado.")
@@ -222,7 +245,7 @@ print(f"Total combinaciones producto-tienda a insertar: {len(productos_tienda_js
 
 if len(productos_tienda_json) > 0:
     with engine.connect() as conn:
-        conn.execute(sa.text("INSERT INTO producto_tienda (id_producto, id_tienda) VALUES(:id_producto, :id_tienda) ON CONFLICT DO NOTHING"), productos_tienda_json)
+        conn.execute(sa.text("INSERT INTO producto_tienda (id_producto, id_tienda, url_link) VALUES(:id_producto, :id_tienda, :url_link) ON CONFLICT (id_producto, id_tienda) DO UPDATE SET url_link = EXCLUDED.url_link"), productos_tienda_json)
         conn.commit()
 
 
@@ -254,3 +277,17 @@ if len(historial_precios_json) > 0:
     with engine.connect() as conn:
         conn.execute(sa.text("INSERT INTO historia_precios (id_producto_tienda, precio, fecha_precio) VALUES(:id_producto_tienda, :precio, :fecha_precio)"), historial_precios_json)
         conn.commit()
+
+
+# --- MOVER ARCHIVO PROCESADO AL RESPALDO ---
+try:
+    if not os.path.exists(BACKUP_DIR):
+        os.makedirs(BACKUP_DIR)
+        print(f"Directorio creado: {BACKUP_DIR}")
+
+    destination = os.path.join(BACKUP_DIR, os.path.basename(latest_file))
+    shutil.move(latest_file, destination)
+    print(f"Archivo movido exitosamente a: {destination}")
+
+except Exception as e:
+    print(f"Error al mover el archivo de respaldo: {e}")
