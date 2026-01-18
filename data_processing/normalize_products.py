@@ -14,7 +14,7 @@ def extract_sizes(text):
     if not isinstance(text, str): return tuple()
     
     # Regex for common supplement units
-    pattern = r'(\d+(?:[.,]\d+)?)\s*(lbs?|libras?|kgs?|kilos?|gr?|gramos?|oz|onzas?|tabs?|tabletas?|caps?|c[aá]psulas?|softgels?|soft|comprimidos?|servicios?|servs?|svs?|scoops?|sachets?|unid\.|unida?d?e?s?|mcg|mg|iu|ui|ml|l|litros?|ampollas?|amp|billions?|billones?)'
+    pattern = r'(\d+(?:[.,]\d+)?)\s*(lbs?|libras?|kgs?|kilos?|gr?|gramos?|oz|onzas?|tabs?|tabletas?|caps?|c[aá]psulas?|softgels?|soft|comprimidos?|servicios?|servs?|svs?|scoops?|sachets?|unid\.|unida?d?e?s?|mcg|mg|iu|ui|ml|l|litros?|ampollas?|amp|billions?|billones?|porciones?)'
     
     unit_map = {
         'lbs': 'lb', 'libra': 'lb', 'libras': 'lb',
@@ -32,7 +32,8 @@ def extract_sizes(text):
         'iu': 'iu', 'ui': 'iu',
         'ml': 'ml', 'l': 'l', 'litro': 'l', 'litros': 'l',
         'ampollas': 'amp', 'ampolla': 'amp', 'amp': 'amp',
-        'billion': 'billion', 'billions': 'billion', 'billon': 'billion', 'billones': 'billion'
+        'billion': 'billion', 'billions': 'billion', 'billon': 'billion', 'billones': 'billion',
+        'porciones': 'serv', 'porcion': 'serv'
     }
     
     matches = re.findall(pattern, text.lower())
@@ -68,10 +69,27 @@ def detect_packaging(text):
 
 def extract_pack_quantity(text):
     if not isinstance(text, str): return None
-    # Matches "5x" or "Pack 2" or "Pack de 2"
+    # Matches "5x" or "Pack 2" or "Pack de 2" or starting "2 "
+    # Case: "5x" (existing)
     match_x = re.search(r'(?:^|\s)(\d+)\s*[xX]\s', text)
     if match_x:
         return match_x.group(1)
+
+    # Case: Starting number indicating pack (e.g. "2 Mass Extreme")
+    # Must be at start of string, followed by space, avoiding "100% ..."
+    match_start = re.search(r'^(\d+)\s+(?!\d|%|lbs|kg|gr)', text)
+    if match_start:
+         val = int(match_start.group(1))
+         if val > 1 and val < 10: # Safety: only treat small numbers as pack quantities
+             return str(val)
+
+    # Case: Starting number indicating pack (e.g. "2 Mass Extreme")
+    # Must be at start of string, followed by space, avoiding "100% ..."
+    match_start = re.search(r'^(\d+)\s+(?!\d|%|lbs|kg|gr)', text)
+    if match_start:
+         val = int(match_start.group(1))
+         if val > 1 and val < 10: # Safety: only treat small numbers as pack quantities
+             return str(val)
         
     match_pack = re.search(r'pack\s+(?:de\s+)?(\d+)', text.lower())
     if match_pack:
@@ -112,7 +130,7 @@ def check_critical_mismatch(text1, text2):
         'hydro', 'concentrate', 'bar', 'barrita', 'men', 'senior', 'd3', 'b12',
         'pro', 'creamy', 'crunchy', 'hero', 'super', 'dark', 'instant', 'intense',
         'gold', 'turbo', 'shock', 'storm', 'caffeine', 'cafeina', 'sabores',
-        'fusili', 'filini',
+        'fusili', 'filini', 'tubo', 'sachet', 'vivace', 'cremoso', 'intenso', 'dolce', 'top',
         # Gender specificity
         'woman', 'women', 'her', 'hers', 'female', 'mujer'
     ]
