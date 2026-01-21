@@ -55,6 +55,9 @@ class FitMarketChileScraper(BaseScraper):
             "detail_brand": "N/D", # Not explicitly standardized
             "detail_title": "h1.product_title",
             
+            # Out of stock
+            "out_of_stock": ".out-of-stock",
+
             # Pagination
             "next_button": "a.next.page-numbers"
         }
@@ -127,6 +130,11 @@ class FitMarketChileScraper(BaseScraper):
                             clean_price = re.sub(r'[^\d]', '', price_text)
                             if clean_price:
                                 price = int(clean_price)
+
+                            # Out of stock check: if 'agotado' badge is present, price is 0
+                            if card.locator(self.selectors['out_of_stock']).count() > 0:
+                                price = 0
+                                active_discount = False
 
                             # Thumbnail
                             thumbnail_url = ""

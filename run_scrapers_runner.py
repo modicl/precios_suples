@@ -14,7 +14,8 @@ def run_scrapers():
         "scrapers/SuplementosBullChileScraper.py",
         "scrapers/MuscleFactoryScraper.py",
         "scrapers/FitMarketChileScraper.py",
-        "scrapers/DecathlonScraper.py"
+        "scrapers/DecathlonScraper.py",
+        "scrapers/DrSimiScraper.py"
     ]
 
     processes = []
