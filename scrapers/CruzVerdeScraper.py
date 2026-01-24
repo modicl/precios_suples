@@ -30,7 +30,11 @@ class CruzVerdeScraper(BaseScraper):
             # Si no hay oferta, a veces usa clases estándar dentro de ml-price-tag-v2
             
             # Stock
-            "no_stock_badge": "div:has-text('Sin stock online')" # Pseudo-selector de Playwright muy útil
+            "no_stock_badge": "div:has-text('Sin stock online')", # Pseudo-selector de Playwright muy útil
+            
+            # Selectores de página de detalle
+            "detail_image": "img.ngxImageZoomThumbnail",
+            "description": "p >> text=Ayuda a la recuperación"
         }
 
         super().__init__(base_url, headless, category_urls=list(self.categories_config.values()), selectors=selectors, site_name="Cruz Verde")
@@ -164,6 +168,51 @@ class CruzVerdeScraper(BaseScraper):
                             else:
                                 final_category = "Vitaminas y Minerales"
                         
+                        # 5. DETAIL EXTRACTION (NEW TAB)
+                        detail_image_url = image_url  # Fallback a thumbnail
+                        sku = "N/D"
+                        description = "N/D"
+                        
+                        if link != "N/D":
+                            context = page.context
+                            detail_page = None
+                            try:
+                                detail_page = context.new_page()
+                                detail_page.goto(link, wait_until="domcontentloaded", timeout=30000)
+                                
+                                # Esperar a que la página cargue completamente
+                                detail_page.wait_for_load_state("networkidle", timeout=10000)
+                                
+                                # Extraer imagen full
+                                if detail_page.locator(self.selectors['detail_image']).count() > 0:
+                                    img_elem = detail_page.locator(self.selectors['detail_image']).first
+                                    img_src = img_elem.get_attribute('src')
+                                    if img_src and not ('disclaimer' in img_src or 'logo' in img_src):
+                                        detail_image_url = img_src
+                                
+                                # Extraer descripción - usar evaluate para buscar el párrafo
+                                try:
+                                    description_js = detail_page.evaluate('''() => {
+                                        const allP = Array.from(document.querySelectorAll('p'));
+                                        const p = allP.find(p => p.textContent.includes('Ayuda a la recuperación'));
+                                        return p ? p.textContent.trim() : null;
+                                    }''')
+                                    if description_js:
+                                        description = description_js
+                                except:
+                                    pass
+                                
+                                # Extraer SKU de la URL
+                                url_match = re.search(r'/(\d+)\.html', link)
+                                if url_match:
+                                    sku = url_match.group(1)
+                                
+                                detail_page.close()
+                            except Exception as e:
+                                print(f"[red]Error extrayendo detalle de {link}: {e}[/red]")
+                                if detail_page:
+                                    detail_page.close()
+                        
                         current_date = datetime.now().strftime("%Y-%m-%d")
 
                         yield {
@@ -179,9 +228,9 @@ class CruzVerdeScraper(BaseScraper):
                             'reviews': "0",
                             'active_discount': active_discount,
                             'thumbnail_image_url': image_url,
-                            'image_url': image_url,
-                            'sku': "N/D",
-                            'description': "N/D"
+                            'image_url': detail_image_url,
+                            'sku': sku,
+                            'description': description
                         }
 
                     except Exception as e:

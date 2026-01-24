@@ -30,10 +30,15 @@ class FarmaciaKnopScraper(BaseScraper):
             "old_price": "strike.bootic-price-comparison, .old-price",
             
             # Stock: Botón "Notificarme" indica sin stock
-            "notify_button": "button.notify-in-stock, button:has-text('Notificarme')"
+            "notify_button": "button.notify-in-stock, button:has-text('Notificarme')",
+            
+            # Selectores de página de detalle
+            "detail_image": ".product-image-container img, img[class*='product']",
+            "description": "p:has-text('Beneficios'), .product-description, p:has-text('Presentación')",
+            "sku": "p:has-text('SKU:')"
         }
 
-        super().__init__(base_url, headless, category_urls=list(self.categories_config.values()), selectors=selectors, site_name="Farmacia Knop")
+        super().__init__(base_url, headless, category_urls=list(self.categories_config.values()), selectors=selectors, site_name="Farmacia Knopp")
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.categories_config)} categorías en Farmacia Knop...[/green]")
@@ -128,6 +133,44 @@ class FarmaciaKnopScraper(BaseScraper):
                             # Fallback raro
                             price = 0
 
+                    # DETAIL EXTRACTION (NEW TAB)
+                    detail_image_url = image_url  # Fallback a thumbnail
+                    sku = "N/D"
+                    description = "N/D"
+                    
+                    if link != "N/D":
+                        context = page.context
+                        detail_page = None
+                        try:
+                            detail_page = context.new_page()
+                            detail_page.goto(link, wait_until="domcontentloaded", timeout=30000)
+                            detail_page.wait_for_load_state("networkidle")  # Wait for dynamic content
+                            
+                            # Extraer imagen full
+                            img_selector = self.selectors['detail_image']
+                            if detail_page.locator(img_selector).count() > 0:
+                                detail_image_url = detail_page.locator(img_selector).first.get_attribute('src')
+                            
+                            # Extraer descripción - puede estar en una sección colapsable
+                            desc_selector = self.selectors['description']
+                            if detail_page.locator(desc_selector).count() > 0:
+                                description = detail_page.locator(desc_selector).first.inner_text().strip()
+                            
+                            # Extraer SKU - buscar por texto que contenga "SKU:"
+                            sku_selector = self.selectors['sku']
+                            if detail_page.locator(sku_selector).count() > 0:
+                                sku_text = detail_page.locator(sku_selector).first.inner_text()
+                                # Extraer solo el código SKU
+                                sku_match = re.search(r'SKU:\s*([A-Z0-9-]+)', sku_text, re.IGNORECASE)
+                                if sku_match:
+                                    sku = sku_match.group(1)
+                            
+                            detail_page.close()
+                        except Exception as e:
+                            print(f"[red]Error extrayendo detalle de {link}: {e}[/red]")
+                            if detail_page:
+                                detail_page.close()
+                    
                     current_date = datetime.now().strftime("%Y-%m-%d")
 
                     yield {
@@ -143,9 +186,9 @@ class FarmaciaKnopScraper(BaseScraper):
                         'reviews': "0",
                         'active_discount': active_discount,
                         'thumbnail_image_url': image_url,
-                        'image_url': image_url,
-                        'sku': "N/D",
-                        'description': "N/D"
+                        'image_url': detail_image_url,
+                        'sku': sku,
+                        'description': description
                     }
 
                 except Exception as e:

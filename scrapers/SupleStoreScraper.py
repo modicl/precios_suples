@@ -146,7 +146,7 @@ class SupleStoreScraper(BaseScraper):
                                     
                                     # 1. Main Image (HD)
                                     # Try to find the image zoom or main image
-                                    img_el = detail_page.locator('img.imagenpe, .bs-product-image img').first
+                                    img_el = detail_page.locator('img.imagenpe, .bs-product-image img, .bs-img-square img').first
                                     if img_el.count() > 0:
                                         # Use data-zoom if available for higher res, else src
                                         src = img_el.get_attribute("data-zoom") or img_el.get_attribute("src")

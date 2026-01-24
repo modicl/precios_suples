@@ -152,7 +152,7 @@ class OneNutritionScraper(BaseScraper):
                                 title = producto.locator(self.selectors['product_name']).first.inner_text().strip()
                             
                             # Brand (inferred)
-                            brand = title.split(' ')[0] if title != "N/D" else "N/D"
+                            brand = "N/D"
                             
                             # Thumbnail
                             thumbnail_url = ""

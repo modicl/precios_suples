@@ -14,7 +14,8 @@ def extract_sizes(text):
     if not isinstance(text, str): return tuple()
     
     # Regex for common supplement units
-    pattern = r'(\d+(?:[.,]\d+)?)\s*(lbs?|libras?|kgs?|kilos?|gr?|gramos?|oz|onzas?|tabs?|tabletas?|caps?|c[aá]psulas?|softgels?|soft|comprimidos?|servicios?|servs?|svs?|scoops?|sachets?|unid\.|unida?d?e?s?|mcg|mg|iu|ui|ml|l|litros?|ampollas?|amp|billions?|billones?|porciones?)'
+    # Added \b for units like 'u' to avoid matching inside words
+    pattern = r'(\d+(?:[.,]\d+)?)\s*(lbs?|libras?|kgs?|kilos?|gr?|gramos?|oz|onzas?|tabs?|tabletas?|caps?|c[aá]psulas?|softgels?|soft|comprimidos?|servicios?|servs?|svs?|scoops?|sachets?|unid\.|unida?d?e?s?|mcg|mg|iu|ui|ml|l|litros?|ampollas?|amp|billions?|billones?|porciones?|\bu\b)'
     
     unit_map = {
         'lbs': 'lb', 'libra': 'lb', 'libras': 'lb',
@@ -27,7 +28,7 @@ def extract_sizes(text):
         'servicios': 'serv', 'servicio': 'serv', 'servs': 'serv', 'serv': 'serv', 'svs': 'serv', 'sv': 'serv',
         'scoops': 'scoop', 'scoop': 'scoop',
         'sachet': 'sachet', 'sachets': 'sachet',
-        'unid.': 'unid', 'unid': 'unid', 'unidad': 'unid', 'unidades': 'unid', 'und': 'unid',
+        'unid.': 'unid', 'unid': 'unid', 'unidad': 'unid', 'unidades': 'unid', 'und': 'unid', 'u': 'unid', 'un': 'unid',
         'mcg': 'mcg', 'mg': 'mg',
         'iu': 'iu', 'ui': 'iu',
         'ml': 'ml', 'l': 'l', 'litro': 'l', 'litros': 'l',
@@ -131,8 +132,12 @@ def check_critical_mismatch(text1, text2):
         'pro', 'creamy', 'crunchy', 'hero', 'super', 'dark', 'instant', 'intense',
         'gold', 'turbo', 'shock', 'storm', 'caffeine', 'cafeina', 'sabores',
         'fusili', 'filini', 'tubo', 'sachet', 'vivace', 'cremoso', 'intenso', 'dolce', 'top',
+        # Variant specifics
+        'sf', 'regular', 'atena', 'afrodita', 'sirena', 'scugnizzo', 'moka',
+        # Bundles/Gifts
+        'shaker', 'regalo', 'vaso', 'botella', 'mochila',
         # Gender specificity
-        'woman', 'women', 'her', 'hers', 'female', 'mujer'
+        'woman', 'women', 'her', 'hers', 'female', 'mujer', 'ellos', 'ellas', 'hombre', 'hombres'
     ]
     
     for kw in keywords:

@@ -76,7 +76,7 @@ class ChileSuplementosScraper(BaseScraper):
             'rating': '.star-rating',
             'active_discount': '.onsale',
             'next_button': '.archive-products .next.page-numbers',
-            'thumbnail': 'img' # Relative to card
+            'thumbnail': '.porto-tb-featured-image img, .porto-tb-woo-link img' # Better grid selectors
         }
         
         super().__init__(base_url, headless, category_urls, selectors, site_name="ChileSuplementos")
@@ -139,8 +139,12 @@ class ChileSuplementosScraper(BaseScraper):
                                 thumbnail_url = ""
                                 thumb_elem = producto.locator(self.selectors['thumbnail']).first
                                 if thumb_elem.count() > 0:
-                                    src = thumb_elem.get_attribute("src") or thumb_elem.get_attribute("data-src")
+                                    src = thumb_elem.get_attribute("src") or thumb_elem.get_attribute("data-src") or thumb_elem.get_attribute("srcset")
                                     if src:
+                                        # If srcset, take the first one (usually small) or last (large)
+                                        # For thumbnail, first is fine, but src is safer
+                                        if "," in src:
+                                            src = src.split(",")[0].split(" ")[0]
                                         thumbnail_url = src
                                 
                                 # Price
@@ -185,16 +189,17 @@ class ChileSuplementosScraper(BaseScraper):
                                 description = ""
                                 
                                 if link != "N/D":
+                                    detail_page = None
                                     try:
                                         detail_page = context.new_page()
                                         detail_page.goto(link, wait_until="domcontentloaded", timeout=40000)
                                         
                                         # 1. Main Image
-                                        img_selectors = ['.woocommerce-product-gallery__image img', '.porto-product-main-image img', '.product-image img']
+                                        img_selectors = ['.woocommerce-product-gallery__image img', '.porto-product-main-image img', '.product-images img']
                                         for sel in img_selectors:
                                             img_el = detail_page.locator(sel).first
                                             if img_el.count() > 0:
-                                                src = img_el.get_attribute("src") or img_el.get_attribute("href")
+                                                src = img_el.get_attribute("src") or img_el.get_attribute("href") or img_el.get_attribute("data-src")
                                                 if src:
                                                     image_url = src
                                                     break
@@ -243,34 +248,44 @@ class ChileSuplementosScraper(BaseScraper):
                         else:
                             no_change_counter += 1
                         
+                        # Check if we should stop before trying to load more
+                        if no_change_counter >= 2:
+                            print("Se ha llegado al final del scroll.")
+                            break
+
                         # Pagination logic
                         load_more_btn = page.locator(self.selectors['next_button'])
-                        if load_more_btn.count() > 0:
+                        clicked = False
+                        
+                        if load_more_btn.count() > 0 and load_more_btn.first.is_visible():
                             print(f"  > Botón 'Cargar más' detectado.")
                             try:
-                                if not load_more_btn.first.is_visible():
-                                     load_more_btn.first.scroll_into_view_if_needed(timeout=3000)
-                                
-                                load_more_btn.first.click(force=True, timeout=3000)
-                                page.wait_for_timeout(5000) 
-                            except Exception as e:
-                                print(f"[yellow]  > Falló click normal ({e}). Intentando click JS...[/yellow]")
+                                load_more_btn.first.click(force=True)
+                                clicked = True
+                            except:
+                                print(f"[yellow]  > Falló click normal. Intentando click JS...[/yellow]")
                                 try:
                                     page.evaluate("arguments[0].click();", load_more_btn.first.element_handle())
-                                    page.wait_for_timeout(5000)
+                                    clicked = True
                                 except Exception as e_js:
                                     print(f"[red]  > Falló click JS también: {e_js}[/red]")
-                                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                                    page.wait_for_timeout(2000)
-                        else:
-                            print(f"  > No se detectó botón. Buscando scroll...")
-                            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                            page.wait_for_timeout(2000)
                         
-                        if page.locator(self.selectors['product_card']).count() == last_product_count:
-                            if no_change_counter >= 3:
-                                print("Se ha llegado al final del scroll.")
-                                break
+                        if not clicked:
+                            # Scroll if button wasn't clicked
+                            print(f"  > Buscando scroll...")
+                            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                        
+                        # Smart wait for products to increase
+                        try:
+                            # Wait up to 3 seconds for new products to appear
+                            # This is much faster than static sleep(5) or sleep(2)
+                            page.wait_for_function(
+                                f"document.querySelectorAll('{self.selectors['product_card']}').length > {last_product_count}",
+                                timeout=3000
+                            )
+                        except:
+                            # Timeout is expected when we reach the end
+                            pass
                     
                 except Exception as e:
                     print(f"[red]Error categoría {url}: {e}[/red]")

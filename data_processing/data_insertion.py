@@ -5,6 +5,12 @@ from dotenv import load_dotenv
 import glob
 import shutil
 
+def clean_text(text):
+    """Normalize text for case-insensitive comparison."""
+    if isinstance(text, str):
+        return text.lower().strip()
+    return ""
+
 # 1. Cargar variables de entorno
 load_dotenv() # Carga el archivo .env por defecto
 
@@ -56,11 +62,13 @@ df = pd.read_csv(latest_file)
 ## Nos traemos las categorias ya existentes
 with engine.connect() as conn:
     result = conn.execute(sa.text("SELECT * FROM categorias")).fetchall()
-    cat_existentes = {row.nombre_categoria for row in result}
+    # Usamos un set de nombres normalizados para comparación
+    cat_existentes_norm = {clean_text(row.nombre_categoria) for row in result}
 
 ## Categorias
-nombres_categorias = df["category"].unique().tolist()
-nombres_categorias_json = [{"nombre_categoria": nombre} for nombre in nombres_categorias if nombre not in cat_existentes] # Filtramos las categorias que ya existen
+nombres_categorias = df["category"].dropna().unique().tolist()
+# Filtramos las categorias que ya existen (comparando normalizado)
+nombres_categorias_json = [{"nombre_categoria": nombre} for nombre in nombres_categorias if clean_text(nombre) not in cat_existentes_norm]
 
 with engine.connect() as conn:
     if len(nombres_categorias_json) > 0:
@@ -73,11 +81,12 @@ with engine.connect() as conn:
 ## Nos traemos las tiendas ya existentes
 with engine.connect() as conn:
     result = conn.execute(sa.text("SELECT * FROM tiendas")).fetchall()
-    tiendas_existentes = {row.nombre_tienda for row in result}
+    tiendas_existentes_norm = {clean_text(row.nombre_tienda) for row in result}
 
 ## Filtramos las tiendas desde el df (ojo que no trae el dato de la url de la tienda, esto sera manual)
-nombres_tiendas = df["site_name"].unique().tolist()
-nombres_tiendas_json = [{"nombre_tienda": nombre} for nombre in nombres_tiendas if nombre not in tiendas_existentes] # Filtramos las tiendas que ya existen
+nombres_tiendas = df["site_name"].dropna().unique().tolist()
+# Filtramos las tiendas que ya existen
+nombres_tiendas_json = [{"nombre_tienda": nombre} for nombre in nombres_tiendas if clean_text(nombre) not in tiendas_existentes_norm] 
 
 with engine.connect() as conn:
     if len(nombres_tiendas_json) > 0:
@@ -90,12 +99,12 @@ with engine.connect() as conn:
 ## Nos traemos las marcas ya existentes
 with engine.connect() as conn:
     result = conn.execute(sa.text("SELECT * FROM marcas")).fetchall()
-    marcas_existentes = {row.nombre_marca for row in result}
+    marcas_existentes_norm = {clean_text(row.nombre_marca) for row in result}
 
 
 ## Filtramos las marcas desde el df
 nombres_marcas = df["brand"][df["brand"].notna()].unique().tolist() # Eliminamos las marcas NaN
-nombres_marcas_json = [{"nombre_marca": nombre} for nombre in nombres_marcas if nombre not in marcas_existentes] # Filtramos las marcas que ya existen
+nombres_marcas_json = [{"nombre_marca": nombre} for nombre in nombres_marcas if clean_text(nombre) not in marcas_existentes_norm] # Filtramos las marcas que ya existen
 
 with engine.connect() as conn:
     if len(nombres_marcas_json) > 0:
@@ -112,10 +121,13 @@ with engine.connect() as conn:
 with engine.connect() as conn:
 #  Obtenemos todas las combinaciones categoria-subcategoria existentes en una query
     result = conn.execute(sa.text("SELECT sc.nombre_subcategoria, c.nombre_categoria FROM subcategorias sc JOIN categorias c ON sc.id_categoria = c.id_categoria")).fetchall()
-    subcat_existentes = {(row.nombre_subcategoria, row.nombre_categoria) for row in result}
+    # Guardamos combinaciones normalizadas
+    subcat_existentes_norm = {(clean_text(row.nombre_subcategoria), clean_text(row.nombre_categoria)) for row in result}
+    
 ## Obtenemos todas las categorias existentes en una query
     cat_result = conn.execute(sa.text("SELECT nombre_categoria, id_categoria FROM categorias")).fetchall()
-    cat_ids = {row.nombre_categoria: row.id_categoria for row in cat_result}
+    # Mapa de nombre normalizado -> id
+    cat_ids_norm = {clean_text(row.nombre_categoria): row.id_categoria for row in cat_result}
 
 ## Subcategorias y preparacion datos a insertar
 nombres_subcategorias = df[["subcategory","category"]].drop_duplicates().values.tolist()
@@ -123,14 +135,21 @@ nombres_subcategorias_json = []
 
 # Revisamos si la combinacion categoria-subcategoria ya existe
 for subcategoria, categoria in nombres_subcategorias:
-    if (subcategoria , categoria) not in subcat_existentes:
-        nombres_subcategorias_json.append({
-            "nombre_subcategoria": subcategoria,
-            "id_categoria": cat_ids[categoria]
-        })
-        print(f"Nueva combinacion categoria-subcategoria: {categoria} - {subcategoria} agregada para insercion.")
+    # Use normalized keys for check and lookup
+    sub_norm = clean_text(subcategoria)
+    cat_norm = clean_text(categoria)
+    
+    if (sub_norm, cat_norm) not in subcat_existentes_norm:
+        # Recuperamos ID usando el nombre normalizado
+        if cat_norm in cat_ids_norm:
+            nombres_subcategorias_json.append({
+                "nombre_subcategoria": subcategoria, # Guardamos nombre original
+                "id_categoria": cat_ids_norm[cat_norm]
+            })
+            print(f"Nueva combinacion categoria-subcategoria: {categoria} - {subcategoria} agregada para insercion.")
     else:
-        print(f"Combinacion categoria-subcategoria: {categoria} - {subcategoria} ya existe.")
+        # print(f"Combinacion categoria-subcategoria: {categoria} - {subcategoria} ya existe.")
+        pass
 
 # Insertamos las nuevas subcategorias
 if len(nombres_subcategorias_json) > 0:
@@ -147,15 +166,16 @@ else:
 with engine.connect() as conn:
     ## Obtenemos todas las subcategorias existentes en una query
     subcat_result = conn.execute(sa.text("SELECT nombre_subcategoria, id_subcategoria FROM subcategorias")).fetchall()
-    subcat_ids = {row.nombre_subcategoria: row.id_subcategoria for row in subcat_result}
+    subcat_ids_norm = {clean_text(row.nombre_subcategoria): row.id_subcategoria for row in subcat_result}
 
     ## Obtenemos las marcas exsitentes en una query
     marca_result = conn.execute(sa.text("SELECT nombre_marca, id_marca FROM marcas")).fetchall()
-    marca_ids = {row.nombre_marca: row.id_marca for row in marca_result}
+    marca_ids_norm = {clean_text(row.nombre_marca): row.id_marca for row in marca_result}
 
     ## Obtenemos los productos ya existentes
     prod_result = conn.execute(sa.text("SELECT nombre_producto, id_marca, id_subcategoria FROM productos")).fetchall()
-    productos_existentes = {(row.nombre_producto, row.id_marca, row.id_subcategoria) for row in prod_result}
+    # Set con tupla normalizada: (normalized_name, id_marca, id_subcategoria)
+    productos_existentes_norm = {(clean_text(row.nombre_producto), row.id_marca, row.id_subcategoria) for row in prod_result}
 
     # Preparamos los datos para insertar
     productos_json = []
@@ -166,13 +186,23 @@ with engine.connect() as conn:
         # Usamos normalized_name si existe, si no product_name
         nombre_final = row["normalized_name"] if "normalized_name" in row and pd.notna(row["normalized_name"]) else row["product_name"]
         
-        productos_json.append({"nombre_producto": nombre_final,
-                        "url_imagen": row["image_url"],
-                        "url_thumb_imagen": row["thumbnail_image_url"],
-                        "descripcion": row["description"],
-                        "id_marca" : marca_ids[row["brand"]] if pd.notna(row["brand"]) and row["brand"] in marca_ids else 14,# Si no tiene marca o no existe en la tabla, asignamos id_marca = 14 (Marca: 'Sin Marca')
-                        "id_subcategoria": subcat_ids[row["subcategory"]]
-                        })
+        # Get normalized keys
+        brand_norm = clean_text(row["brand"])
+        subcat_norm = clean_text(row["subcategory"])
+        
+        # Look up IDs
+        id_marca = marca_ids_norm.get(brand_norm, 14) # 14 is 'Sin Marca'
+        id_subcategoria = subcat_ids_norm.get(subcat_norm)
+        
+        if id_subcategoria:
+            productos_json.append({
+                "nombre_producto": nombre_final,
+                "url_imagen": row["image_url"],
+                "url_thumb_imagen": row["thumbnail_image_url"],
+                "descripcion": row["description"],
+                "id_marca" : id_marca,
+                "id_subcategoria": id_subcategoria
+            })
     
     # Lista final a insertar
     productos_insertar_json = []
@@ -184,18 +214,24 @@ with engine.connect() as conn:
         id_marca = producto["id_marca"]
         id_subcategoria = producto["id_subcategoria"]
         
-        # Clave unica para evitar duplicados en la lista de insercion
-        key = (nombre_producto, id_marca, id_subcategoria)
+        # Clave normalizada para verificar existencia
+        nombre_prod_norm = clean_text(nombre_producto)
         
-        if key not in productos_existentes and key not in seen_products:
+        # Check against DB existence and local seen set
+        # Key for DB check
+        key_db = (nombre_prod_norm, id_marca, id_subcategoria)
+        # Key for local deduplication
+        key_local = (nombre_prod_norm, id_marca, id_subcategoria)
+        
+        if key_db not in productos_existentes_norm and key_local not in seen_products:
             productos_insertar_json.append(producto)
-            seen_products.add(key)
+            seen_products.add(key_local)
             # print(f"El producto {nombre_producto} agregado para insercion.") # Reduce spam
     
     # Insertamos los productos
     if(len(productos_insertar_json) > 0):
         print(f"Insertando {len(productos_insertar_json)} productos nuevos...")
-        conn.execute(sa.text("INSERT INTO productos (nombre_producto, url_imagen, url_thumb_imagen, descripcion, id_marca, id_subcategoria) VALUES(:nombre_producto, :url_imagen, :url_thumb_imagen, :descripcion, :id_marca, :id_subcategoria) ON CONFLICT (nombre_producto, id_marca,id_subcategoria) DO NOTHING"), productos_insertar_json)
+        conn.execute(sa.text("INSERT INTO productos (nombre_producto, url_imagen, url_thumb_imagen, descripcion, id_marca, id_subcategoria) VALUES(:nombre_producto, :url_imagen, :url_thumb_imagen, :descripcion, :id_marca, :id_subcategoria) ON CONFLICT (nombre_producto, id_marca,id_subcategoria) DO UPDATE SET url_imagen = EXCLUDED.url_imagen, url_thumb_imagen = EXCLUDED.url_thumb_imagen"), productos_insertar_json)
         conn.commit()
     else:
         print("No hay productos nuevos para insertar.")
@@ -206,12 +242,12 @@ with engine.connect() as conn:
 
 with engine.connect() as conn:
     tienda_result = conn.execute(sa.text("SELECT id_tienda, nombre_tienda FROM tiendas")).fetchall()
-    tienda_ids = {row.nombre_tienda: row.id_tienda for row in tienda_result}
+    tienda_ids_norm = {clean_text(row.nombre_tienda): row.id_tienda for row in tienda_result}
 
 ## Productos y sus ids
 with engine.connect() as conn:
     prod_result = conn.execute(sa.text("SELECT id_producto, nombre_producto FROM productos")).fetchall()
-    producto_ids = {row.nombre_producto: row.id_producto for row in prod_result}
+    producto_ids_norm = {clean_text(row.nombre_producto): row.id_producto for row in prod_result}
 
 ## ProductoTienda actuales
 with engine.connect() as conn:
@@ -224,11 +260,12 @@ productos_tienda_vistos = set() # Evitamos la duplibacion en la primera vez
 for index, row in df.iterrows():
     # Buscamos el ID usando el normalized_name que es como se guardó en la BD
     nombre_busqueda = row["normalized_name"] if "normalized_name" in row and pd.notna(row["normalized_name"]) else row["product_name"]
-    id_producto = producto_ids.get(nombre_busqueda)
+    id_producto = producto_ids_norm.get(clean_text(nombre_busqueda))
     # Las urls
     url_producto = row["link"]
     
-    id_tienda = tienda_ids.get(row["site_name"])
+    id_tienda = tienda_ids_norm.get(clean_text(row["site_name"]))
+    
     if id_producto and id_tienda:
         if (id_producto, id_tienda) not in productos_tienda_vistos and (id_producto, id_tienda) not in producto_tienda_existentes:
             productos_tienda_json.append({
@@ -262,16 +299,18 @@ historial_precios_json = []
 for index, row in df.iterrows():
     # Buscamos ID producto usando normalized_name
     nombre_busqueda = row["normalized_name"] if "normalized_name" in row and pd.notna(row["normalized_name"]) else row["product_name"]
-    id_producto = producto_ids.get(nombre_busqueda)
+    id_producto = producto_ids_norm.get(clean_text(nombre_busqueda))
      
-    id_tienda = tienda_ids.get(row["site_name"])
-    id_producto_tienda = producto_tienda_ids.get((id_producto, id_tienda))
-    if id_producto_tienda:
-        historial_precios_json.append({
-            "id_producto_tienda": id_producto_tienda,
-            "precio": row["price"],
-            "fecha_precio": pd.to_datetime(row["date"]).date()
-        })
+    id_tienda = tienda_ids_norm.get(clean_text(row["site_name"]))
+    
+    if id_producto and id_tienda:
+        id_producto_tienda = producto_tienda_ids.get((id_producto, id_tienda))
+        if id_producto_tienda:
+            historial_precios_json.append({
+                "id_producto_tienda": id_producto_tienda,
+                "precio": row["price"],
+                "fecha_precio": pd.to_datetime(row["date"]).date()
+            })
 # Insertamos los datos
 if len(historial_precios_json) > 0:
     with engine.connect() as conn:

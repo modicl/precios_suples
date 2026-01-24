@@ -49,5 +49,32 @@ def run_scrapers():
     duration = end_time - start_time
     print(f"\n--- Todos los scrapers han finalizado en {duration:.2f} segundos ---")
 
+    # --- POST-PROCESSING & DB UPDATE ---
+    print("\n--- Iniciando Procesamiento y Actualización de Base de Datos ---")
+    
+    steps = [
+        ("Procesando Datos (Consolidación)", "data_processing/process_data.py"),
+        ("Normalizando Productos (Fuzzy Match)", "data_processing/normalize_products.py"),
+        ("Insertando Datos en BD", "data_processing/data_insertion.py"),
+        ("Limpiando Marcas", "data_processing/clean_brands.py"),
+        ("Limpiando Categorías", "data_processing/clean_categories.py")
+    ]
+
+    for description, script_path in steps:
+        print(f"\n> {description} ({script_path})...")
+        try:
+            # Run sequentially, checking for errors
+            result = subprocess.run([sys.executable, script_path], check=True)
+            print(f"  [OK] {description} completado.")
+        except subprocess.CalledProcessError as e:
+            print(f"  [ERROR] Falló {description}: {e}")
+            print("  Deteniendo la ejecución de pasos posteriores.")
+            break
+        except Exception as e:
+            print(f"  [ERROR] Error inesperado en {description}: {e}")
+            break
+
+    print("\n--- Ejecución completa ---")
+
 if __name__ == "__main__":
     run_scrapers()

@@ -48,7 +48,7 @@ class SuplementosMayoristasScraper(BaseScraper):
             "product_card": "section.vtex-product-summary-2-x-container", # Container más robusto
             "link_container": "a.vtex-product-summary-2-x-clearLink", # Link principal
             
-            "brand": ".vtex-product-summary-2-x-brandName, .vtex-product-summary-2-x-productBrandName",
+            "brand": ".vtex-store-components-3-x-productBrandName",
             "name": ".vtex-product-summary-2-x-productBrand",
             "image": "img.vtex-product-summary-2-x-image",
             
@@ -60,7 +60,11 @@ class SuplementosMayoristasScraper(BaseScraper):
             "stock_badge": ".vtex-product-summary-2-x-element", # Textos genéricos en el card
             
             # Paginación "Mostrar más"
-            "show_more_btn": ".vtex-search-result-3-x-buttonShowMore button" 
+            "show_more_btn": ".vtex-search-result-3-x-buttonShowMore button",
+            
+            # Selectores de página de detalle
+            "detail_image": ".vtex-store-components-3-x-productImageTag",
+            "description": ".vtex-store-components-3-x-productDescriptionText"
         }
 
         super().__init__(base_url, headless, category_urls=all_urls, selectors=selectors, site_name="SuplementosMayoristas")
@@ -167,6 +171,51 @@ class SuplementosMayoristasScraper(BaseScraper):
                             # No stock msg but no price? treat as 0 or check if it's a layout issue
                             price = 0
 
+                        # DETAIL EXTRACTION (NEW TAB)
+                        detail_image_url = image_url  # Fallback a thumbnail
+                        sku = "N/D"
+                        description = "N/D"
+                        
+                        if link != "N/D":
+                            context = page.context
+                            detail_page = None
+                            try:
+                                detail_page = context.new_page()
+                                detail_page.goto(link, wait_until="domcontentloaded", timeout=30000)
+                                detail_page.wait_for_load_state("networkidle")  # Wait for dynamic content
+                                
+                                # Extraer imagen full
+                                if detail_page.locator(self.selectors['detail_image']).count() > 0:
+                                    detail_image_url = detail_page.locator(self.selectors['detail_image']).first.get_attribute('src')
+                                
+                                # Extraer descripción
+                                if detail_page.locator(self.selectors['description']).count() > 0:
+                                    description = detail_page.locator(self.selectors['description']).first.inner_text().strip()
+                                
+                                # Extraer SKU del script JSON
+                                try:
+                                    sku_script = detail_page.evaluate('''() => {
+                                        const scripts = Array.from(document.querySelectorAll('script'));
+                                        for (const script of scripts) {
+                                            const text = script.textContent;
+                                            if (text.includes('"sku"') || text.includes('"skuId"')) {
+                                                const skuMatch = text.match(/"(?:sku|skuId)"\\s*:\\s*"([^"]+)"/);
+                                                if (skuMatch) return skuMatch[1];
+                                            }
+                                        }
+                                        return null;
+                                    }''')
+                                    if sku_script:
+                                        sku = sku_script
+                                except:
+                                    pass
+                                
+                                detail_page.close()
+                            except Exception as e:
+                                print(f"[red]Error extrayendo detalle de {link}: {e}[/red]")
+                                if detail_page:
+                                    detail_page.close()
+                        
                         current_date = datetime.now().strftime("%Y-%m-%d")
 
                         yield {
@@ -182,9 +231,9 @@ class SuplementosMayoristasScraper(BaseScraper):
                             'reviews': "0",
                             'active_discount': False, # User said no discounts for now
                             'thumbnail_image_url': image_url,
-                            'image_url': image_url,
-                            'sku': "N/D",
-                            'description': "N/D"
+                            'image_url': detail_image_url,
+                            'sku': sku,
+                            'description': description
                         }
 
                     except Exception as e:

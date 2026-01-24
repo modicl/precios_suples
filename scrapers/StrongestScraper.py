@@ -31,7 +31,7 @@ class StrongestScraper(BaseScraper):
             "price": ".bs-collection__product-final-price", 
             "old_price": ".bs-collection__old-price", 
             "link": "a.bs-collection__product-info",
-            "thumbnail": ".bs-collection__product__img img"
+            "thumbnail": ".bs-collection__product__img img, .bs-collection__product-image img"
         }
 
     def extract_process(self, page):
@@ -118,7 +118,7 @@ class StrongestScraper(BaseScraper):
                                 
                                 # 1. Main Image (HD)
                                 # Try multiple selectors identified
-                                img_el = detail_page.locator('.bs-product-gallery__img img, .bs-product__image img').first
+                                img_el = detail_page.locator('.bs-product-gallery__img img, .bs-product__image img, .bs-img-square img').first
                                 if img_el.count() > 0:
                                     src = img_el.get_attribute("src")
                                     if src:
