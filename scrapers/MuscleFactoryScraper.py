@@ -159,11 +159,39 @@ class MuscleFactoryScraper(BaseScraper):
                                     if detail_page.locator(self.selectors['detail_brand']).count() > 0:
                                         brand = detail_page.locator(self.selectors['detail_brand']).first.inner_text().strip()
                                     
-                                    # Main Image
-                                    if detail_page.locator(self.selectors['detail_image']).count() > 0:
-                                        img_src = detail_page.locator(self.selectors['detail_image']).first.get_attribute("src")
-                                        if img_src:
-                                            image_url = "https:" + img_src if img_src.startswith('//') else img_src
+                                    # Main Image - Priority: Open Graph > JSON-LD > DOM
+                                    
+                                    # Open Graph
+                                    try:
+                                        og_img = detail_page.locator('meta[property="og:image"]').first.get_attribute('content')
+                                        if og_img:
+                                            image_url = og_img
+                                    except: pass
+
+                                    # JSON-LD
+                                    if not image_url:
+                                        try:
+                                            json_img = detail_page.evaluate('''() => {
+                                                const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                                                for (const s of scripts) {
+                                                    try {
+                                                        const d = JSON.parse(s.innerText);
+                                                        if ((d['@type'] === 'Product' || d['@type'] === 'ProductGroup') && d.image) 
+                                                            return Array.isArray(d.image) ? d.image[0] : d.image;
+                                                    } catch(e){}
+                                                }
+                                                return null;
+                                            }''')
+                                            if json_img:
+                                                image_url = json_img
+                                        except: pass
+
+                                    # DOM Fallback
+                                    if not image_url:
+                                        if detail_page.locator(self.selectors['detail_image']).count() > 0:
+                                            img_src = detail_page.locator(self.selectors['detail_image']).first.get_attribute("src")
+                                            if img_src:
+                                                image_url = "https:" + img_src if img_src.startswith('//') else img_src
                                     
                                     if not image_url and thumbnail_url:
                                         image_url = thumbnail_url.replace('240x240', '1024x1024') 

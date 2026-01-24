@@ -57,7 +57,8 @@ def run_scrapers():
         ("Normalizando Productos (Fuzzy Match)", "data_processing/normalize_products.py"),
         ("Insertando Datos en BD", "data_processing/data_insertion.py"),
         ("Limpiando Marcas", "data_processing/clean_brands.py"),
-        ("Limpiando Categorías", "data_processing/clean_categories.py")
+        ("Limpiando Categorías", "data_processing/clean_categories.py"),
+        ("Clasificando Productos (Vegano/Mujer)", "data_processing/classify_products.py")
     ]
 
     for description, script_path in steps:

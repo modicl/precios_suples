@@ -116,13 +116,40 @@ class StrongestScraper(BaseScraper):
                                 detail_page = context.new_page()
                                 detail_page.goto(link, wait_until="domcontentloaded", timeout=40000)
                                 
-                                # 1. Main Image (HD)
-                                # Try multiple selectors identified
-                                img_el = detail_page.locator('.bs-product-gallery__img img, .bs-product__image img, .bs-img-square img').first
-                                if img_el.count() > 0:
-                                    src = img_el.get_attribute("src")
-                                    if src:
-                                        image_url = src if src.startswith('http') else f"https:{src}"
+                                # 1. Main Image - Priority: Open Graph > JSON-LD > DOM
+                                
+                                # Open Graph
+                                try:
+                                    og_img = detail_page.locator('meta[property="og:image"]').first.get_attribute('content')
+                                    if og_img:
+                                        image_url = og_img
+                                except: pass
+
+                                # JSON-LD
+                                if not image_url:
+                                    try:
+                                        json_img = detail_page.evaluate('''() => {
+                                            const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                                            for (const s of scripts) {
+                                                try {
+                                                    const d = JSON.parse(s.innerText);
+                                                    if ((d['@type'] === 'Product' || d['@type'] === 'ProductGroup') && d.image) 
+                                                        return Array.isArray(d.image) ? d.image[0] : d.image;
+                                                } catch(e){}
+                                            }
+                                            return null;
+                                        }''')
+                                        if json_img:
+                                            image_url = json_img
+                                    except: pass
+
+                                # DOM Fallback
+                                if not image_url:
+                                    img_el = detail_page.locator('.bs-product-gallery__img img, .bs-product__image img, .bs-img-square img').first
+                                    if img_el.count() > 0:
+                                        src = img_el.get_attribute("src")
+                                        if src:
+                                            image_url = src if src.startswith('http') else f"https:{src}"
                                 
                                 # 2. SKU
                                 sku_el = detail_page.locator('.bs-product__sku').first

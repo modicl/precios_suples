@@ -199,19 +199,47 @@ class SuplesScraper(BaseScraper):
                                     detail_page = context.new_page()
                                     detail_page.goto(link, wait_until="domcontentloaded", timeout=40000)
                                     
-                                    # 1. Main Image (HD)
-                                    # Try .product-gallery__image img first
-                                    img_el = detail_page.locator('.product-gallery__image img, .product-gallery__featured-image img').first
-                                    if img_el.count() > 0:
-                                        # Details page often has src loaded, or data-zoom
-                                        src = img_el.get_attribute("src")
-                                        if src and "base64" not in src:
-                                            image_url = "https:" + src if src.startswith('//') else src
-                                        else:
-                                             # Try data indicators if src is placeholder
-                                             data_zoom = img_el.get_attribute("data-zoom")
-                                             if data_zoom:
-                                                 image_url = "https:" + data_zoom if data_zoom.startswith('//') else data_zoom
+                                    # 1. Main Image - Priority: Open Graph > JSON-LD > DOM
+                                    
+                                    # Open Graph
+                                    try:
+                                        og_img = detail_page.locator('meta[property="og:image"]').first.get_attribute('content')
+                                        if og_img:
+                                            image_url = og_img
+                                    except: pass
+
+                                    # JSON-LD
+                                    if not image_url:
+                                        try:
+                                            json_img = detail_page.evaluate('''() => {
+                                                const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                                                for (const s of scripts) {
+                                                    try {
+                                                        const d = JSON.parse(s.innerText);
+                                                        if ((d['@type'] === 'Product' || d['@type'] === 'ProductGroup') && d.image) 
+                                                            return Array.isArray(d.image) ? d.image[0] : d.image;
+                                                    } catch(e){}
+                                                }
+                                                return null;
+                                            }''')
+                                            if json_img:
+                                                image_url = json_img
+                                        except: pass
+
+                                    # DOM Fallback
+                                    if not image_url:
+                                        # Try .product-gallery__image img first
+                                        img_el = detail_page.locator('.product-gallery__image img, .product-gallery__featured-image img').first
+                                        if img_el.count() > 0:
+                                            # Details page often has src loaded, or data-zoom
+                                            src = img_el.get_attribute("src")
+                                            if src and "base64" not in src:
+                                                image_url = "https:" + src if src.startswith('//') else src
+                                            else:
+                                                 # Try data indicators if src is placeholder
+                                                 data_zoom = img_el.get_attribute("data-zoom")
+                                                 if data_zoom:
+                                                     image_url = "https:" + data_zoom if data_zoom.startswith('//') else data_zoom
                                     
                                     # 2. SKU
                                     sku_el = detail_page.locator('.product-meta__sku').first

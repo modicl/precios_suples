@@ -195,14 +195,46 @@ class ChileSuplementosScraper(BaseScraper):
                                         detail_page.goto(link, wait_until="domcontentloaded", timeout=40000)
                                         
                                         # 1. Main Image
-                                        img_selectors = ['.woocommerce-product-gallery__image img', '.porto-product-main-image img', '.product-images img']
-                                        for sel in img_selectors:
-                                            img_el = detail_page.locator(sel).first
-                                            if img_el.count() > 0:
-                                                src = img_el.get_attribute("src") or img_el.get_attribute("href") or img_el.get_attribute("data-src")
-                                                if src:
-                                                    image_url = src
-                                                    break
+                                        # Priority: Open Graph > JSON-LD > DOM
+                                        
+                                        # Open Graph
+                                        try:
+                                            og_img = detail_page.locator('meta[property="og:image"]').first.get_attribute('content')
+                                            if og_img:
+                                                image_url = og_img
+                                        except: pass
+
+                                        # JSON-LD (if OG failed)
+                                        if not image_url:
+                                            try:
+                                                json_img = detail_page.evaluate('''() => {
+                                                    const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                                                    for (const s of scripts) {
+                                                        try {
+                                                            const d = JSON.parse(s.innerText);
+                                                            if (d['@type'] === 'Product' && d.image) return Array.isArray(d.image) ? d.image[0] : d.image;
+                                                            if (d['@graph']) {
+                                                                const p = d['@graph'].find(i => i['@type'] === 'Product');
+                                                                if (p && p.image) return p.image;
+                                                            }
+                                                        } catch(e){}
+                                                    }
+                                                    return null;
+                                                }''')
+                                                if json_img:
+                                                    image_url = json_img
+                                            except: pass
+
+                                        # DOM Fallback
+                                        if not image_url:
+                                            img_selectors = ['.woocommerce-product-gallery__image img', '.porto-product-main-image img', '.product-images img']
+                                            for sel in img_selectors:
+                                                img_el = detail_page.locator(sel).first
+                                                if img_el.count() > 0:
+                                                    src = img_el.get_attribute("src") or img_el.get_attribute("href") or img_el.get_attribute("data-src")
+                                                    if src:
+                                                        image_url = src
+                                                        break
                                         
                                         # 2. SKU
                                         sku_el = detail_page.locator('.sku, [itemprop="sku"]').first

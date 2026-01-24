@@ -144,14 +144,40 @@ class SupleStoreScraper(BaseScraper):
                                     detail_page = context.new_page()
                                     detail_page.goto(link, wait_until="domcontentloaded", timeout=40000)
                                     
-                                    # 1. Main Image (HD)
-                                    # Try to find the image zoom or main image
-                                    img_el = detail_page.locator('img.imagenpe, .bs-product-image img, .bs-img-square img').first
-                                    if img_el.count() > 0:
-                                        # Use data-zoom if available for higher res, else src
-                                        src = img_el.get_attribute("data-zoom") or img_el.get_attribute("src")
-                                        if src:
-                                            image_url = "https:" + src if src.startswith('//') else src
+                                    # 1. Main Image - Priority: Open Graph > JSON-LD > DOM
+                                    
+                                    # Open Graph
+                                    try:
+                                        og_img = detail_page.locator('meta[property="og:image"]').first.get_attribute('content')
+                                        if og_img:
+                                            image_url = og_img
+                                    except: pass
+
+                                    # JSON-LD
+                                    if not image_url:
+                                        try:
+                                            json_img = detail_page.evaluate('''() => {
+                                                const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                                                for (const s of scripts) {
+                                                    try {
+                                                        const d = JSON.parse(s.innerText);
+                                                        if ((d['@type'] === 'Product' || d['@type'] === 'ProductGroup') && d.image) 
+                                                            return Array.isArray(d.image) ? d.image[0] : d.image;
+                                                    } catch(e){}
+                                                }
+                                                return null;
+                                            }''')
+                                            if json_img:
+                                                image_url = json_img
+                                        except: pass
+
+                                    # DOM Fallback
+                                    if not image_url:
+                                        img_el = detail_page.locator('img.imagenpe, .bs-product-image img, .bs-img-square img').first
+                                        if img_el.count() > 0:
+                                            src = img_el.get_attribute("data-zoom") or img_el.get_attribute("src")
+                                            if src:
+                                                image_url = "https:" + src if src.startswith('//') else src
                                     
                                     # 2. SKU
                                     sku_el = detail_page.locator('[data-bs="product.sku"]').first

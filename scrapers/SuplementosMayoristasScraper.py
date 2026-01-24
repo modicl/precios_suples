@@ -192,23 +192,64 @@ class SuplementosMayoristasScraper(BaseScraper):
                                 if detail_page.locator(self.selectors['description']).count() > 0:
                                     description = detail_page.locator(self.selectors['description']).first.inner_text().strip()
                                 
-                                # Extraer SKU del script JSON
+                                # Extraer datos estructurados (JSON-LD) para Brand y SKU
                                 try:
-                                    sku_script = detail_page.evaluate('''() => {
-                                        const scripts = Array.from(document.querySelectorAll('script'));
+                                    json_data = detail_page.evaluate('''() => {
+                                        const scripts = document.querySelectorAll('script[type="application/ld+json"]');
                                         for (const script of scripts) {
-                                            const text = script.textContent;
-                                            if (text.includes('"sku"') || text.includes('"skuId"')) {
-                                                const skuMatch = text.match(/"(?:sku|skuId)"\\s*:\\s*"([^"]+)"/);
-                                                if (skuMatch) return skuMatch[1];
-                                            }
+                                            try {
+                                                const text = script.innerText;
+                                                const data = JSON.parse(text);
+                                                // Handle array or object
+                                                const items = Array.isArray(data) ? data : [data];
+                                                for (const item of items) {
+                                                    if (item['@type'] === 'Product') {
+                                                        return {
+                                                            brand: item.brand ? (item.brand.name || item.brand) : null,
+                                                            sku: item.sku || item.mpn || null
+                                                        };
+                                                    }
+                                                }
+                                            } catch (e) {}
                                         }
                                         return null;
                                     }''')
-                                    if sku_script:
-                                        sku = sku_script
-                                except:
+                                    
+                                    if json_data:
+                                        if json_data.get('brand'):
+                                            brand = json_data['brand']
+                                        if json_data.get('sku') and json_data.get('sku') != "N/D":
+                                            sku = json_data['sku']
+                                except Exception as e:
                                     pass
+
+                                # Fallback: Extraer Brand visualmente si aún es N/D
+                                if brand == "N/D":
+                                    try:
+                                        brand_el = detail_page.locator(".vtex-store-components-3-x-productBrandName").first
+                                        if brand_el.count() > 0:
+                                            brand = brand_el.inner_text().strip()
+                                    except:
+                                        pass
+
+                                # Fallback: Extraer SKU del script JSON si no se encontró en JSON-LD
+                                if sku == "N/D":
+                                    try:
+                                        sku_script = detail_page.evaluate('''() => {
+                                            const scripts = Array.from(document.querySelectorAll('script'));
+                                            for (const script of scripts) {
+                                                const text = script.textContent;
+                                                if (text.includes('"sku"') || text.includes('"skuId"')) {
+                                                    const skuMatch = text.match(/"(?:sku|skuId)"\\s*:\\s*"([^"]+)"/);
+                                                    if (skuMatch) return skuMatch[1];
+                                                }
+                                            }
+                                            return null;
+                                        }''')
+                                        if sku_script:
+                                            sku = sku_script
+                                    except:
+                                        pass
                                 
                                 detail_page.close()
                             except Exception as e:
