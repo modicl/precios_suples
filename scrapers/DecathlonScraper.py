@@ -11,15 +11,14 @@ class DecathlonScraper(BaseScraper):
             "Proteinas": [
                 "https://www.decathlon.cl/5270-proteinas"
             ],
-            "Barritas": [
-                "https://www.decathlon.cl/5271-barritas-de-proteina"
-            ],
-            "Gel Energetico": [
+            "Snacks y Comida": [
+                "https://www.decathlon.cl/5271-barritas-de-proteina",
                 "https://www.decathlon.cl/5339-gel-energetico"
             ],
-            "Creatina": [
+            "Creatinas": [
                 "https://www.decathlon.cl/5341-creatina"
             ],
+
             "Isotonicas": [
                 "https://www.decathlon.cl/5813-bebidas-isotonicas"
             ]

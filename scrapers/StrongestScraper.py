@@ -19,10 +19,11 @@ class StrongestScraper(BaseScraper):
             "Vitaminas": "https://www.strongest.cl/collection/salud-y-bienestar",
             "Pre Entrenos": "https://www.strongest.cl/collection/pre-entrenos",
             "Ganadores de Peso": "https://www.strongest.cl/collection/ganadores-de-masa",
-            "Aminoacidos": "https://www.strongest.cl/collection/aminoacidos-bcaa",
-            "Quemadores": "https://www.strongest.cl/collection/termogenicos",
-            "Snacks": "https://www.strongest.cl/collection/snacks",
+            "Aminoacidos y BCAA": "https://www.strongest.cl/collection/aminoacidos-bcaa",
+            "Perdida de Grasa": "https://www.strongest.cl/collection/termogenicos",
+            "Snacks y Comida": "https://www.strongest.cl/collection/snacks",
             "Ofertas": "https://www.strongest.cl/collection/ofertas-y-precios-bajos"
+
         }
         
         self.selectors = {

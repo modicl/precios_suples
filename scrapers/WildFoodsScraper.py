@@ -8,7 +8,7 @@ class WildFoodsScraper(BaseScraper):
         
         # 1. Definición de Categorías (Categoría -> Lista de URLs)
         category_urls = {
-            "Barritas": [
+            "Snacks y Comida": [
                 "https://thewildfoods.com/collections/barritas-wild-protein",
                 "https://thewildfoods.com/collections/barritas-veganas",
                 "https://thewildfoods.com/collections/wild-fit"

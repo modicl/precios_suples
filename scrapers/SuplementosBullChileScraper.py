@@ -16,16 +16,13 @@ class SuplementosBullChileScraper(BaseScraper):
             "Pre Entrenos": [
                 "https://www.suplementosbullchile.cl/pre-entreno"
             ],
-            "Quemadores": [
+            "Perdida de Grasa": [
                 "https://www.suplementosbullchile.cl/quemador-energetico-1"
             ],
+
             "Packs": [
                 "https://www.suplementosbullchile.cl/packs"
             ],
-
-            "Buffalo Labz": [
-                "https://www.suplementosbullchile.cl/buffalo-labz"
-            ]
         }
 
         # Selectores identificados

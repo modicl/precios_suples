@@ -12,16 +12,16 @@ class FitMarketChileScraper(BaseScraper):
             "Creatinas": [
                 "https://fitmarketchile.cl/categoria-producto/creatina"
             ],
-            "Aminoacidos": [
+            "Aminoacidos y BCAA": [
                 "https://fitmarketchile.cl/categoria-producto/aminoacidos-bcaa"
             ],
-            "Quemadores": [
+            "Perdida de Grasa": [
                 "https://fitmarketchile.cl/categoria-producto/quemador-de-grasa"
             ],
             "Pre Entrenos": [
                 "https://fitmarketchile.cl/categoria-producto/pre-entrenos"
             ],
-            "Ganador de Masa": [
+            "Ganadores de Peso": [
                 "https://fitmarketchile.cl/categoria-producto/ganador-de-masa"
             ],
             "Vitaminas": [
@@ -30,9 +30,10 @@ class FitMarketChileScraper(BaseScraper):
             "Ofertas": [
                 "https://fitmarketchile.cl/categoria-producto/cuber-day"
             ],
-            "Snacks": [
+            "Snacks y Comida": [
                 "https://fitmarketchile.cl/categoria-producto/barras-de-proteina-snack"
             ]
+
         }
 
         # Selectores WooCommerce / WoodMart

@@ -20,15 +20,16 @@ class SuplementosMayoristasScraper(BaseScraper):
                 ("Micronizada", "https://www.suplementosmayoristas.cl/creatinas/micronizada"),
                 ("Monohidratada", "https://www.suplementosmayoristas.cl/creatinas/monohidratada")
             ],
-            "Quemadores": [
+            "Perdida de Grasa": [
                 ("Quemadores", "https://www.suplementosmayoristas.cl/quemadores")
             ],
             "Pre Entrenos": [
                  ("Pre Entrenos", "https://www.suplementosmayoristas.cl/pre-entreno")
             ],
-            "Ganador de Masa": [
+            "Ganadores de Peso": [
                 ("Ganador de Masa", "https://www.suplementosmayoristas.cl/ganadores-de-masa-muscular")
             ],
+
             "Aminoacidos y BCAA": [
                 ("BCAA", "https://www.suplementosmayoristas.cl/aminoacidos/bcaa"),
                 ("EAA", "https://www.suplementosmayoristas.cl/aminoacidos/eaa"),

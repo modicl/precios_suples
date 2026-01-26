@@ -11,9 +11,10 @@ class CruzVerdeScraper(BaseScraper):
         self.categories_config = {
             "Proteinas": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/proteinas/",
             "Energia": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/energia-y-resistencia/",
-            "Barritas": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/barras-proteicas/",
+            "Snacks y Comida": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/barras-proteicas/",
             "Hidratación": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/hidratacion/"
         }
+
 
         # Selectores identificados
         selectors = {
