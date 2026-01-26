@@ -231,7 +231,23 @@ with engine.connect() as conn:
     # Insertamos los productos
     if(len(productos_insertar_json) > 0):
         print(f"Insertando {len(productos_insertar_json)} productos nuevos...")
-        conn.execute(sa.text("INSERT INTO productos (nombre_producto, url_imagen, url_thumb_imagen, descripcion, id_marca, id_subcategoria) VALUES(:nombre_producto, :url_imagen, :url_thumb_imagen, :descripcion, :id_marca, :id_subcategoria) ON CONFLICT (nombre_producto, id_marca,id_subcategoria) DO UPDATE SET url_imagen = EXCLUDED.url_imagen, url_thumb_imagen = EXCLUDED.url_thumb_imagen"), productos_insertar_json)
+        query = """
+        INSERT INTO productos (nombre_producto, url_imagen, url_thumb_imagen, descripcion, id_marca, id_subcategoria) 
+        VALUES(:nombre_producto, :url_imagen, :url_thumb_imagen, :descripcion, :id_marca, :id_subcategoria) 
+        ON CONFLICT (nombre_producto, id_marca,id_subcategoria) 
+        DO UPDATE SET 
+            url_imagen = CASE 
+                WHEN EXCLUDED.url_imagen LIKE '%suplescrapper-images.s3%' THEN EXCLUDED.url_imagen 
+                WHEN productos.url_imagen LIKE '%suplescrapper-images.s3%' THEN productos.url_imagen 
+                ELSE EXCLUDED.url_imagen 
+            END,
+            url_thumb_imagen = CASE 
+                WHEN EXCLUDED.url_thumb_imagen LIKE '%suplescrapper-images.s3%' THEN EXCLUDED.url_thumb_imagen 
+                WHEN productos.url_thumb_imagen LIKE '%suplescrapper-images.s3%' THEN productos.url_thumb_imagen 
+                ELSE EXCLUDED.url_thumb_imagen 
+            END
+        """
+        conn.execute(sa.text(query), productos_insertar_json)
         conn.commit()
     else:
         print("No hay productos nuevos para insertar.")

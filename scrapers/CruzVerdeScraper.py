@@ -86,13 +86,16 @@ class CruzVerdeScraper(BaseScraper):
                         name = "N/D"
                         name_el = card.locator(self.selectors['name']).first
                         if name_el.count() > 0:
-                            name = name_el.inner_text().strip()
+                            raw_name = name_el.inner_text()
+                            name = self.clean_text(raw_name)
                         
                         # Marca
                         brand = "N/D"
                         brand_el = card.locator(self.selectors['brand']).first
                         if brand_el.count() > 0:
-                            brand = brand_el.inner_text().strip()
+                            raw_brand = brand_el.inner_text()
+                            brand = self.clean_text(raw_brand)
+
                         
                         # Link
                         link = "N/D"
@@ -218,8 +221,8 @@ class CruzVerdeScraper(BaseScraper):
                         yield {
                             'date': current_date,
                             'site_name': self.site_name,
-                            'category': final_category,
-                            'subcategory': final_category,
+                            'category': self.clean_text(final_category),
+                            'subcategory': self.clean_text(final_category),
                             'product_name': name,
                             'brand': brand,
                             'price': price,

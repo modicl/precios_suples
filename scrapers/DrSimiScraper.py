@@ -78,9 +78,11 @@ class DrSimiScraper(BaseScraper):
                         # Extract basic info
                         name = "N/D"
                         if card.locator(self.selectors['product_name']).count() > 0:
-                            name = card.locator(self.selectors['product_name']).first.inner_text().strip()
+                            raw_name = card.locator(self.selectors['product_name']).first.inner_text()
+                            name = self.clean_text(raw_name)
 
                         link = "N/D"
+
                         if card.locator(self.selectors['link']).count() > 0:
                             href = card.locator(self.selectors['link']).first.get_attribute("href")
                             if href:
@@ -106,6 +108,8 @@ class DrSimiScraper(BaseScraper):
                             brand = "Pronutrition"
                         elif "simi" in name.lower():
                             brand = "Dr Simi"
+                        
+                        brand = self.clean_text(brand)
                         
                         # DETAIL EXTRACTION (NEW TAB)
                         detail_image_url = image_url  # Fallback a thumbnail
@@ -150,7 +154,8 @@ class DrSimiScraper(BaseScraper):
                                     try:
                                         brand_elem = detail_page.locator('.vtex-store-components-3-x-productBrandName, .brand').first
                                         if brand_elem.count() > 0:
-                                            brand = brand_elem.inner_text().strip()
+                                            raw_brand = brand_elem.inner_text()
+                                            brand = self.clean_text(raw_brand)
                                     except:
                                         pass
                                 
@@ -165,8 +170,8 @@ class DrSimiScraper(BaseScraper):
                         yield {
                             'date': current_date,
                             'site_name': self.site_name,
-                            'category': category_name,
-                            'subcategory': category_name,
+                            'category': self.clean_text(category_name),
+                            'subcategory': self.clean_text(category_name),
                             'product_name': name,
                             'brand': brand,
                             'price': price,

@@ -90,7 +90,9 @@ class AllNutritionScraper(BaseScraper):
         for main_category, urls in self.category_urls.items():
             for url in urls:
                 subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
+                subcategory_name = self.clean_text(subcategory_name)
                 print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {subcategory_name} ({url})")
+
                 
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=60000)
@@ -116,14 +118,18 @@ class AllNutritionScraper(BaseScraper):
                             # Title
                             title = "N/D"
                             if producto.locator(self.selectors['title']).count() > 0:
-                                title = producto.locator(self.selectors['title']).first.inner_text().strip()
+                                raw_title = producto.locator(self.selectors['title']).first.inner_text()
+                                title = self.clean_text(raw_title)
                             elif producto.locator(self.selectors['title_secondary']).count() > 0:
-                                title = producto.locator(self.selectors['title_secondary']).first.inner_text().strip()
+                                raw_title = producto.locator(self.selectors['title_secondary']).first.inner_text()
+                                title = self.clean_text(raw_title)
                             
                             # Brand
                             brand = "N/D"
                             if producto.locator(self.selectors['vendor']).count() > 0:
-                                brand = producto.locator(self.selectors['vendor']).first.inner_text().strip()
+                                raw_brand = producto.locator(self.selectors['vendor']).first.inner_text()
+                                brand = self.clean_text(raw_brand)
+
                             
                             # Link
                             link = "N/D"
@@ -202,8 +208,9 @@ class AllNutritionScraper(BaseScraper):
                             yield {
                                 'date': current_date,
                                 'site_name': self.site_name,
-                                'category': main_category,
+                                'category': self.clean_text(main_category),
                                 'subcategory': subcategory_name,
+
                                 'product_name': title,
                                 'brand': brand,
                                 'price': price,

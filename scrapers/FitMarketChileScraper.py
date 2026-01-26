@@ -96,9 +96,11 @@ class FitMarketChileScraper(BaseScraper):
                             # 1. Basic Info from Grid
                             title = "N/D"
                             if card.locator(self.selectors['product_name']).count() > 0:
-                                title = card.locator(self.selectors['product_name']).first.inner_text().strip()
+                                raw_title = card.locator(self.selectors['product_name']).first.inner_text()
+                                title = self.clean_text(raw_title)
 
                             link = "N/D"
+
                             if card.locator(self.selectors['link']).count() > 0:
                                 href = card.locator(self.selectors['link']).first.get_attribute("href")
                                 if href:
@@ -187,11 +189,13 @@ class FitMarketChileScraper(BaseScraper):
                             yield {
                                 'date': current_date,
                                 'site_name': self.site_name,
-                                'category': main_category,
-                                'subcategory': main_category, 
+                                'category': self.clean_text(main_category),
+                                'subcategory': self.clean_text(main_category), 
                                 'product_name': title,
-                                'brand': brand,
+
+                                'brand': self.clean_text(brand),
                                 'price': price,
+
                                 'link': link,
                                 'rating': "0",
                                 'reviews': "0",

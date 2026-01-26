@@ -1,6 +1,7 @@
 import csv
 import os
 import hashlib
+import re
 import requests
 import shutil
 import io
@@ -43,6 +44,16 @@ class BaseScraper:
                 aws_secret_access_key=self.aws_secret_key,
                 region_name=self.aws_region
             )
+
+    def clean_text(self, text: str) -> str:
+        """
+        Elimina emojis y caracteres no deseados del texto.
+        Preserva caracteres alfanuméricos, espacios, acentos y puntuación básica (.,-).
+        """
+        if not text:
+            return ""
+        # Regex para eliminar emojis y símbolos gráficos, preservando acentos
+        return re.sub(r'[^\w\s\u00C0-\u00FF\u002D\u002E\u002C]', '', text).strip()
 
     def _setup_logging(self):
         """Configura el logger específico para el scraper."""

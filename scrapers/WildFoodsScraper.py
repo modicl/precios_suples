@@ -52,6 +52,7 @@ class WildFoodsScraper(BaseScraper):
                 # Determinar Marca
                 slug = url.rstrip('/').split('/')[-1]
                 current_brand = self.brand_map.get(slug, "WILD") # Default a WILD
+                current_brand = self.clean_text(current_brand)
                 
                 print(f"Procesando {main_category} - Marca: {current_brand} - URL: {url}")
                 
@@ -71,7 +72,8 @@ class WildFoodsScraper(BaseScraper):
                             try:
                                 # Nombre
                                 name_el = product.query_selector(self.selectors['product_name'])
-                                name = name_el.inner_text().strip() if name_el else "N/D"
+                                raw_name = name_el.inner_text() if name_el else "N/D"
+                                name = self.clean_text(raw_name)
                                 
                                 # Precio
                                 price_el = product.query_selector(self.selectors['price'])
@@ -105,7 +107,7 @@ class WildFoodsScraper(BaseScraper):
                                 yield {
                                     'date': time.strftime("%Y-%m-%d"),
                                     'site_name': self.site_name,
-                                    'category': main_category,
+                                    'category': self.clean_text(main_category),
                                     'subcategory': "N/D",
                                     'product_name': name,
                                     'brand': current_brand,

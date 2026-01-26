@@ -254,10 +254,11 @@ def normalize_names(threshold=87):
             
             sizes_rep = extract_sizes(candidate_rep)
             
-            if sizes_candidate and sizes_rep:
-                if sizes_candidate != sizes_rep: 
-                    # They have different size configurations
-                    continue
+            # 3. Size Logic (Strict)
+            # If the detected sizes are different (even if one is empty and the other is not),
+            # they are considered different products.
+            if sizes_candidate != sizes_rep:
+                continue
 
             # 4. Packaging Status
             pack_rep = detect_packaging(candidate_rep)

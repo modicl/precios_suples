@@ -84,9 +84,14 @@ class DecathlonScraper(BaseScraper):
                             for item in hits:
                                 current_date = datetime.now().strftime("%Y-%m-%d")
                                 
-                                title = item.get('product_name', 'N/D')
-                                brand = item.get('brand', 'Decathlon')
+                                raw_title = item.get('product_name', 'N/D')
+                                title = self.clean_text(raw_title)
+                                
+                                raw_brand = item.get('brand', 'Decathlon')
+                                brand = self.clean_text(raw_brand)
+                                
                                 link = item.get('url', 'N/D')
+
                                 
                                 # Price logic
                                 price = item.get('prix', 0)
@@ -111,9 +116,10 @@ class DecathlonScraper(BaseScraper):
                                 yield {
                                     'date': current_date,
                                     'site_name': self.site_name,
-                                    'category': main_category,
-                                    'subcategory': main_category,
+                                    'category': self.clean_text(main_category),
+                                    'subcategory': self.clean_text(main_category),
                                     'product_name': title,
+
                                     'brand': brand,
                                     'price': int(price),
                                     'link': link,

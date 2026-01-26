@@ -76,18 +76,22 @@ class FarmaciaKnopScraper(BaseScraper):
                     name = "N/D"
                     name_el = card.locator(self.selectors['name']).first
                     if name_el.count() > 0:
-                        name = name_el.inner_text().strip()
+                        raw_name = name_el.inner_text()
+                        name = self.clean_text(raw_name)
                     else:
                         # Fallback: title attribute or text inside h3 a
                         name_backup = card.locator("h3.product-title a").first
                         if name_backup.count() > 0:
-                            name = name_backup.get_attribute("title") or name_backup.inner_text().strip()
+                            raw_name = name_backup.get_attribute("title") or name_backup.inner_text()
+                            name = self.clean_text(raw_name)
 
                     brand = "N/D"
                     brand_el = card.locator(self.selectors['brand']).first
                     if brand_el.count() > 0:
-                        brand = brand_el.inner_text().strip()
+                        raw_brand = brand_el.inner_text()
+                        brand = self.clean_text(raw_brand)
                         # Limpieza si trae basura como "% dcto" en caso de error de selector
+
                         if "%" in brand or "$" in brand:
                              brand = "N/D"
 
@@ -176,8 +180,8 @@ class FarmaciaKnopScraper(BaseScraper):
                     yield {
                         'date': current_date,
                         'site_name': self.site_name,
-                        'category': category_name,
-                        'subcategory': category_name,
+                        'category': self.clean_text(category_name),
+                        'subcategory': self.clean_text(category_name),
                         'product_name': name,
                         'brand': brand,
                         'price': price,

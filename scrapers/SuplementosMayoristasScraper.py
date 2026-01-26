@@ -133,13 +133,16 @@ class SuplementosMayoristasScraper(BaseScraper):
                         name = "N/D"
                         name_el = card.locator(self.selectors['name']).first
                         if name_el.count() > 0:
-                            name = name_el.inner_text().strip()
+                            raw_name = name_el.inner_text()
+                            name = self.clean_text(raw_name)
 
                         # Brand
                         brand = "N/D"
                         brand_el = card.locator(self.selectors['brand']).first
                         if brand_el.count() > 0:
-                            brand = brand_el.inner_text().strip()
+                            raw_brand = brand_el.inner_text()
+                            brand = self.clean_text(raw_brand)
+
 
                         # Image
                         image_url = ""
@@ -217,7 +220,7 @@ class SuplementosMayoristasScraper(BaseScraper):
                                     
                                     if json_data:
                                         if json_data.get('brand'):
-                                            brand = json_data['brand']
+                                            brand = self.clean_text(json_data['brand'])
                                         if json_data.get('sku') and json_data.get('sku') != "N/D":
                                             sku = json_data['sku']
                                 except Exception as e:
@@ -228,7 +231,8 @@ class SuplementosMayoristasScraper(BaseScraper):
                                     try:
                                         brand_el = detail_page.locator(".vtex-store-components-3-x-productBrandName").first
                                         if brand_el.count() > 0:
-                                            brand = brand_el.inner_text().strip()
+                                            raw_brand = brand_el.inner_text()
+                                            brand = self.clean_text(raw_brand)
                                     except:
                                         pass
 
@@ -262,8 +266,8 @@ class SuplementosMayoristasScraper(BaseScraper):
                         yield {
                             'date': current_date,
                             'site_name': self.site_name,
-                            'category': category_name,
-                            'subcategory': subcategory_name,
+                            'category': self.clean_text(category_name),
+                            'subcategory': self.clean_text(subcategory_name),
                             'product_name': name,
                             'brand': brand,
                             'price': price,

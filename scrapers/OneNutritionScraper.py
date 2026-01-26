@@ -112,8 +112,10 @@ class OneNutritionScraper(BaseScraper):
         for main_category, urls in self.category_urls.items():
             for url in urls:
                 subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
+                subcategory_name = self.clean_text(subcategory_name)
                 
                 print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {subcategory_name} ({url})")
+
                 
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=60000)
@@ -149,10 +151,12 @@ class OneNutritionScraper(BaseScraper):
                             # Title
                             title = "N/D"
                             if producto.locator(self.selectors['product_name']).count() > 0:
-                                title = producto.locator(self.selectors['product_name']).first.inner_text().strip()
+                                raw_title = producto.locator(self.selectors['product_name']).first.inner_text()
+                                title = self.clean_text(raw_title)
                             
                             # Brand (inferred)
                             brand = "N/D"
+
                             
                             # Thumbnail
                             thumbnail_url = ""
@@ -222,11 +226,12 @@ class OneNutritionScraper(BaseScraper):
                             yield {
                                 'date': current_date,
                                 'site_name': self.site_name,
-                                'category': main_category,
+                                'category': self.clean_text(main_category),
                                 'subcategory': subcategory_name,
                                 'product_name': title,
-                                'brand': brand,
+                                'brand': self.clean_text(brand),
                                 'price': price,
+
                                 'link': link,
                                 'rating': "0",
                                 'reviews': "0",

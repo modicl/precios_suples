@@ -76,9 +76,11 @@ class StrongestScraper(BaseScraper):
                         # Title
                         title = "N/D"
                         if card.locator(self.selectors['product_name']).count() > 0:
-                            title = card.locator(self.selectors['product_name']).first.inner_text().strip()
+                            raw_title = card.locator(self.selectors['product_name']).first.inner_text()
+                            title = self.clean_text(raw_title)
                         
                         # Link
+
                         link = "N/D"
                         if card.locator(self.selectors['link']).count() > 0:
                             href = card.locator(self.selectors['link']).first.get_attribute("href")
@@ -181,10 +183,11 @@ class StrongestScraper(BaseScraper):
                         yield {
                             'date': current_date,
                             'site_name': self.site_name,
-                            'category': category,
-                            'subcategory': subcategory_name,
+                            'category': self.clean_text(category),
+                            'subcategory': self.clean_text(subcategory_name),
                             'product_name': title,
                             'brand': 'Strongest',
+
                             'price': price,
                             'link': link,
                             'rating': "0",

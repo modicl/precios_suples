@@ -88,7 +88,9 @@ class ChileSuplementosScraper(BaseScraper):
         for main_category, urls in self.category_urls.items():
             for url in urls:
                 subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
+                subcategory_name = self.clean_text(subcategory_name)
                 print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {subcategory_name} ({url})")
+
                 
                 try:
                     page.goto(url, wait_until="load", timeout=60000)
@@ -119,13 +121,16 @@ class ChileSuplementosScraper(BaseScraper):
                                 title = "N/D"
                                 title_elem = producto.locator(self.selectors['product_name']) 
                                 if title_elem.count() > 0:
-                                    title = title_elem.first.inner_text().strip()
+                                    raw_title = title_elem.first.inner_text()
+                                    title = self.clean_text(raw_title)
                                 
                                 # Brand
                                 brand = "N/D"
                                 brand_elem = producto.locator(self.selectors['brand'])
                                 if brand_elem.count() > 0:
-                                    brand = brand_elem.first.inner_text().strip()
+                                    raw_brand = brand_elem.first.inner_text()
+                                    brand = self.clean_text(raw_brand)
+
                                     
                                 # Link
                                 link = "N/D"
@@ -276,7 +281,7 @@ class ChileSuplementosScraper(BaseScraper):
                                 yield {
                                     'date': current_date,
                                     'site_name': self.site_name,
-                                    'category': main_category,
+                                    'category': self.clean_text(main_category),
                                     'subcategory': subcategory_name,
                                     'product_name': title,
                                     'brand': brand,

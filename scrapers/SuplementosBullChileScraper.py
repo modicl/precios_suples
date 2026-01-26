@@ -81,9 +81,11 @@ class SuplementosBullChileScraper(BaseScraper):
                             # 1. Basic Info from Grid
                             title = "N/D"
                             if card.locator(self.selectors['product_name']).count() > 0:
-                                title = card.locator(self.selectors['product_name']).first.inner_text().strip()
+                                raw_title = card.locator(self.selectors['product_name']).first.inner_text()
+                                title = self.clean_text(raw_title)
 
                             link = "N/D"
+
                             if card.locator(self.selectors['link']).count() > 0:
                                 href = card.locator(self.selectors['link']).first.get_attribute("href")
                                 if href:
@@ -147,9 +149,11 @@ class SuplementosBullChileScraper(BaseScraper):
 
                                     # Brand (Try selector)
                                     if detail_page.locator(self.selectors['detail_brand']).count() > 0:
-                                        brand = detail_page.locator(self.selectors['detail_brand']).first.inner_text().strip()
+                                        raw_brand = detail_page.locator(self.selectors['detail_brand']).first.inner_text()
+                                        brand = self.clean_text(raw_brand)
                                     
                                     # Main Image
+
                                     if detail_page.locator(self.selectors['detail_image']).count() > 0:
                                         # Often these are sliders, take first
                                         img_src = detail_page.locator(self.selectors['detail_image']).first.get_attribute("src")
@@ -170,9 +174,10 @@ class SuplementosBullChileScraper(BaseScraper):
                             yield {
                                 'date': current_date,
                                 'site_name': self.site_name,
-                                'category': main_category,
-                                'subcategory': main_category, # No subcategories explicitly handled yet
+                                'category': self.clean_text(main_category),
+                                'subcategory': self.clean_text(main_category), # No subcategories explicitly handled yet
                                 'product_name': title,
+
                                 'brand': brand,
                                 'price': price,
                                 'link': link,
