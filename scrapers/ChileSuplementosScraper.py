@@ -248,14 +248,30 @@ class ChileSuplementosScraper(BaseScraper):
                                         else:
                                             # Fallback to description tab
                                             desc_el = detail_page.locator('#tab-description, .description').first
-                                            if desc_el.count() > 0:
-                                                description = desc_el.inner_text().strip()
+                                        if desc_el.count() > 0:
+                                            description = desc_el.inner_text().strip()
 
                                         detail_page.close()
                                     except Exception as e:
                                         print(f"[yellow]Error loading details for {link}: {e}[/yellow]")
                                         try: detail_page.close()
                                         except: pass
+
+                                # --- IMPLEMENTACIÓN DE DESCARGA ---
+                                # Definir una subcarpeta limpia basada en el nombre del sitio
+                                site_folder = self.site_name.replace(" ", "_").lower()
+
+                                # Descargar Thumbnail
+                                if thumbnail_url:
+                                    local_thumb = self.download_image(thumbnail_url, subfolder=site_folder)
+                                    if local_thumb:
+                                        thumbnail_url = local_thumb
+
+                                # Descargar Imagen Principal
+                                if image_url:
+                                    local_img = self.download_image(image_url, subfolder=site_folder)
+                                    if local_img:
+                                        image_url = local_img
 
                                 yield {
                                     'date': current_date,

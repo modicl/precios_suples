@@ -223,7 +223,7 @@ with engine.connect() as conn:
         # Key for local deduplication
         key_local = (nombre_prod_norm, id_marca, id_subcategoria)
         
-        if key_db not in productos_existentes_norm and key_local not in seen_products:
+        if key_local not in seen_products:
             productos_insertar_json.append(producto)
             seen_products.add(key_local)
             # print(f"El producto {nombre_producto} agregado para insercion.") # Reduce spam

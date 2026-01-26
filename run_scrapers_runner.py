@@ -18,7 +18,8 @@ def run_scrapers():
         "scrapers/DrSimiScraper.py",
         "scrapers/CruzVerdeScraper.py",
         "scrapers/SuplementosMayoristasScraper.py",
-        "scrapers/FarmaciaKnopScraper.py"
+        "scrapers/FarmaciaKnopScraper.py",
+        "scrapers/WildFoodsScraper.py"
     ]
 
     processes = []
@@ -58,7 +59,8 @@ def run_scrapers():
         ("Insertando Datos en BD", "data_processing/data_insertion.py"),
         ("Limpiando Marcas", "data_processing/clean_brands.py"),
         ("Limpiando Categorías", "data_processing/clean_categories.py"),
-        ("Clasificando Productos (Vegano/Mujer)", "data_processing/classify_products.py")
+        ("Clasificando Productos (Vegano/Mujer)", "data_processing/classify_products.py"),
+        ("Deduplicando Productos", "tools/fix_product_duplicates.py")
     ]
 
     for description, script_path in steps:

@@ -22,3 +22,7 @@ env/
 # Testing
 testcsv.py
 testsql.py
+
+# Carpetas
+implementaciones/
+assets/
