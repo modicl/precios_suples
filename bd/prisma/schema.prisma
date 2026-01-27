@@ -31,6 +31,7 @@ model producto_tienda {
     id_producto        Int
     id_tienda          Int
     url_link           String?            @db.VarChar(300)
+    descripcion        String?            @db.VarChar(500)
     historia_precios   historia_precios[]
     productos          productos          @relation(fields: [id_producto], references: [id_producto], onDelete: NoAction, onUpdate: NoAction, map: "fk_producto")
     tiendas            tiendas            @relation(fields: [id_tienda], references: [id_tienda], onDelete: NoAction, onUpdate: NoAction, map: "fk_tienda")

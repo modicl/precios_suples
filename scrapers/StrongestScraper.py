@@ -15,14 +15,14 @@ class StrongestScraper(BaseScraper):
         # URLs Cateogorias
         self.category_urls = {
             "Proteinas": "https://www.strongest.cl/collection/proteinas",
-            "Creatinas": "https://www.strongest.cl/collection/creatinas",
-            "Vitaminas": "https://www.strongest.cl/collection/salud-y-bienestar",
-            "Pre Entrenos": "https://www.strongest.cl/collection/pre-entrenos",
-            "Ganadores de Peso": "https://www.strongest.cl/collection/ganadores-de-masa",
-            "Aminoacidos y BCAA": "https://www.strongest.cl/collection/aminoacidos-bcaa",
-            "Perdida de Grasa": "https://www.strongest.cl/collection/termogenicos",
-            "Snacks y Comida": "https://www.strongest.cl/collection/snacks",
-            "Ofertas": "https://www.strongest.cl/collection/ofertas-y-precios-bajos"
+            # "Creatinas": "https://www.strongest.cl/collection/creatinas",
+            # "Vitaminas": "https://www.strongest.cl/collection/salud-y-bienestar",
+            # "Pre Entrenos": "https://www.strongest.cl/collection/pre-entrenos",
+            # "Ganadores de Peso": "https://www.strongest.cl/collection/ganadores-de-masa",
+            # "Aminoacidos y BCAA": "https://www.strongest.cl/collection/aminoacidos-bcaa",
+            # "Perdida de Grasa": "https://www.strongest.cl/collection/termogenicos",
+            # "Snacks y Comida": "https://www.strongest.cl/collection/snacks",
+            # "Ofertas": "https://www.strongest.cl/collection/ofertas-y-precios-bajos"
 
         }
         
@@ -32,7 +32,8 @@ class StrongestScraper(BaseScraper):
             "price": ".bs-collection__product-final-price", 
             "old_price": ".bs-collection__old-price", 
             "link": "a.bs-collection__product-info",
-            "thumbnail": ".bs-collection__product__img img, .bs-collection__product-image img"
+            "thumbnail": ".bs-collection__product__img img, .bs-collection__product-image img",
+            "brand": ".bs-collection__product-brand"
         }
 
     def extract_process(self, page):
@@ -108,6 +109,12 @@ class StrongestScraper(BaseScraper):
                         active_discount = False
                         if card.locator(self.selectors['old_price']).count() > 0:
                             active_discount = True
+
+                        # Brand Extraction
+                        brand = "N/D"
+                        if card.locator(self.selectors['brand']).count() > 0:
+                            raw_brand = card.locator(self.selectors['brand']).first.inner_text()
+                            brand = self.clean_text(raw_brand)
                         
                         # --- Detail Extraction (Multi-tab) ---
                         image_url = ""
@@ -187,7 +194,7 @@ class StrongestScraper(BaseScraper):
                             'category': self.clean_text(category),
                             'subcategory': self.clean_text(subcategory_name),
                             'product_name': title,
-                            'brand': 'Strongest',
+                            'brand': brand,
 
                             'price': price,
                             'link': link,

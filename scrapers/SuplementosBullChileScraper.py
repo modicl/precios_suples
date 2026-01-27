@@ -135,17 +135,22 @@ class SuplementosBullChileScraper(BaseScraper):
                                     detail_page = context.new_page()
                                     detail_page.goto(link, wait_until="domcontentloaded", timeout=30000)
                                     
-                                    # SKU
+                                    # SKU and Brand from SKU text
                                     if detail_page.locator(self.selectors['detail_sku']).count() > 0:
                                         sku_text = detail_page.locator(self.selectors['detail_sku']).first.inner_text()
-                                        sku = sku_text.replace('SKU:', '').strip()
+                                        if "|" in sku_text:
+                                            parts = sku_text.split("|")
+                                            sku = parts[0].replace('SKU:', '').strip()
+                                            brand = parts[1].strip()
+                                        else:
+                                            sku = sku_text.replace('SKU:', '').strip()
 
                                     # Description
                                     if detail_page.locator(self.selectors['detail_desc']).count() > 0:
                                         description = detail_page.locator(self.selectors['detail_desc']).first.inner_text().strip()
 
-                                    # Brand (Try selector)
-                                    if detail_page.locator(self.selectors['detail_brand']).count() > 0:
+                                    # Brand (Try selector if not found in SKU)
+                                    if brand == "N/D" and detail_page.locator(self.selectors['detail_brand']).count() > 0:
                                         raw_brand = detail_page.locator(self.selectors['detail_brand']).first.inner_text()
                                         brand = self.clean_text(raw_brand)
                                     

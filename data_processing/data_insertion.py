@@ -199,7 +199,6 @@ with engine.connect() as conn:
                 "nombre_producto": nombre_final,
                 "url_imagen": row["image_url"],
                 "url_thumb_imagen": row["thumbnail_image_url"],
-                "descripcion": row["description"],
                 "id_marca" : id_marca,
                 "id_subcategoria": id_subcategoria
             })
@@ -232,8 +231,8 @@ with engine.connect() as conn:
     if(len(productos_insertar_json) > 0):
         print(f"Insertando {len(productos_insertar_json)} productos nuevos...")
         query = """
-        INSERT INTO productos (nombre_producto, url_imagen, url_thumb_imagen, descripcion, id_marca, id_subcategoria) 
-        VALUES(:nombre_producto, :url_imagen, :url_thumb_imagen, :descripcion, :id_marca, :id_subcategoria) 
+        INSERT INTO productos (nombre_producto, url_imagen, url_thumb_imagen, id_marca, id_subcategoria) 
+        VALUES(:nombre_producto, :url_imagen, :url_thumb_imagen, :id_marca, :id_subcategoria) 
         ON CONFLICT (nombre_producto, id_marca,id_subcategoria) 
         DO UPDATE SET 
             url_imagen = CASE 
@@ -283,11 +282,12 @@ for index, row in df.iterrows():
     id_tienda = tienda_ids_norm.get(clean_text(row["site_name"]))
     
     if id_producto and id_tienda:
-        if (id_producto, id_tienda) not in productos_tienda_vistos and (id_producto, id_tienda) not in producto_tienda_existentes:
+        if (id_producto, id_tienda) not in productos_tienda_vistos:
             productos_tienda_json.append({
                 "id_producto": id_producto,
                 "id_tienda": id_tienda,
                 "url_link": url_producto,
+                "descripcion": row["description"]
             })
             productos_tienda_vistos.add((id_producto, id_tienda))
             # print(f"Link {id_producto}-{id_tienda} agregado.")
@@ -298,7 +298,7 @@ print(f"Total combinaciones producto-tienda a insertar: {len(productos_tienda_js
 
 if len(productos_tienda_json) > 0:
     with engine.connect() as conn:
-        conn.execute(sa.text("INSERT INTO producto_tienda (id_producto, id_tienda, url_link) VALUES(:id_producto, :id_tienda, :url_link) ON CONFLICT (id_producto, id_tienda) DO UPDATE SET url_link = EXCLUDED.url_link"), productos_tienda_json)
+        conn.execute(sa.text("INSERT INTO producto_tienda (id_producto, id_tienda, url_link, descripcion) VALUES(:id_producto, :id_tienda, :url_link, :descripcion) ON CONFLICT (id_producto, id_tienda) DO UPDATE SET url_link = EXCLUDED.url_link, descripcion = EXCLUDED.descripcion"), productos_tienda_json)
         conn.commit()
 
 
