@@ -64,7 +64,9 @@ class BaseScraper:
         1. Si la marca ya es válida (no es 'N/D' ni vacía), se mantiene.
         2. Si no es válida, usa BrandMatcher para buscarla en el nombre del producto.
         """
-        if brand and brand.strip().upper() != "N/D":
+        # Check against list of "unknown" indicators, including "ND" which might result from aggressive cleaning
+        invalid_brands = ["N/D", "ND", "N.D.", ""]
+        if brand and brand.strip().upper() not in invalid_brands:
             return brand
         
         return self.brand_matcher.get_best_match(product_name)
@@ -72,12 +74,12 @@ class BaseScraper:
     def clean_text(self, text: str) -> str:
         """
         Elimina emojis y caracteres no deseados del texto.
-        Preserva caracteres alfanuméricos, espacios, acentos y puntuación básica (.,-).
+        Preserva caracteres alfanuméricos, espacios, acentos, puntuación básica (.,-) y barras (/).
         """
         if not text:
             return ""
-        # Regex para eliminar emojis y símbolos gráficos, preservando acentos
-        return re.sub(r'[^\w\s\u00C0-\u00FF\u002D\u002E\u002C]', '', text).strip()
+        # Regex para eliminar emojis y símbolos gráficos, preservando acentos y '/'
+        return re.sub(r'[^\w\s\u00C0-\u00FF\u002D\u002E\u002C\u002F]', '', text).strip()
 
     def _setup_logging(self):
         """Configura el logger específico para el scraper."""

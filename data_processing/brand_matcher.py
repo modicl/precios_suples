@@ -64,7 +64,16 @@ class BrandMatcher:
             'hangry': 'HANGRYBOY', # Alias just in case "Hangryboy" matching fails, or for "Hangry" substring
             'hangryboy': 'HANGRYBOY',
             'king whey': 'Ronnie Coleman', # Example based on test data, usually RC King Whey
-            'animal pak': 'Universal Nutrition' # Often associated
+            'animal pak': 'Universal Nutrition', # Often associated
+            'perfect nutricion': 'Perfect Nutrition', # Typo fix
+            'fit supps': 'FitSupps', # Spacing fix
+            'black line': 'Perfect Nutrition', # Line association based on data patterns
+            'innovative': 'Innovative Fit', # Shortening
+            '100 whey protein': 'Innovative Fit', # User specific request for generic name mapping
+            'creatine premium plus': 'Innovative Fit', # User specific request
+            'activ-on': 'Activ On', # Formatting
+            'high protein bar': 'Activlab', # Product specific mapping
+            'activ on': 'Activ On' # Ensure distinct word matching captures this
         }
     
     def normalize(self, text: str) -> str:

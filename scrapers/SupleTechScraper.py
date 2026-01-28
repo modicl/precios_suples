@@ -221,7 +221,7 @@ class SupleTechScraper(BaseScraper):
                                     'category': self.clean_text(main_category),
                                     'subcategory': subcategory_name,
                                     'product_name': title,
-                                    'brand': brand,
+                                    'brand': self.enrich_brand(brand, title),
 
                                     'price': price,
                                     'link': link,

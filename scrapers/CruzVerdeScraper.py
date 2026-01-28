@@ -225,7 +225,7 @@ class CruzVerdeScraper(BaseScraper):
                             'category': self.clean_text(final_category),
                             'subcategory': self.clean_text(final_category),
                             'product_name': name,
-                            'brand': brand,
+                            'brand': self.enrich_brand(brand, name),
                             'price': price,
                             'link': link,
                             'rating': "0",

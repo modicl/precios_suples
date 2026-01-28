@@ -183,7 +183,7 @@ class FarmaciaKnopScraper(BaseScraper):
                         'category': self.clean_text(category_name),
                         'subcategory': self.clean_text(category_name),
                         'product_name': name,
-                        'brand': brand,
+                        'brand': self.enrich_brand(brand, name),
                         'price': price,
                         'link': link,
                         'rating': "0",

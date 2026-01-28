@@ -119,7 +119,7 @@ class DecathlonScraper(BaseScraper):
                                     'subcategory': self.clean_text(main_category),
                                     'product_name': title,
 
-                                    'brand': brand,
+                                    'brand': self.enrich_brand(brand, title),
                                     'price': int(price),
                                     'link': link,
                                     'rating': str(item.get('rating_average', 0)),

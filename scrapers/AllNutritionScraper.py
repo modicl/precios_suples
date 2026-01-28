@@ -212,7 +212,7 @@ class AllNutritionScraper(BaseScraper):
                                 'subcategory': subcategory_name,
 
                                 'product_name': title,
-                                'brand': brand,
+                                'brand': self.enrich_brand(brand, title),
                                 'price': price,
                                 'link': link,
                                 'rating': "0",

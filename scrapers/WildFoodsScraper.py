@@ -110,7 +110,7 @@ class WildFoodsScraper(BaseScraper):
                                     'category': self.clean_text(main_category),
                                     'subcategory': "N/D",
                                     'product_name': name,
-                                    'brand': current_brand,
+                                    'brand': self.enrich_brand(current_brand, name),
                                     'price': price,
                                     'link': link,
                                     'rating': "N/D",
