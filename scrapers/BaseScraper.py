@@ -6,11 +6,21 @@ import requests
 import shutil
 import io
 import logging
+import sys
+import os
 from datetime import datetime
 from playwright.sync_api import sync_playwright, Page, Playwright
 import boto3
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
+
+# Ensure project root is in sys.path to allow importing data_processing
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, '..'))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+from data_processing.brand_matcher import BrandMatcher
 
 load_dotenv()
 
@@ -23,6 +33,9 @@ class BaseScraper:
         self.selectors = selectors if selectors else {} # Selectores para extraer datos en forma de diccionario
         self.site_name = site_name # Nombre del sitio web
         
+        # Inicializar BrandMatcher
+        self.brand_matcher = BrandMatcher()
+
         # Configuración S3
         self.bucket_name = os.getenv("AWS_BUCKET_NAME", "suplescrapper-images")
         self.aws_region = os.getenv("AWS_REGION", "us-east-2")
@@ -44,6 +57,17 @@ class BaseScraper:
                 aws_secret_access_key=self.aws_secret_key,
                 region_name=self.aws_region
             )
+
+    def enrich_brand(self, brand: str, product_name: str) -> str:
+        """
+        Intenta mejorar la marca detectada:
+        1. Si la marca ya es válida (no es 'N/D' ni vacía), se mantiene.
+        2. Si no es válida, usa BrandMatcher para buscarla en el nombre del producto.
+        """
+        if brand and brand.strip().upper() != "N/D":
+            return brand
+        
+        return self.brand_matcher.get_best_match(product_name)
 
     def clean_text(self, text: str) -> str:
         """

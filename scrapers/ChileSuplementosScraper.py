@@ -89,6 +89,10 @@ class ChileSuplementosScraper(BaseScraper):
             for url in urls:
                 subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
                 subcategory_name = self.clean_text(subcategory_name)
+                
+                if not subcategory_name or not subcategory_name.strip():
+                    subcategory_name = "N/D"
+
                 print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {subcategory_name} ({url})")
 
                 
@@ -284,7 +288,7 @@ class ChileSuplementosScraper(BaseScraper):
                                     'category': self.clean_text(main_category),
                                     'subcategory': subcategory_name,
                                     'product_name': title,
-                                    'brand': brand,
+                                    'brand': self.enrich_brand(brand, title),
                                     'price': price,
                                     'link': link,
                                     'rating': rating,

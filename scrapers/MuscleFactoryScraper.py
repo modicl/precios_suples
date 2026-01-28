@@ -223,7 +223,7 @@ class MuscleFactoryScraper(BaseScraper):
                                 'subcategory': self.clean_text(main_category), 
                                 'product_name': title,
 
-                                'brand': brand,
+                                'brand': self.enrich_brand(brand, title),
                                 'price': price,
                                 'link': link,
                                 'rating': "0",

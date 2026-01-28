@@ -215,10 +215,10 @@ class SupleStoreScraper(BaseScraper):
                                 'date': current_date,
                                 'site_name': self.site_name,
                                 'category': self.clean_text(main_category),
-                                'subcategory': subcategory_name,
+                                'subcategory': self.clean_text(main_category), 
                                 'product_name': title,
 
-                                'brand': brand,
+                                'brand': self.enrich_brand(brand, title),
                                 'price': price,
                                 'link': link,
                                 'rating': "0",

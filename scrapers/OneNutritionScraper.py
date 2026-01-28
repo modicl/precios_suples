@@ -229,7 +229,7 @@ class OneNutritionScraper(BaseScraper):
                                 'category': self.clean_text(main_category),
                                 'subcategory': subcategory_name,
                                 'product_name': title,
-                                'brand': self.clean_text(brand),
+                                'brand': self.enrich_brand(self.clean_text(brand), title),
                                 'price': price,
 
                                 'link': link,

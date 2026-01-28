@@ -180,7 +180,7 @@ class SuplementosBullChileScraper(BaseScraper):
                                 'subcategory': self.clean_text(main_category), # No subcategories explicitly handled yet
                                 'product_name': title,
 
-                                'brand': brand,
+                                'brand': self.enrich_brand(brand, title),
                                 'price': price,
                                 'link': link,
                                 'rating': "0",

@@ -194,7 +194,7 @@ class FitMarketChileScraper(BaseScraper):
                                 'subcategory': self.clean_text(main_category), 
                                 'product_name': title,
 
-                                'brand': self.clean_text(brand),
+                                'brand': self.enrich_brand(self.clean_text(brand), title),
                                 'price': price,
 
                                 'link': link,

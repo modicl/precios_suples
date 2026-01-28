@@ -194,7 +194,7 @@ class StrongestScraper(BaseScraper):
                             'category': self.clean_text(category),
                             'subcategory': self.clean_text(subcategory_name),
                             'product_name': title,
-                            'brand': brand,
+                            'brand': self.enrich_brand(brand, title),
 
                             'price': price,
                             'link': link,
