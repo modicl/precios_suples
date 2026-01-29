@@ -13,6 +13,7 @@ from playwright.sync_api import sync_playwright, Page, Playwright
 import boto3
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
+from rich import print
 
 # Ensure project root is in sys.path to allow importing data_processing
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -110,25 +111,28 @@ class BaseScraper:
         if self.logger:
             self.logger.info(message)
 
-    def _ensure_s3_cache(self, subfolder: str):
+    def _ensure_s3_cache(self, subfolder: str, prefix: str = None):
         """
         Carga la lista de objetos de S3 para una subcarpeta específica en memoria (una sola vez).
+        Por defecto apunta a la carpeta 'assets/img/resized/'.
         """
         if not self.s3_client or subfolder in self.s3_cache:
             return
 
-        print(f"Cargando inventario S3 para: assets/img/{subfolder} ...")
-        self._log_info(f"Cargando inventario S3 para subcarpeta: {subfolder}")
+        # Si no se especifica prefix, usamos 'assets/img/resized/{subfolder}'
+        target_prefix = prefix if prefix else f"assets/img/resized/{subfolder}"
+
+        print(f"Cargando inventario S3 para: {target_prefix} ...")
+        self._log_info(f"Cargando inventario S3 para subcarpeta: {subfolder} (Prefix: {target_prefix})")
         
         self.s3_cache[subfolder] = set()
-        prefix = f"assets/img/{subfolder}"
         
         paginator = self.s3_client.get_paginator('list_objects_v2')
         try:
-            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
+            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=target_prefix):
                 if 'Contents' in page:
                     for obj in page['Contents']:
-                        # Guardamos solo el nombre del archivo (ej: 'assets/img/strongest/abc.jpg' -> 'abc.jpg')
+                        # Guardamos solo el nombre del archivo (ej: 'assets/img/resized/strongest/abc.jpg' -> 'abc.jpg')
                         key = obj['Key']
                         filename = os.path.basename(key)
                         self.s3_cache[subfolder].add(filename)
@@ -141,11 +145,11 @@ class BaseScraper:
 
     def download_image(self, url: str, subfolder: str = "") -> str:
         """
-        Gestiona la imagen:
+        Gestiona la imagen con estrategia Fire and Forget:
         1. Calcula Hash.
-        2. Verifica si existe en S3 (usando caché en memoria).
-        3. Si existe: Retorna URL de S3 y LOGUEA INFO.
-        4. Si no: Descarga (RAM) -> Sube a S3 -> Retorna URL.
+        2. Verifica si existe en S3 (carpeta 'assets/img/resized/').
+        3. Si existe: Retorna URL de 'assets/img/resized/'.
+        4. Si no: Descarga (RAM) -> Sube a 'assets/img/originals/' -> Retorna URL de 'assets/img/originals/'.
         """
         if not url or url == "N/D":
             return ""
@@ -155,22 +159,30 @@ class BaseScraper:
         if not file_ext or len(file_ext) > 5:
             file_ext = ".jpg" # Fallback extension
         
-        filename = hashlib.md5(url.encode('utf-8')).hexdigest() + file_ext
-        s3_key = f"assets/img/{subfolder}/{filename}"
-        s3_url = f"https://{self.bucket_name}.s3.{self.aws_region}.amazonaws.com/{s3_key}"
+        # Generar hash basado en la URL limpia (sin parametros dinamicos) para evitar duplicados
+        clean_url_key = url.split('?')[0]
+        filename = hashlib.md5(clean_url_key.encode('utf-8')).hexdigest() + file_ext
+        
+        # Definir rutas S3 (dentro de assets/img)
+        s3_resized_key = f"assets/img/resized/{subfolder}/{filename}"
+        s3_original_key = f"assets/img/originals/{subfolder}/{filename}"
+        
+        s3_resized_url = f"https://{self.bucket_name}.s3.{self.aws_region}.amazonaws.com/{s3_resized_key}"
+        s3_original_url = f"https://{self.bucket_name}.s3.{self.aws_region}.amazonaws.com/{s3_original_key}"
 
         # --- Lógica S3 ---
         if self.s3_client:
-            # 1. Carga Lazy del inventario
+            # 1. Carga Lazy del inventario (busca en resized por defecto)
             self._ensure_s3_cache(subfolder)
             
             # 2. Verificación en Memoria (Zero Latency)
             if filename in self.s3_cache.get(subfolder, set()):
-                # LOG REQUERIDO: Imagen encontrada en S3
-                self._log_info(f"Imagen existente encontrada en S3: {filename} (URL: {url}) - SKIP DOWNLOAD")
-                return s3_url
+                # LOG REQUERIDO: Imagen encontrada en resized
+                self._log_info(f"Imagen encontrada en resized: {filename} (URL: {url}) - SKIP DOWNLOAD")
+                print(f"[green]   [S3 CACHE] Imagen ya existe (resized): {filename}[/green]")
+                return s3_resized_url
 
-            # 3. Descarga y Subida (Stream)
+            # 3. Descarga y Subida (Stream) a ORIGINALS
             try:
                 headers = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -186,20 +198,22 @@ class BaseScraper:
                     # Leer en memoria (Buffer)
                     image_data = io.BytesIO(response.content)
                     
-                    # Subir a S3
-                    self._log_info(f"Subiendo nueva imagen a S3: {filename}")
+                    # Subir a S3 (Originals)
+                    self._log_info(f"Imagen no encontrada en resized, subiendo a originals: {filename}")
+                    print(f"[yellow]   [S3 UPLOAD] Subiendo original: {filename}[/yellow]")
                     self.s3_client.upload_fileobj(
                         image_data, 
                         self.bucket_name, 
-                        s3_key, 
+                        s3_original_key, 
                         ExtraArgs={'ContentType': content_type}
                     )
                     
-                    # Actualizar caché
-                    if subfolder in self.s3_cache:
-                        self.s3_cache[subfolder].add(filename)
+                    # NOTA: Retornamos la URL de RESIZED para que la BD guarde la URL final/canónica.
+                    # Esto significa que la imagen dará 404 hasta que el proceso Lambda se ejecute
+                    # y genere el archivo en la carpeta 'resized'.
+                    self._log_info(f"Retornando URL futura (resized): {s3_resized_url}")
                         
-                    return s3_url
+                    return s3_resized_url
                 else:
                     msg = f"Error {response.status_code} descargando: {url}"
                     print(f"[yellow]{msg}[/yellow]")

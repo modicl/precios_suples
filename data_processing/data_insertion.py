@@ -330,7 +330,14 @@ for index, row in df.iterrows():
 # Insertamos los datos
 if len(historial_precios_json) > 0:
     with engine.connect() as conn:
-        conn.execute(sa.text("INSERT INTO historia_precios (id_producto_tienda, precio, fecha_precio) VALUES(:id_producto_tienda, :precio, :fecha_precio)"), historial_precios_json)
+        # Usamos ON CONFLICT gracias al constraint uq_precio_fecha (id_producto_tienda, fecha_precio)
+        query = """
+            INSERT INTO historia_precios (id_producto_tienda, precio, fecha_precio) 
+            VALUES(:id_producto_tienda, :precio, :fecha_precio)
+            ON CONFLICT (id_producto_tienda, fecha_precio) 
+            DO UPDATE SET precio = EXCLUDED.precio
+        """
+        conn.execute(sa.text(query), historial_precios_json)
         conn.commit()
 
 

@@ -6,9 +6,12 @@ from rich import print
 def evaluate_matches():
     processed_dir = "processed_data"
     # fuzzy_dir = os.path.join(processed_dir, "fuzzy_matched")
-    inserted_dir = os.path.join(processed_dir, "inserted_data")
+    # inserted_dir = os.path.join(processed_dir, "inserted_data")
     
-    files = glob.glob(os.path.join(inserted_dir, "normalized_products_*.csv"))
+    # files = glob.glob(os.path.join(inserted_dir, "normalized_products_*.csv"))
+    
+    target_dir = os.path.join(processed_dir, "fuzzy_matched")
+    files = glob.glob(os.path.join(target_dir, "normalized_products_*.csv"))
     if not files:
         print("[red]No hay archivos normalizados para evaluar.[/red]")
         return

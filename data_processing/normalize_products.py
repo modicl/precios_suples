@@ -86,9 +86,15 @@ def extract_pack_quantity(text):
 
     # Case: Starting number indicating pack (e.g. "2 Mass Extreme")
     # Must be at start of string, followed by space, avoiding "100% ..."
-    match_start = re.search(r'^(\d+)\s+(?!\d|%|lbs|kg|gr)', text)
+    match_start = re.search(r'^(\d+)\s+(?!\d|%|lbs|kg|gr|mg|mcg|ml|l\b)', text)
     if match_start:
          val = int(match_start.group(1))
+         # Relaxed limit for bars/units, strict for general numbers to avoid "2000 calories" etc.
+         # If followed by 'unidades', 'barras', 'sachets', allow higher.
+         rest_of_text = text[match_start.end():].lower()
+         if re.match(r'(unidades|unid|u\.|barras|bars|sachets|botellas)', rest_of_text.strip()):
+             return str(val)
+             
          if val > 1 and val < 10: # Safety: only treat small numbers as pack quantities
              return str(val)
         
@@ -111,7 +117,12 @@ def extract_flavors(text):
         'mango', 'maracuya', 'passion', 'sandia', 'watermelon', 'uva', 'grape',
         'blue', 'razz', 'raspberry', 'frambuesa', 'manzana', 'apple', 'punch', 'fruit',
         'unflavored', 'sin sabor', 'neutro', 'natural', 'bitter',
-        'cocada', 'blanco', 'white', 'nuts', 'power', 'crunch', 'crunchy', 'creamy'
+        'cocada', 'blanco', 'white', 'nuts', 'power', 'crunch', 'crunchy', 'creamy',
+        # New additions
+        'almendra', 'almond', 'menta', 'mint', 'miel', 'honey', 
+        'lúcuma', 'lucuma', 'avellana', 'hazelnut',
+        'canela', 'cinnamon', 'red velvet', 'cheesecake',
+        'nature' # treated as flavor/variant for bars
     ]
     
     found_flavors = set()
@@ -137,7 +148,12 @@ def check_critical_mismatch(text1, text2):
         # Bundles/Gifts
         'shaker', 'regalo', 'vaso', 'botella', 'mochila',
         # Gender specificity
-        'woman', 'women', 'her', 'hers', 'female', 'mujer', 'ellos', 'ellas', 'hombre', 'hombres'
+        'woman', 'women', 'womens', 'her', 'hers', 'female', 'mujer', 'ellos', 'ellas', 'hombre', 'hombres',
+        # Forms
+        'polvo', 'caps', 'capsulas', 'tabletas', 'comprimidos', 'softgel', 'liquido', 'grano', 'molido',
+        # New Criticals
+        'nightime', 'munchy', 'barras', 'cento', 'cinquanta', 'master', 'lab',
+        'lysine', 'cysteine', 'tyrosine', 'proline', 'leucine', 'glutamine', 'creatine', 'creatina', 'bcaa', 'mix'
     ]
     
     for kw in keywords:

@@ -1,23 +1,28 @@
 import os
+import csv
 import sqlalchemy as sa
 from sqlalchemy import text
 from dotenv import load_dotenv
-
 import re
+from rapidfuzz import process, fuzz, utils
+from collections import defaultdict
 
-def clean_text(text_val):
-    """Normalize text for grouping (remove emojis, strip, lower)."""
-    if not isinstance(text_val, str):
-        return ""
-    
-    # 1. Remove non-standard characters (keep alphanumeric, space, hyphens, dots, apostrophes, &)
-    # This effectively strips emojis like ⭐
-    normalized = re.sub(r'[^\w\s\-\.\'\&]', '', text_val)
-    
-    # 2. Collapse multiple spaces
-    normalized = re.sub(r'\s+', ' ', normalized)
-    
-    return normalized.strip().lower()
+def load_brand_dictionary(filepath):
+    """Load canonical brand names from CSV."""
+    brands = []
+    if not os.path.exists(filepath):
+        print(f"Warning: Dictionary file not found at {filepath}")
+        return []
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row.get('nombre_marca'):
+                    brands.append(row['nombre_marca'].strip())
+    except Exception as e:
+        print(f"Error loading dictionary: {e}")
+        return []
+    return brands
 
 def clean_brands():
     load_dotenv()
@@ -43,42 +48,81 @@ def clean_brands():
     with engine.connect() as conn:
         trans = conn.begin()
         try:
-            print("Fetching brands...")
-            raw_data = conn.execute(text("SELECT id_marca, nombre_marca FROM marcas")).fetchall()
+            print("Starting smart brand cleaning...")
             
-            groups = {}
-            for id_val, name in raw_data:
-                norm = clean_text(name)
-                if not norm: continue
-                if norm not in groups: groups[norm] = []
-                groups[norm].append({'id': id_val, 'name': name})
-            
-            print(f"Found {len(raw_data)} brands, grouped into {len(groups)} unique normalized names.")
-            
+            # 1. Load Dictionary
+            dic_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'marcas_dictionary.csv')
+            canonical_brands = load_brand_dictionary(dic_path)
+            print(f"Loaded {len(canonical_brands)} brands from dictionary.")
+
+            # 2. Fetch all current brands
+            brands_snapshot = conn.execute(text("SELECT id_marca, nombre_marca FROM marcas")).fetchall()
+            print(f"Loaded {len(brands_snapshot)} brands from database.")
+
+            # 3. Cluster Brands
+            # clusters maps { 'Target Canonical Name': [ {id, current_name}, ... ] }
+            clusters = defaultdict(list)
+
+            for id_val, name in brands_snapshot:
+                if not name:
+                    continue
+                
+                target_name = None
+                
+                # A. Try to match with dictionary
+                if canonical_brands:
+                    match_result = process.extractOne(
+                        name, 
+                        canonical_brands, 
+                        scorer=fuzz.WRatio, 
+                        processor=utils.default_process
+                    )
+                    if match_result:
+                        best_match, score, _ = match_result
+                        if score > 85:
+                            target_name = best_match
+                
+                # B. If no dictionary match (or dict empty), use own name as key (stripped)
+                if not target_name:
+                    target_name = name.strip()
+                
+                # Add to cluster
+                clusters[target_name].append({'id': id_val, 'name': name})
+
+            print(f"Grouped into {len(clusters)} unique target names.")
+
+            # 4. Execute Merge and Rename
             fusion_count = 0
-            for norm_name, items in groups.items():
-                if len(items) > 1:
+            rename_count = 0
+            
+            for target_name, items in clusters.items():
+                
+                # --- Step A: Identify Master ---
+                # Logic: Prefer an item that ALREADY has the target name. 
+                # If none, prefer mixed case (Title Case). 
+                # Tie-breaker: Lowest ID.
+                def score_candidate(item):
+                    name = item['name']
+                    score = 0
+                    if name == target_name: score += 10 # Best: already correct
+                    if name != name.lower() and name != name.upper(): score += 2 
+                    if name == name.title(): score += 1
+                    return (-score, item['id']) 
+
+                sorted_items = sorted(items, key=score_candidate)
+                master = sorted_items[0]
+                master_id = master['id']
+                
+                duplicates = sorted_items[1:] # All others are slaves to be merged
+                
+                if duplicates:
                     fusion_count += 1
-                    
-                    # Heuristic for Master
-                    def score_candidate(item):
-                        name = item['name']
-                        score = 0
-                        if name != name.lower() and name != name.upper(): score += 2 
-                        if name == name.title(): score += 1
-                        return (-score, item['id']) 
-
-                    sorted_items = sorted(items, key=score_candidate)
-                    master = sorted_items[0]
-                    master_id = master['id']
-                    
-                    duplicates = sorted_items[1:]
-                    
                     try:
-                        print(f"Merging '{norm_name}': Master='{master['name']}'({master_id}) <- {[d['id'] for d in duplicates]}")
+                        print(f"Merging into '{target_name}' (Master ID {master_id}): Merging {[d['id'] for d in duplicates]}")
                     except UnicodeEncodeError:
-                        print(f"Merging '{norm_name.encode('utf-8', 'ignore')}'...")
+                         pass
 
+                    # --- Step B: Merge Logic ---
                     for dup in duplicates:
                         dup_id = dup['id']
                         
@@ -94,7 +138,6 @@ def clean_brands():
                             subcat_id = prod.id_subcategoria
                             
                             # Check for collision in master brand
-                            # (Same name, same subcategory, but in master brand)
                             master_collision = conn.execute(
                                 text("""
                                     SELECT id_producto FROM productos 
@@ -105,7 +148,6 @@ def clean_brands():
                             
                             if master_collision:
                                 master_prod_id = master_collision.id_producto
-                                # print(f"  Collision: Prod {prod_id} (Dup) matches Prod {master_prod_id} (Master). Merging...")
                                 
                                 # Move producto_tienda entries
                                 pt_entries = conn.execute(
@@ -125,7 +167,7 @@ def clean_brands():
                                     
                                     if master_pt:
                                         master_pt_id = master_pt.id_producto_tienda
-                                        # Move prices to master_pt (using 'historia_precios' table)
+                                        # Move prices to master_pt
                                         conn.execute(
                                             text("UPDATE historia_precios SET id_producto_tienda = :target WHERE id_producto_tienda = :source"),
                                             {'target': master_pt_id, 'source': pt_id}
@@ -136,33 +178,47 @@ def clean_brands():
                                             {'pid': pt_id}
                                         )
                                     else:
-                                        # Just reassign pt entry to master product
+                                        # Reassign pt entry to master product
                                         conn.execute(
                                             text("UPDATE producto_tienda SET id_producto = :target WHERE id_producto_tienda = :source"),
                                             {'target': master_prod_id, 'source': pt_id}
                                         )
                                 
-                                # After handling children, delete the duplicate product
+                                # Delete the duplicate product
                                 conn.execute(
                                     text("DELETE FROM productos WHERE id_producto = :pid"),
                                     {'pid': prod_id}
                                 )
                                 
                             else:
-                                # No collision, safe to move product to master brand
+                                # Safe to move product to master brand
                                 conn.execute(
                                     text("UPDATE productos SET id_marca = :mid WHERE id_producto = :pid"),
                                     {'mid': master_id, 'pid': prod_id}
                                 )
                         
-                        # Finally delete the duplicate brand
+                        # Delete the duplicate brand
                         conn.execute(
                             text("DELETE FROM marcas WHERE id_marca = :did"),
                             {'did': dup_id}
                         )
+                
+                # --- Step C: Rename Master (if needed) ---
+                if master['name'] != target_name:
+                    # Check safely if target_name is available (it should be, because we clustered by it)
+                    # BUT: Another cluster might have claimed it? No, keys are unique.
+                    # The only risk is if we are renaming to 'Space Protein' and 'Space Protein' wasn't in this cluster.
+                    # But if 'Space Protein' existed in DB, it would have been put in THIS cluster.
+                    # So it's safe.
+                    # print(f"Renaming Master ID {master_id} from '{master['name']}' to '{target_name}'")
+                    conn.execute(
+                        text("UPDATE marcas SET nombre_marca = :new_name WHERE id_marca = :id"),
+                        {'new_name': target_name, 'id': master_id}
+                    )
+                    rename_count += 1
 
             trans.commit()
-            print(f"Brand cleaning completed. Merged {fusion_count} groups.")
+            print(f"Brand cleaning completed. Merged {fusion_count} groups. Renamed {rename_count} masters.")
             
         except Exception as e:
             trans.rollback()
