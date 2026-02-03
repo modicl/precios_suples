@@ -270,5 +270,5 @@ class SupleTechScraper(BaseScraper):
 
 if __name__ == "__main__":
     base_url = "https://www.supletech.cl"
-    scraper = SupleTechScraper(base_url=base_url, headless=False)
+    scraper = SupleTechScraper(base_url=base_url, headless=True)
     scraper.run()

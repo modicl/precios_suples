@@ -59,6 +59,13 @@ def fix_duplicates():
         
         print(f"Encontrados {len(grupos)} grupos de duplicados.")
         
+        # Eliminar constraint si existe para permitir duplicados (historia multiple en un dia)
+        try:
+             conn.execute(sa.text("ALTER TABLE historia_precios DROP CONSTRAINT IF EXISTS uq_precio_fecha"))
+             print("Constraint 'uq_precio_fecha' eliminado (o no existía).")
+        except Exception as e:
+             print(f"Advertencia al intentar borrar constraint: {e}")
+        
         processed_count = 0
         deleted_count = 0
         
@@ -121,7 +128,7 @@ def fix_duplicates():
                         link_id_master = link_master.id_producto_tienda
                         print(f"    - Conflicto en tienda {tienda_id}: Migrando historia de link {link_id_dupe} a {link_id_master}")
                         
-                        # Migrar historia
+                        # Migrar historia (ahora permitido duplicados)
                         conn.execute(sa.text("UPDATE historia_precios SET id_producto_tienda = :new_id WHERE id_producto_tienda = :old_id"), {"new_id": link_id_master, "old_id": link_id_dupe})
                         
                         # Borrar link dupe

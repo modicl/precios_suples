@@ -334,8 +334,6 @@ if len(historial_precios_json) > 0:
         query = """
             INSERT INTO historia_precios (id_producto_tienda, precio, fecha_precio) 
             VALUES(:id_producto_tienda, :precio, :fecha_precio)
-            ON CONFLICT (id_producto_tienda, fecha_precio) 
-            DO UPDATE SET precio = EXCLUDED.precio
         """
         conn.execute(sa.text(query), historial_precios_json)
         conn.commit()

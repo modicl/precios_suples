@@ -145,5 +145,5 @@ class DecathlonScraper(BaseScraper):
 
 if __name__ == "__main__":
     # Keep headless=False because of Cloudflare
-    scraper = DecathlonScraper("https://www.decathlon.cl", headless=False)
+    scraper = DecathlonScraper("https://www.decathlon.cl", headless=True)
     scraper.run()

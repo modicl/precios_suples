@@ -348,5 +348,5 @@ class ChileSuplementosScraper(BaseScraper):
                     print(f"[red]Error categoría {url}: {e}[/red]")
 
 if __name__ == "__main__":
-    scraper = ChileSuplementosScraper(headless=False)
+    scraper = ChileSuplementosScraper(headless=True)
     scraper.run()
