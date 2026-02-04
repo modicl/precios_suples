@@ -4,6 +4,8 @@ import pandas as pd
 from dotenv import load_dotenv
 import glob
 import shutil
+from datetime import datetime
+
 
 def clean_text(text):
     """Normalize text for case-insensitive comparison."""
@@ -322,15 +324,38 @@ for index, row in df.iterrows():
     if id_producto and id_tienda:
         id_producto_tienda = producto_tienda_ids.get((id_producto, id_tienda))
         if id_producto_tienda:
+            # Validar fecha
+            fecha = row["date"]
+            if pd.isna(fecha):
+                 # Si es NaT, usamos la fecha y hora actual
+                fecha_final = datetime.now()
+            else:
+                fecha_dt = pd.to_datetime(fecha, errors='coerce')
+                if pd.isna(fecha_dt):
+                    # Fallback si conversión falla
+                    fecha_final = datetime.now()
+                else:
+                    # Usamos el timestamp completo, no solo .date()
+                    fecha_final = fecha_dt
+
             historial_precios_json.append({
                 "id_producto_tienda": id_producto_tienda,
                 "precio": row["price"],
-                "fecha_precio": pd.to_datetime(row["date"]).date()
+                "fecha_precio": fecha_final
             })
+
 # Insertamos los datos
 if len(historial_precios_json) > 0:
     with engine.connect() as conn:
+        # 1. Borrar datos de HOY para evitar duplicados/sucios antes de insertar
+        print("Eliminando registros de historia_precios del día de hoy antes de insertar...")
+        conn.execute(sa.text("DELETE FROM historia_precios WHERE fecha_precio::date = CURRENT_DATE"))
+        conn.commit()
+
+
         # Usamos ON CONFLICT gracias al constraint uq_precio_fecha (id_producto_tienda, fecha_precio)
+        # Nota: Si ahora incluimos hora, el constraint (si es solo por fecha) podría no saltar igual.
+        # Asumiendo que se quiere guardar el timestamp exacto.
         query = """
             INSERT INTO historia_precios (id_producto_tienda, precio, fecha_precio) 
             VALUES(:id_producto_tienda, :precio, :fecha_precio)

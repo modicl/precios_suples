@@ -262,7 +262,7 @@ class SuplementosMayoristasScraper(BaseScraper):
                                 if detail_page:
                                     detail_page.close()
                         
-                        current_date = datetime.now().strftime("%Y-%m-%d")
+                        current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                         yield {
                             'date': current_date,

@@ -1,6 +1,7 @@
 from BaseScraper import BaseScraper
 from playwright.sync_api import Page
 import time
+from datetime import datetime
 
 class WildFoodsScraper(BaseScraper):
     def __init__(self, headless=False):
@@ -105,7 +106,7 @@ class WildFoodsScraper(BaseScraper):
                                 
                                 # Yield result
                                 yield {
-                                    'date': time.strftime("%Y-%m-%d"),
+                                    'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                     'site_name': self.site_name,
                                     'category': self.clean_text(main_category),
                                     'subcategory': "N/D",
@@ -117,7 +118,7 @@ class WildFoodsScraper(BaseScraper):
                                     'reviews': "N/D",
                                     'active_discount': "N/D",
                                     'thumbnail_image_url': local_image_path if local_image_path else image_url, # Use local path if available
-                                    'image_url': image_url,
+                                    'image_url': local_image_path if local_image_path else image_url,
                                     'sku': "N/D",
                                     'description': "N/D"
                                 }

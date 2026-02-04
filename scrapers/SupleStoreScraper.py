@@ -19,7 +19,7 @@ class SupleStoreScraper(BaseScraper):
             "Creatinas": [
                 "https://www.suplestore.cl/collection/creatinas",
             ],
-            "Vitaminas": [
+            "Vitaminas y Minerales": [
                 "https://www.suplestore.cl/collection/vitaminas-salud"
             ],
             "Pre Entrenos": [
@@ -87,7 +87,7 @@ class SupleStoreScraper(BaseScraper):
                         
                         for i in range(count):
                             producto = producto_cards.nth(i)
-                            current_date = datetime.now().strftime("%Y-%m-%d")
+                            current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             
                             # --- Generic Extraction ---
                             

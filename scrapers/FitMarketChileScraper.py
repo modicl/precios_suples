@@ -24,7 +24,7 @@ class FitMarketChileScraper(BaseScraper):
             "Ganadores de Peso": [
                 "https://fitmarketchile.cl/categoria-producto/ganador-de-masa"
             ],
-            "Vitaminas": [
+            "Vitaminas y Minerales": [
                 "https://fitmarketchile.cl/categoria-producto/vitaminas"
             ],
             "Ofertas": [
@@ -92,7 +92,7 @@ class FitMarketChileScraper(BaseScraper):
 
                         for i in range(count):
                             card = cards.nth(i)
-                            current_date = datetime.now().strftime("%Y-%m-%d")
+                            current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                             # 1. Basic Info from Grid
                             title = "N/D"

@@ -16,7 +16,7 @@ class MuscleFactoryScraper(BaseScraper):
             "Pre Entrenos": [
                 "https://www.musclefactory.cl/productos/pre-entrenamientos"
             ],
-            "Vitaminas": [
+            "Vitaminas y Minerales": [
                 "https://www.musclefactory.cl/vitaminas-y-minerales-🌞"
             ],
             "Por Objetivo": [
@@ -58,6 +58,7 @@ class MuscleFactoryScraper(BaseScraper):
         context = page.context
 
         for main_category, urls in self.category_urls.items():
+            batch_buffer = []
             for url in urls:
                 print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} ({url})")
                 
@@ -80,7 +81,7 @@ class MuscleFactoryScraper(BaseScraper):
 
                         for i in range(count):
                             card = cards.nth(i)
-                            current_date = datetime.now().strftime("%Y-%m-%d")
+                            current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                             # 1. Basic Info from Grid
                             title = "N/D"
@@ -216,7 +217,7 @@ class MuscleFactoryScraper(BaseScraper):
                                 local_img = self.download_image(image_url, subfolder=site_folder)
                                 if local_img: image_url = local_img
 
-                            yield {
+                            product_obj = {
                                 'date': current_date,
                                 'site_name': self.site_name,
                                 'category': self.clean_text(main_category),
@@ -234,6 +235,16 @@ class MuscleFactoryScraper(BaseScraper):
                                 'sku': sku,
                                 'description': description
                             }
+
+                            if main_category == "Por Objetivo":
+                                batch_buffer.append(product_obj)
+                                if len(batch_buffer) >= 20:
+                                    classified_batch = self.classify_batch(batch_buffer)
+                                    for cp in classified_batch:
+                                        yield cp
+                                    batch_buffer = []
+                            else:
+                                yield product_obj
                         
                         # Pagination Logic
                         # Jumpseller usually has a 'next' class or we look for text
@@ -254,6 +265,13 @@ class MuscleFactoryScraper(BaseScraper):
 
                 except Exception as e:
                     print(f"[red]Error procesando categoría {main_category}: {e}[/red]")
+            
+            # Flush remaining buffer for this category
+            if main_category == "Por Objetivo" and batch_buffer:
+                classified_batch = self.classify_batch(batch_buffer)
+                for cp in classified_batch:
+                    yield cp
+                batch_buffer = []
 
 if __name__ == "__main__":
     scraper = MuscleFactoryScraper("https://www.musclefactory.cl", headless=True)

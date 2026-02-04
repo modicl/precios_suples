@@ -79,6 +79,9 @@ def clean_brands():
                     )
                     if match_result:
                         best_match, score, _ = match_result
+                        if "WINKLER" in name.upper():
+                             print(f"DEBUG WINKLER: '{name}' matched with '{best_match}' score {score}")
+
                         if score > 85:
                             target_name = best_match
                 

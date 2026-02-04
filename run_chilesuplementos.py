@@ -4,11 +4,12 @@ import time
 
 def run_scrapers():
     scrapers = [
-        "scrapers/ChileSuplementosScraper.py"
+        "scrapers/ChileSuplementosScraperPart1.py",
+        "scrapers/ChileSuplementosScraperPart2.py"
     ]
 
     processes = []
-    print(f"--- Iniciando ChileSuplementos Scraper ---")
+    print(f"--- Iniciando ChileSuplementos Scrapers (Split) ---")
 
     start_time = time.time()
 

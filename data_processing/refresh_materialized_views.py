@@ -27,8 +27,13 @@ def refresh_views():
         with engine.connect() as conn:
             # mv_main_query
             print("Actualizando mv_main_query...")
-            conn.execute(sa.text("REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_main_query;"))
+            conn.execute(sa.text("REFRESH MATERIALIZED VIEW public.mv_main_query;"))
             print("mv_main_query actualizada.")
+
+            # mv_main_query_v2
+            print("Actualizando mv_main_query_v2...")
+            conn.execute(sa.text("REFRESH MATERIALIZED VIEW public.mv_main_query_v2;"))
+            print("mv_main_query_v2 actualizada.")
 
             # mv_click_stats
             print("Actualizando mv_click_stats...")
@@ -40,6 +45,11 @@ def refresh_views():
             conn.execute(sa.text("REFRESH MATERIALIZED VIEW public.mv_search_stats;"))
             print("mv_search_stats actualizada.")
 
+            # mv_active_brands
+            print("Actualizando mv_active_brands...")
+            conn.execute(sa.text("REFRESH MATERIALIZED VIEW public.mv_active_brands;"))
+            print("mv_active_brands actualizada.")
+    
             conn.commit()
             
         elapsed = time.time() - start_time

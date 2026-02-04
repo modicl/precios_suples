@@ -8,6 +8,8 @@ import io
 import logging
 import sys
 import os
+import json
+import ollama
 from datetime import datetime
 from playwright.sync_api import sync_playwright, Page, Playwright
 import boto3
@@ -58,6 +60,105 @@ class BaseScraper:
                 aws_secret_access_key=self.aws_secret_key,
                 region_name=self.aws_region
             )
+
+        # Load valid categories for LLM classification
+        self.valid_categories = []
+        self._load_valid_categories()
+
+    def _load_valid_categories(self):
+        try:
+            # Assumes running from root
+            csv_path = 'diccionario_categorias.csv'
+            if not os.path.exists(csv_path):
+                 # Fallback for when running inside scrapers/ or elsewhere
+                 csv_path = '../diccionario_categorias.csv'
+            
+            if os.path.exists(csv_path):
+                with open(csv_path, mode='r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        # Find column regardless of BOM or case
+                        key = next((k for k in row.keys() if 'nombre_categoria' in k.lower()), None)
+                        if key and row[key]:
+                            self.valid_categories.append(row[key])
+            else:
+                 print("[yellow]Warning: diccionario_categorias.csv not found.[/yellow]")
+        except Exception as e:
+            print(f"[red]Error loading categories: {e}[/red]")
+            
+        if not self.valid_categories:
+             # Fallback default list
+             self.valid_categories = ["Proteinas", "Vitaminas", "Creatina", "Aminoacidos"]
+
+    def classify_batch(self, products):
+        """
+        Clasifica una lista de productos usando un LLM (Ollama).
+        """
+        if not products:
+            return []
+            
+        items_to_classify = []
+        for p in products:
+            items_to_classify.append({
+                "name": p['product_name'],
+                "description": p['description']
+            })
+            
+        system_prompt = "Eres un asistente de clasificación de datos experto. Tu tarea es asignar la categoría CORRECTA de la lista proporcionada."
+        user_prompt = f"""
+        INSTRUCCIONES:
+        1. Analiza cada producto (Nombre y Descripción).
+        2. Asigna UNA categoría de la lista de 'Valid Categories'.
+        3. Si es un accesorio (guantes, shaker, etc), usa 'Ofertas' o 'OTROS' si no encaja.
+        4. Responde SOLO con un JSON donde la llave es el nombre exacto del producto.
+
+        Valid Categories: {", ".join(self.valid_categories)}
+        
+        Items:
+        {json.dumps(items_to_classify, ensure_ascii=False)}
+        """
+        
+        try:
+            # Switch to robust model Qwen 2.5 14B
+            response = ollama.chat(model='qwen2.5:14b', messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_prompt},
+            ], format='json', options={'temperature': 0})
+            
+            content = response['message']['content']
+            result = json.loads(content)
+            
+            for p in products:
+                p_name = p['product_name']
+                
+                # Robust key search (Exact -> Case Insensitive -> Fuzzy)
+                val = result.get(p_name)
+                if not val:
+                     for k, v in result.items():
+                         if k.lower().strip() == p_name.lower().strip():
+                             val = v
+                             break
+                
+                cat = 'OTROS'
+                sub = 'OTROS'
+
+                if isinstance(val, str):
+                    cat = val
+                    sub = val # If string, assume category = subcategory
+                elif isinstance(val, dict):
+                    cat = val.get('category', 'OTROS')
+                    sub = val.get('subcategory', 'OTROS')
+                
+                p['category'] = cat
+                p['subcategory'] = sub
+                    
+        except Exception as e:
+            print(f"[red]Error in batch classification: {e}[/red]")
+            for p in products:
+                p['category'] = 'OTROS'
+                p['subcategory'] = 'OTROS'
+                
+        return products
 
     def enrich_brand(self, brand: str, product_name: str) -> str:
         """
@@ -205,7 +306,10 @@ class BaseScraper:
                         image_data, 
                         self.bucket_name, 
                         s3_original_key, 
-                        ExtraArgs={'ContentType': content_type}
+                        ExtraArgs={
+                            'ContentType': content_type,
+                            'CacheControl': 'max-age=2592000' # 30 días
+                        }
                     )
                     
                     # NOTA: Retornamos la URL de RESIZED para que la BD guarde la URL final/canónica.

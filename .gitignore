@@ -27,3 +27,6 @@ testsql.py
 implementaciones/
 assets/
 bd/
+.agent/
+.agents/
+.opencode/

@@ -23,7 +23,7 @@ class AllNutritionScraper(BaseScraper):
             "Creatinas": [
                 "https://allnutrition.cl/collections/creatinas"
             ],
-            "Vitaminas": [
+            "Vitaminas y Minerales": [
                 "https://allnutrition.cl/collections/multivitaminicos-y-energia",
                 "https://allnutrition.cl/collections/b-complex",
                 "https://allnutrition.cl/collections/vitamina-c",
@@ -111,7 +111,7 @@ class AllNutritionScraper(BaseScraper):
                         
                         for i in range(count):
                             producto = producto_cards.nth(i)
-                            current_date = datetime.now().strftime("%Y-%m-%d")
+                            current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             
                             # --- GRID EXTRACTION ---
                             

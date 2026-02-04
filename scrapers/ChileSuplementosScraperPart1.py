@@ -1,4 +1,4 @@
-# Scraper para la pagina web ChileSuplementos.cl
+# Scraper para la pagina web ChileSuplementos.cl (Parte 1)
 # Contiene Infinite Scroll y a veces un boton "Cargar más"
 
 from BaseScraper import BaseScraper
@@ -6,10 +6,10 @@ from rich import print
 from datetime import datetime
 import re
 
-class ChileSuplementosScraper(BaseScraper):
+class ChileSuplementosScraperPart1(BaseScraper):
     def __init__(self, base_url="https://www.chilesuplementos.cl", headless=False):
 
-        # Categorias y sus URLs (Estructura Diccionario: Categoria -> [URLs])
+        # Categorias y sus URLs (Parte 1: Proteinas, Creatinas, Vitaminas, Pre Entrenos, Ganadores de Peso)
         category_urls = {
             "Proteinas": [
                 "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/whey-isolate/",
@@ -49,21 +49,6 @@ class ChileSuplementosScraper(BaseScraper):
             ],
             "Ganadores de Peso": [
                 "https://www.chilesuplementos.cl/categoria/productos/ganadores-de-peso/"
-            ],
-            "Aminoacidos y BCAA": [
-                "https://www.chilesuplementos.cl/categoria/productos/aminoacidos-y-bcaa/"
-            ],
-            "Glutamina": [
-                "https://www.chilesuplementos.cl/categoria/productos/glutamina/"
-            ],
-            "Perdida de Grasa": [
-                "https://www.chilesuplementos.cl/categoria/perdida-de-grasa/"
-            ],
-            "Post Entreno": [
-                "https://www.chilesuplementos.cl/categoria/productos/post-entreno/"
-            ],
-            "Snacks y Comida": [
-                "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/"
             ]
         }
         
@@ -82,7 +67,7 @@ class ChileSuplementosScraper(BaseScraper):
         super().__init__(base_url, headless, category_urls, selectors, site_name="ChileSuplementos")
 
     def extract_process(self, page):
-        print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en ChileSuplementos...[/green]")
+        print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en ChileSuplementos (Parte 1)...[/green]")
         context = page.context
         
         for main_category, urls in self.category_urls.items():
@@ -348,5 +333,5 @@ class ChileSuplementosScraper(BaseScraper):
                     print(f"[red]Error categoría {url}: {e}[/red]")
 
 if __name__ == "__main__":
-    scraper = ChileSuplementosScraper(headless=True)
+    scraper = ChileSuplementosScraperPart1(headless=True)
     scraper.run()

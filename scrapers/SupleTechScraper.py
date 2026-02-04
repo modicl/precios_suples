@@ -22,7 +22,7 @@ class SupleTechScraper(BaseScraper):
                 "https://www.supletech.cl/suplementos-alimenticios/creatinas/micronizada",
                 "https://www.supletech.cl/suplementos-alimenticios/creatinas/monohidratada"
             ],
-            "Vitaminas": [
+            "Vitaminas y Minerales": [
                 "https://www.supletech.cl/bienestar/vitaminas-y-minerales",
                 "https://www.supletech.cl/bienestar/probioticos-y-prebioticos",
                 "https://www.supletech.cl/bienestar/omega",
@@ -100,7 +100,7 @@ class SupleTechScraper(BaseScraper):
                             
                             for i in range(last_product_count, current_product_count):
                                 producto = producto_cards.nth(i)
-                                current_date = datetime.now().strftime("%Y-%m-%d")
+                                current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                 
                                 # --- Grid Extraction ---
                                 

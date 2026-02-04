@@ -81,7 +81,7 @@ class DecathlonScraper(BaseScraper):
                             print(f"  > Encontrados {len(hits)} productos en JSON.")
 
                             for item in hits:
-                                current_date = datetime.now().strftime("%Y-%m-%d")
+                                current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                 
                                 raw_title = item.get('product_name', 'N/D')
                                 title = self.clean_text(raw_title)

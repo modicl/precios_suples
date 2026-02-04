@@ -24,7 +24,7 @@ class OneNutritionScraper(BaseScraper):
                 "https://onenutrition.cl/tienda/sello-creapure",
                 "https://onenutrition.cl/tienda/creatinas-"
             ],
-            "Vitaminas": [
+            "Vitaminas y Minerales": [
                 "https://onenutrition.cl/tienda/vitaminas-a-z",
                 "https://onenutrition.cl/tienda/omega-fish-oil",
                 "https://onenutrition.cl/tienda/ashwagandha",
@@ -135,7 +135,7 @@ class OneNutritionScraper(BaseScraper):
                         
                         for i in range(count):
                             producto = producto_cards.nth(i)
-                            current_date = datetime.now().strftime("%Y-%m-%d")
+                            current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             
                             # --- Grid Extraction ---
                             

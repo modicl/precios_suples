@@ -73,7 +73,7 @@ class SuplementosBullChileScraper(BaseScraper):
 
                         for i in range(count):
                             card = cards.nth(i)
-                            current_date = datetime.now().strftime("%Y-%m-%d")
+                            current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                             # 1. Basic Info from Grid
                             title = "N/D"

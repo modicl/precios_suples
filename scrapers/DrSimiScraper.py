@@ -4,6 +4,10 @@ from datetime import datetime
 import re
 import math
 import time
+import ollama
+import json
+import csv
+import os
 
 class DrSimiScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -37,6 +41,8 @@ class DrSimiScraper(BaseScraper):
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.categories_config)} categorías en Dr. Simi...[/green]")
         
+        batch_buffer = []
+
         for category_name, base_category_url in self.categories_config.items():
             print(f"\n[bold blue]Procesando categoría:[/bold blue] {category_name}")
             
@@ -165,9 +171,9 @@ class DrSimiScraper(BaseScraper):
                                 if detail_page:
                                     detail_page.close()
                         
-                        current_date = datetime.now().strftime("%Y-%m-%d")
+                        current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                        yield {
+                        product_obj = {
                             'date': current_date,
                             'site_name': self.site_name,
                             'category': self.clean_text(category_name),
@@ -178,19 +184,24 @@ class DrSimiScraper(BaseScraper):
                             'link': link,
                             'rating': "0",
                             'reviews': "0",
-                            'active_discount': False, # Could be improved by checking for old price
+                            'active_discount': False, 
                             'thumbnail_image_url': image_url,
                             'image_url': detail_image_url,
                             'sku': sku,
                             'description': description
                         }
+                        
+                        if category_name in ["Pronutrition", "Deportistas"]:
+                            batch_buffer.append(product_obj)
+                            if len(batch_buffer) >= 20:
+                                classified_batch = self.classify_batch(batch_buffer)
+                                for cp in classified_batch:
+                                    yield cp
+                                batch_buffer = []
+                        else:
+                            yield product_obj
 
                     # Check if there is a next page/show more button to decide if we continue
-                    # However, VTEX usually just returns fewer products or a different state if page exceeds limit.
-                    # A more robust way is to check the 'Mostrar más' button or the length of products.
-                    # If we found fewer products than a typical page size (usually 12, 16, 24, 48...), or 0, we stop.
-                    # But VTEX pagination with ?page=n is quite reliable. 
-                    # If we found products, we try the next page.
                     page_num += 1
                     
                     # Safety break to avoid infinite loops if something goes wrong
@@ -200,6 +211,13 @@ class DrSimiScraper(BaseScraper):
                 except Exception as e:
                     print(f"    [red]Error en página {page_num}: {e}[/red]")
                     has_more = False
+            
+            # End of category loop - Flush remaining
+            if category_name in ["Pronutrition", "Deportistas"] and batch_buffer:
+                classified_batch = self.classify_batch(batch_buffer)
+                for cp in classified_batch:
+                    yield cp
+                batch_buffer = []
 
 if __name__ == "__main__":
     scraper = DrSimiScraper("https://www.drsimi.cl", headless=True)

@@ -20,7 +20,7 @@ class SuplesScraper(BaseScraper):
             "Creatinas": [
                 "https://www2.suples.cl/collections/creatinas",
             ],
-            "Vitaminas": [
+            "Vitaminas y Minerales": [
                 "https://www2.suples.cl/collections/multivitaminicos",
                 "https://www2.suples.cl/collections/vitamina-b",
                 "https://www2.suples.cl/collections/vitamina-c",
@@ -66,6 +66,9 @@ class SuplesScraper(BaseScraper):
             "Snacks y Comida": [
                 "https://www2.suples.cl/collections/barritas-y-snacks-proteicas",
                 "https://www2.suples.cl/collections/alimentos-outdoor"
+            ],
+            "Por Objetivo": [
+                "https://www2.suples.cl/collections/por-objetivo"
             ]
         }
         
@@ -91,6 +94,7 @@ class SuplesScraper(BaseScraper):
         context = page.context
 
         for main_category, urls in self.category_urls.items():
+            batch_buffer = []
             for url in urls:
                 subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
                 subcategory_name = self.clean_text(subcategory_name)
@@ -117,7 +121,7 @@ class SuplesScraper(BaseScraper):
                         
                         for i in range(count):
                             producto = producto_cards.nth(i)
-                            current_date = datetime.now().strftime("%Y-%m-%d")
+                            current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             
                             # --- Grid Extraction ---
                             
@@ -273,7 +277,7 @@ class SuplesScraper(BaseScraper):
                                 local_img = self.download_image(image_url, subfolder=site_folder)
                                 if local_img: image_url = local_img
 
-                            yield {
+                            product_obj = {
                                 'date': current_date,
                                 'site_name': self.site_name,
                                 'category': self.clean_text(main_category),
@@ -291,6 +295,16 @@ class SuplesScraper(BaseScraper):
                                 'sku': sku,
                                 'description': description
                             }
+
+                            if main_category == "Por Objetivo":
+                                batch_buffer.append(product_obj)
+                                if len(batch_buffer) >= 20:
+                                    classified_batch = self.classify_batch(batch_buffer)
+                                    for cp in classified_batch:
+                                        yield cp
+                                    batch_buffer = []
+                            else:
+                                yield product_obj
                         
                         # Paginación
                         next_btn = page.locator(self.selectors['next_button'])
@@ -309,6 +323,13 @@ class SuplesScraper(BaseScraper):
                             
                 except Exception as e:
                     print(f"[red]Error procesando {url}: {e}[/red]")
+            
+            # Flush remaining buffer for this category
+            if main_category == "Por Objetivo" and batch_buffer:
+                classified_batch = self.classify_batch(batch_buffer)
+                for cp in classified_batch:
+                    yield cp
+                batch_buffer = []
 
 if __name__ == "__main__":
     base_url = "https://www2.suples.cl"

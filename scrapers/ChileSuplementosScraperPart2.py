@@ -1,4 +1,4 @@
-# Scraper para la pagina web ChileSuplementos.cl
+# Scraper para la pagina web ChileSuplementos.cl (Parte 2)
 # Contiene Infinite Scroll y a veces un boton "Cargar más"
 
 from BaseScraper import BaseScraper
@@ -6,50 +6,11 @@ from rich import print
 from datetime import datetime
 import re
 
-class ChileSuplementosScraper(BaseScraper):
+class ChileSuplementosScraperPart2(BaseScraper):
     def __init__(self, base_url="https://www.chilesuplementos.cl", headless=False):
 
-        # Categorias y sus URLs (Estructura Diccionario: Categoria -> [URLs])
+        # Categorias y sus URLs (Parte 2: Resto de categorías)
         category_urls = {
-            "Proteinas": [
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/whey-isolate/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/whey-protein/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/hidrolizada/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/caseina/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/clear-protein/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/proteina-de-carne/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/proteina-vegana/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/reemplazante-de-comidas/"
-            ],
-            "Creatinas": [
-                "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/monohidratada/",
-                "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/micronizada/",
-                "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/con-sello-creapure/",
-                "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/malato/",
-                "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/creatina-hcl/"
-            ],
-            "Vitaminas y Minerales": [
-                "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-b/",
-                "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-c/",
-                "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-d/",
-                "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-k/",
-                "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/multivitaminicos/"
-            ],
-            "Pre Entrenos": [
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/cafeina/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/beta-alanina/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/arginina/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/energeticas/",
-                "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/cafe/cafe-en-grano/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/requerimientos-especiales-pre-entrenos/libre-de-estimulantes/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/taurina/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/guarana/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/shots-y-geles/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/requerimientos-especiales-pre-entrenos/alto-en-estimulantes/"
-            ],
-            "Ganadores de Peso": [
-                "https://www.chilesuplementos.cl/categoria/productos/ganadores-de-peso/"
-            ],
             "Aminoacidos y BCAA": [
                 "https://www.chilesuplementos.cl/categoria/productos/aminoacidos-y-bcaa/"
             ],
@@ -82,7 +43,7 @@ class ChileSuplementosScraper(BaseScraper):
         super().__init__(base_url, headless, category_urls, selectors, site_name="ChileSuplementos")
 
     def extract_process(self, page):
-        print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en ChileSuplementos...[/green]")
+        print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en ChileSuplementos (Parte 2)...[/green]")
         context = page.context
         
         for main_category, urls in self.category_urls.items():
@@ -348,5 +309,5 @@ class ChileSuplementosScraper(BaseScraper):
                     print(f"[red]Error categoría {url}: {e}[/red]")
 
 if __name__ == "__main__":
-    scraper = ChileSuplementosScraper(headless=True)
+    scraper = ChileSuplementosScraperPart2(headless=True)
     scraper.run()
