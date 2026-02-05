@@ -109,13 +109,27 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                 thumbnail_url = ""
                                 thumb_elem = producto.locator(self.selectors['thumbnail']).first
                                 if thumb_elem.count() > 0:
-                                    src = thumb_elem.get_attribute("src") or thumb_elem.get_attribute("data-src") or thumb_elem.get_attribute("srcset")
-                                    if src:
-                                        # If srcset, take the first one (usually small) or last (large)
-                                        # For thumbnail, first is fine, but src is safer
-                                        if "," in src:
-                                            src = src.split(",")[0].split(" ")[0]
-                                        thumbnail_url = src
+                                    # Prioritize lazy loading attributes
+                                    possible_srcs = [
+                                        thumb_elem.get_attribute("data-src"),
+                                        thumb_elem.get_attribute("data-lazy-src"),
+                                        thumb_elem.get_attribute("srcset"),
+                                        thumb_elem.get_attribute("src")
+                                    ]
+                                    
+                                    for src in possible_srcs:
+                                        if src:
+                                            # Handle srcset
+                                            if "," in src:
+                                                src = src.split(",")[0].split(" ")[0]
+                                            
+                                            # Filter placeholders
+                                            lower_src = src.lower()
+                                            if "placeholder" in lower_src or "logo" in lower_src or ".svg" in lower_src or "data:image" in lower_src:
+                                                continue
+                                                
+                                            thumbnail_url = src
+                                            break
                                 
                                 # Price
                                 price = 0
@@ -201,9 +215,22 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                             for sel in img_selectors:
                                                 img_el = detail_page.locator(sel).first
                                                 if img_el.count() > 0:
-                                                    src = img_el.get_attribute("src") or img_el.get_attribute("href") or img_el.get_attribute("data-src")
-                                                    if src:
-                                                        image_url = src
+                                                    # Prioritize high-res attributes
+                                                    possible_srcs = [
+                                                        img_el.get_attribute("data-large_image"),
+                                                        img_el.get_attribute("data-src"),
+                                                        img_el.get_attribute("href"),
+                                                        img_el.get_attribute("src")
+                                                    ]
+                                                    
+                                                    for src in possible_srcs:
+                                                        if src:
+                                                            lower_src = src.lower()
+                                                            if "placeholder" in lower_src or "logo" in lower_src or ".svg" in lower_src or "data:image" in lower_src:
+                                                                continue
+                                                            image_url = src
+                                                            break
+                                                    if image_url:
                                                         break
                                         
                                         # 2. SKU
