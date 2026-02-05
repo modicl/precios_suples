@@ -27,17 +27,17 @@ def refresh_views():
         with engine.connect() as conn:
             # mv_main_query
             print("Actualizando mv_main_query...")
-            conn.execute(sa.text("REFRESH MATERIALIZED VIEW public.mv_main_query;"))
+            conn.execute(sa.text("REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_main_query;"))
             print("mv_main_query actualizada.")
 
             # mv_main_query_v2
             print("Actualizando mv_main_query_v2...")
-            conn.execute(sa.text("REFRESH MATERIALIZED VIEW public.mv_main_query_v2;"))
+            conn.execute(sa.text("REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_main_query_v2;"))
             print("mv_main_query_v2 actualizada.")
 
             # mv_click_stats
             print("Actualizando mv_click_stats...")
-            conn.execute(sa.text("REFRESH MATERIALIZED VIEW public.mv_click_stats;"))
+            conn.execute(sa.text("REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_click_stats;"))
             print("mv_click_stats actualizada.")
 
             # mv_search_stats

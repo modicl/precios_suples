@@ -99,9 +99,14 @@ class BaseScraper:
             
         items_to_classify = []
         for p in products:
+            # Truncate description to avoid massive prompts and timeouts
+            desc = p['description']
+            if desc and len(desc) > 300:
+                desc = desc[:300] + "..."
+                
             items_to_classify.append({
                 "name": p['product_name'],
-                "description": p['description']
+                "description": desc
             })
             
         system_prompt = "Eres un asistente de clasificación de datos experto. Tu tarea es asignar la categoría CORRECTA de la lista proporcionada."
@@ -119,8 +124,11 @@ class BaseScraper:
         """
         
         try:
-            # Switch to robust model Qwen 2.5 14B
-            response = ollama.chat(model='qwen2.5:14b', messages=[
+            # Switch to robust model Qwen 2.5 14B and use Client with timeout
+            # Initialize client here or in __init__. initializing here is safer against connection issues if long running.
+            client = ollama.Client(timeout=45) 
+            
+            response = client.chat(model='qwen2.5:14b', messages=[
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': user_prompt},
             ], format='json', options={'temperature': 0})
@@ -153,7 +161,8 @@ class BaseScraper:
                 p['subcategory'] = sub
                     
         except Exception as e:
-            print(f"[red]Error in batch classification: {e}[/red]")
+            print(f"[red]Error in batch classification (Timeout or other): {e}[/red]")
+            # Fallback to OTROS
             for p in products:
                 p['category'] = 'OTROS'
                 p['subcategory'] = 'OTROS'

@@ -41,6 +41,7 @@ def run_scrapers():
     # Wait for all processes to complete
     completed_count = 0
     for scraper, p in processes:
+        print(f"... Esperando a: {scraper}")
         p.wait()
         completed_count += 1
         print(f"Finalizado ({completed_count}/{len(scrapers)}): {scraper}")
