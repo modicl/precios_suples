@@ -64,7 +64,7 @@ class ChileSuplementosScraperPart1(BaseScraper):
             'thumbnail': '.porto-tb-featured-image img, .porto-tb-woo-link img' # Better grid selectors
         }
         
-        super().__init__(base_url, headless, category_urls, selectors, site_name="ChileSuplementos")
+        super().__init__(base_url, headless, category_urls, selectors, site_name="ChileSuplementos", output_suffix="_part1")
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en ChileSuplementos (Parte 1)...[/green]")

@@ -45,10 +45,10 @@ def update_s3_cache():
                     ContentType=current_content_type,
                     MetadataDirective='REPLACE' # Obligatorio para cambiar metadatos
                 )
-                print(f"✅ Actualizado: {key} [{current_content_type}]")
+                print(f"Actualizado: {key} [{current_content_type}]")
             except Exception as e:
-                print(f"❌ Error en {key}: {e}")
+                print(f"Error en {key}: {e}")
 
 if __name__ == "__main__":
     update_s3_cache()
-    print("\n✨ Proceso completado.")
+    print("\nProceso completado.")

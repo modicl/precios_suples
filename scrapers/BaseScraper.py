@@ -29,12 +29,13 @@ load_dotenv()
 
 class BaseScraper:
     # Constructor que recibe la URL base, el modo headless, urls de categorías y selectores
-    def __init__(self, base_url: str, headless: bool = False, category_urls: list = None, selectors: dict = None, site_name: str = "N/D"):
+    def __init__(self, base_url: str, headless: bool = False, category_urls: list = None, selectors: dict = None, site_name: str = "N/D", output_suffix: str = ""):
         self.base_url = base_url # URL base del sitio web
         self.headless = headless # Modo headless
         self.category_urls = category_urls if category_urls else [] # Categorias de productos y su URL
         self.selectors = selectors if selectors else {} # Selectores para extraer datos en forma de diccionario
         self.site_name = site_name # Nombre del sitio web
+        self.output_suffix = output_suffix
         
         # Inicializar BrandMatcher
         self.brand_matcher = BrandMatcher()
@@ -377,7 +378,7 @@ class BaseScraper:
             os.makedirs(output_dir, exist_ok=True)
             
             # Nombre del archivo CSV estandarizado dentro de raw_data
-            csv_filename = f"productos_{self.site_name.replace(' ', '_').lower()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+            csv_filename = f"productos_{self.site_name.replace(' ', '_').lower()}{self.output_suffix}_{datetime.now().strftime('%Y-%m-%d')}.csv"
             csv_file = os.path.join(output_dir, csv_filename)
             
             csv_headers = ['date', 'site_name', 'category', 'subcategory', 'product_name', 'brand', 'price', 'link', 'rating', 'reviews', 'active_discount', 'thumbnail_image_url', 'image_url', 'sku', 'description']

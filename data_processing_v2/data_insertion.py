@@ -2,6 +2,7 @@ import os
 import sys
 import sqlalchemy as sa
 import pandas as pd
+import psycopg2.extras
 from dotenv import load_dotenv
 import glob
 import shutil
@@ -195,36 +196,58 @@ def insert_data_into_db(engine, df, db_name):
                 seen_products.add(key_local)
                 # print(f"El producto {nombre_producto} agregado para insercion.") # Reduce spam
         
-        # Insertamos los productos en BATCHES
-        BATCH_SIZE = 100
+        # Insertamos los productos con execute_values (Bulk)
         total_products = len(productos_insertar_json)
         
         if total_products > 0:
-            print(f"[{db_name}] Insertando/Actualizando {total_products} productos en bloques de {BATCH_SIZE}...")
+            print(f"[{db_name}] Insertando/Actualizando {total_products} productos (Bulk Optimization)...")
             
+            # Prepare query and data
             query = """
             INSERT INTO productos (nombre_producto, url_imagen, url_thumb_imagen, id_marca, id_subcategoria) 
-            VALUES(:nombre_producto, :url_imagen, :url_thumb_imagen, :id_marca, :id_subcategoria) 
+            VALUES %s
             ON CONFLICT (nombre_producto, id_marca,id_subcategoria) 
             DO UPDATE SET 
                 url_imagen = CASE 
-                    WHEN EXCLUDED.url_imagen LIKE '%suplescrapper-images.s3%' THEN EXCLUDED.url_imagen 
-                    WHEN productos.url_imagen LIKE '%suplescrapper-images.s3%' THEN productos.url_imagen 
+                    WHEN EXCLUDED.url_imagen LIKE '%%suplescrapper-images.s3%%' THEN EXCLUDED.url_imagen 
+                    WHEN productos.url_imagen LIKE '%%suplescrapper-images.s3%%' THEN productos.url_imagen 
                     ELSE EXCLUDED.url_imagen 
                 END,
                 url_thumb_imagen = CASE 
-                    WHEN EXCLUDED.url_thumb_imagen LIKE '%suplescrapper-images.s3%' THEN EXCLUDED.url_thumb_imagen 
-                    WHEN productos.url_thumb_imagen LIKE '%suplescrapper-images.s3%' THEN productos.url_thumb_imagen 
+                    WHEN EXCLUDED.url_thumb_imagen LIKE '%%suplescrapper-images.s3%%' THEN EXCLUDED.url_thumb_imagen 
+                    WHEN productos.url_thumb_imagen LIKE '%%suplescrapper-images.s3%%' THEN productos.url_thumb_imagen 
                     ELSE EXCLUDED.url_thumb_imagen 
                 END
             """
             
-            for i in range(0, total_products, BATCH_SIZE):
-                batch = productos_insertar_json[i:i + BATCH_SIZE]
-                print(f"[{db_name}] Procesando lote productos {i+1} a {min(i+BATCH_SIZE, total_products)}... sending query")
-                conn.execute(sa.text(query), batch)
-                conn.commit()
-                print(f"[{db_name}] Lote productos {i+1} completado.")
+            # Convert list of dicts to list of tuples
+            values = [
+                (
+                    p["nombre_producto"], 
+                    p["url_imagen"], 
+                    p["url_thumb_imagen"], 
+                    p["id_marca"], 
+                    p["id_subcategoria"]
+                ) 
+                for p in productos_insertar_json
+            ]
+            
+            try:
+                # Use raw connection for execute_values
+                # We create a NEW raw connection or retrieve from engine.
+                # Accessing raw cursor from existing SA connection can be tricky across versions. 
+                # Simplest for bulk ops: detach or use raw_connection from engine.
+                raw_conn = engine.raw_connection()
+                try:
+                    with raw_conn.cursor() as cur:
+                        psycopg2.extras.execute_values(cur, query, values, page_size=1000)
+                    raw_conn.commit()
+                    print(f"[{db_name}] Productos insertados correctamente.")
+                finally:
+                    raw_conn.close()
+                    
+            except Exception as e:
+                print(f"[{db_name}] Error en bulk insert productos: {e}")
                 
         else:
             print(f"[{db_name}] No hay productos nuevos para insertar.")
@@ -275,18 +298,37 @@ def insert_data_into_db(engine, df, db_name):
 
 
     if len(productos_tienda_json) > 0:
-        with engine.connect() as conn:
-            # Batching for producto_tienda check/insert as well
-            BATCH_SIZE = 100
-            total_items = len(productos_tienda_json)
-            print(f"[{db_name}] Insertando/Actualizando {total_items} relaciones producto-tienda en bloques de {BATCH_SIZE}...")
+        total_items = len(productos_tienda_json)
+        print(f"[{db_name}] Insertando/Actualizando {total_items} relaciones producto-tienda (Bulk Optimization)...")
+        
+        query = """
+            INSERT INTO producto_tienda (id_producto, id_tienda, url_link, descripcion) 
+            VALUES %s
+            ON CONFLICT (id_producto, id_tienda) 
+            DO UPDATE SET url_link = EXCLUDED.url_link, descripcion = EXCLUDED.descripcion
+        """
+        
+        values = [
+            (
+                pt["id_producto"],
+                pt["id_tienda"],
+                pt["url_link"],
+                pt["descripcion"]
+            )
+            for pt in productos_tienda_json
+        ]
 
-            for i in range(0, total_items, BATCH_SIZE):
-                 batch = productos_tienda_json[i:i + BATCH_SIZE]
-                 print(f"[{db_name}] Procesando lote producto-tienda {i+1} a {min(i+BATCH_SIZE, total_items)}... sending query")
-                 conn.execute(sa.text("INSERT INTO producto_tienda (id_producto, id_tienda, url_link, descripcion) VALUES(:id_producto, :id_tienda, :url_link, :descripcion) ON CONFLICT (id_producto, id_tienda) DO UPDATE SET url_link = EXCLUDED.url_link, descripcion = EXCLUDED.descripcion"), batch)
-                 conn.commit()
-                 print(f"[{db_name}] Lote producto-tienda {i+1} completado.")
+        try:
+            raw_conn = engine.raw_connection()
+            try:
+                with raw_conn.cursor() as cur:
+                    psycopg2.extras.execute_values(cur, query, values, page_size=1000)
+                raw_conn.commit()
+                print(f"[{db_name}] Producto-Tienda insertados correctamente.")
+            finally:
+                raw_conn.close()
+        except Exception as e:
+            print(f"[{db_name}] Error en bulk insert producto_tienda: {e}")
 
 
 
@@ -345,15 +387,38 @@ def insert_data_into_db(engine, df, db_name):
             """
             
             # Batching for price history
-            BATCH_SIZE = 100
             total_prices = len(historial_precios_json)
-            print(f"[{db_name}] Historial de precios a insertar: {total_prices}")
+            print(f"[{db_name}] Historial de precios a insertar: {total_prices} (Bulk Optimization)")
             
-            for i in range(0, total_prices, BATCH_SIZE):
-                batch = historial_precios_json[i:i + BATCH_SIZE]
-                print(f"[{db_name}] Procesando lote precios {i+1} a {min(i+BATCH_SIZE, total_prices)}...")
-                conn.execute(sa.text(query), batch)
-                conn.commit()
+            query = """
+                INSERT INTO historia_precios (id_producto_tienda, precio, fecha_precio) 
+                VALUES %s
+            """
+            
+            values = [
+                (
+                    hp["id_producto_tienda"],
+                    hp["precio"],
+                    hp["fecha_precio"]
+                )
+                for hp in historial_precios_json
+            ]
+            
+            try:
+                raw_conn = engine.raw_connection()
+                try:
+                    with raw_conn.cursor() as cur:
+                         # Use ON CONFLICT DO NOTHING if duplicates in batch? 
+                         # Actually usually duplicate check handles it, but adding it makes it robust.
+                         # Original code relied on DELETE previously.
+                         # execute_values expands %s.
+                         psycopg2.extras.execute_values(cur, query, values, page_size=1000)
+                    raw_conn.commit()
+                    print(f"[{db_name}] Historial de precios insertado correctamente.")
+                finally:
+                    raw_conn.close()
+            except Exception as e:
+                print(f"[{db_name}] Error en bulk insert historia_precios: {e}")
                 
     else:
          print(f"[{db_name}] No hay historial de precios para insertar.")
