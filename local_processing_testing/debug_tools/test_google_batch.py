@@ -17,7 +17,7 @@ def test_google():
         print("No raw data found.")
         return
         
-    df = pd.read_csv(raw_files[0]).head(100) # 100 items for 1 batch
+    df = pd.read_csv(raw_files[0]).head(50) # 50 items for 1 batch
     print(f"Loaded {len(df)} items from {raw_files[0]}")
     
     # 2. Init Categorizer (Should detect Google provider from env)

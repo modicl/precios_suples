@@ -92,8 +92,8 @@ def ai_categorization_step(df, engine):
     SLEEP_TIME = 0
     
     if hasattr(categorizer, 'provider') and categorizer.provider == "google":
-        BATCH_SIZE = 100
-        SLEEP_TIME = 4 # Seconds to respect 15 RPM limit (1 req / 4s)
+        BATCH_SIZE = 50 # Reduced from 100 to 50 for stability
+        SLEEP_TIME = 2  # Adjusted sleep for higher frequency
         print(f"[Config] Provider: Google | Batch: {BATCH_SIZE} | Sleep: {SLEEP_TIME}s")
     else:
         print(f"[Config] Provider: Ollama/Default | Batch: {BATCH_SIZE}")

@@ -168,6 +168,7 @@ Output a JSON array of objects with keys:
 Rules:
 1. Use EXACT category names from the list.
 2. Return ONLY the JSON array.
+3. DO NOT use markdown code blocks (```json). Just raw JSON.
 """
         
         try:
