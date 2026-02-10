@@ -8,47 +8,48 @@ import re
 class SupleTechScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
         
+        # Structure: "Category Name": [ { "url": "...", "subcategory": "Exact DB Subcategory" } ]
         category_urls = {
             "Proteinas": [
-                "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/concentradas",
-                "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/isolate-protein",
-                "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/hidrolizadas",
-                "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/clear-whey-isolate",
-                "https://www.supletech.cl/suplementos-alimenticios/proteinas/proteinas-veganas",
-                "https://www.supletech.cl/suplementos-alimenticios/proteinas/proteinas-de-carne",
-                "https://www.supletech.cl/suplementos-alimenticios/proteinas/colageno"
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/concentradas", "subcategory": "Proteína Concentrada" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/isolate-protein", "subcategory": "Proteína Aislada" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/hidrolizadas", "subcategory": "Proteína Hidrolizada" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/clear-whey-isolate", "subcategory": "Proteína Aislada" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/proteinas-veganas", "subcategory": "Proteína Vegana" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/proteinas-de-carne", "subcategory": "Proteína de Carne" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/colageno", "subcategory": "Colágeno" }
             ],
             "Creatinas": [
-                "https://www.supletech.cl/suplementos-alimenticios/creatinas/micronizada",
-                "https://www.supletech.cl/suplementos-alimenticios/creatinas/monohidratada"
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/creatinas/micronizada", "subcategory": "Creatina Monohidrato" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/creatinas/monohidratada", "subcategory": "Creatina Monohidrato" }
             ],
             "Vitaminas y Minerales": [
-                "https://www.supletech.cl/bienestar/vitaminas-y-minerales",
-                "https://www.supletech.cl/bienestar/probioticos-y-prebioticos",
-                "https://www.supletech.cl/bienestar/omega",
-                "https://www.supletech.cl/bienestar/biotina-y-colageno",
-                "https://www.supletech.cl/bienestar/descanso-y-sueno",
-                "https://www.supletech.cl/bienestar/gummies"
+                { "url": "https://www.supletech.cl/bienestar/vitaminas-y-minerales", "subcategory": "Vitaminas y Minerales" },
+                { "url": "https://www.supletech.cl/bienestar/probioticos-y-prebioticos", "subcategory": "Probióticos" },
+                { "url": "https://www.supletech.cl/bienestar/omega", "subcategory": "Omega 3 y Aceites" },
+                { "url": "https://www.supletech.cl/bienestar/biotina-y-colageno", "subcategory": "Colágeno" },
+                { "url": "https://www.supletech.cl/bienestar/descanso-y-sueno", "subcategory": "Bienestar General" },
+                { "url": "https://www.supletech.cl/bienestar/gummies", "subcategory": "Gummies" }
             ],
             "Pre Entrenos": [
-                "https://www.supletech.cl/quemadores-y-pre-entrenos/pre-entreno"
+                { "url": "https://www.supletech.cl/quemadores-y-pre-entrenos/pre-entreno", "subcategory": "Pre Entreno" }
             ],
             "Ganadores de Peso": [
-                "https://www.supletech.cl/suplementos-alimenticios/aumento-de-masa-corporal"
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/aumento-de-masa-corporal", "subcategory": "Ganador de Masa" }
             ],
             "Aminoacidos y BCAA": [
-                "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/bcaa",
-                "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/eaa",
-                "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/hmb-y-zma",
-                "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/especificos"
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/bcaa", "subcategory": "BCAAs" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/eaa", "subcategory": "EAAs (Esenciales)" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/hmb-y-zma", "subcategory": "HMB y ZMA" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/especificos", "subcategory": "Especificos" }
             ],
             "Perdida de Grasa": [
-                "https://www.supletech.cl/quemadores-y-pre-entrenos/quemadores"
+                { "url": "https://www.supletech.cl/quemadores-y-pre-entrenos/quemadores", "subcategory": "Quemadores" }
             ],
             "Snacks y Comida": [
-                "https://www.supletech.cl/barritas-geles-y-liquidos/barritas-proteicas",
-                "https://www.supletech.cl/barritas-geles-y-liquidos/shake-proteicos",
-                "https://www.supletech.cl/barritas-geles-y-liquidos/bebidas-energeticas",
+                { "url": "https://www.supletech.cl/barritas-geles-y-liquidos/barritas-proteicas", "subcategory": "Barritas Y Snacks Proteicas" },
+                { "url": "https://www.supletech.cl/barritas-geles-y-liquidos/shake-proteicos", "subcategory": "Shake Proteicos" },
+                { "url": "https://www.supletech.cl/barritas-geles-y-liquidos/bebidas-energeticas", "subcategory": "Energía (Geles/Café)" }
             ]
         }
         
@@ -67,16 +68,16 @@ class SupleTechScraper(BaseScraper):
         super().__init__(base_url, headless, category_urls, selectors, site_name="SupleTech")
 
     def extract_process(self, page):
-        print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en SupleTech...[/green]")
+        print(f"[green]Iniciando scraping Determinista (V2) de SupleTech...[/green]")
         context = page.context
         
-        for main_category, urls in self.category_urls.items():
-            for url in urls:
-                subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
-                subcategory_name = self.clean_text(subcategory_name)
-                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {subcategory_name} ({url})")
-
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                url = item['url']
+                deterministic_sub = item['subcategory']
                 
+                print(f"\n[bold blue]Procesando:[/bold blue] {main_category} -> {deterministic_sub} ({url})")
+
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=60000)
                     page.wait_for_timeout(3000) 
@@ -116,7 +117,6 @@ class SupleTechScraper(BaseScraper):
                                     raw_brand = producto.locator(self.selectors['brand']).first.inner_text()
                                     brand = self.clean_text(raw_brand)
 
-                                
                                 # Brand fallback
                                 if brand == "N/D" or len(brand) < 2: 
                                     title_normalized = title.replace("–", "-").replace("—", "-")
@@ -125,7 +125,6 @@ class SupleTechScraper(BaseScraper):
                                         if len(potential_brand) > 1:
                                             brand = self.clean_text(potential_brand)
 
-                                
                                 # Link
                                 link = "N/D"
                                 link_elem = producto.locator(self.selectors['link'])
@@ -215,17 +214,11 @@ class SupleTechScraper(BaseScraper):
                                         try: detail_page.close()
                                         except: pass
 
-                                # New Categorization Logic
-                                final_subcategory = subcategory_name
-                                cat_info = self.categorizer.classify_product(title, subcategory_name)
-                                if cat_info:
-                                    final_subcategory = cat_info['nombre_subcategoria']
-
                                 yield {
                                     'date': current_date,
                                     'site_name': self.site_name,
                                     'category': self.clean_text(main_category),
-                                    'subcategory': final_subcategory,
+                                    'subcategory': deterministic_sub, # EXPLICIT
                                     'product_name': title,
                                     'brand': self.enrich_brand(brand, title),
 

@@ -6,6 +6,8 @@ from sqlalchemy.orm import sessionmaker
 import requests
 from google import genai
 from google.genai import types
+import time
+import re
 
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -22,8 +24,8 @@ class ProductCategorizer:
         
         # Select Model based on Provider
         if self.provider == "google":
-            # Trying Gemini 2.5 Flash (Newest, likely open quota)
-            self.model = "gemini-2.5-flash"
+            # Using Gemini 2.5 Flash Lite
+            self.model = "gemini-2.5-flash-lite"
             print(f"[Categorizer] Using Google Gemini ({self.model})")
             if self.google_api_key:
                 self.client = genai.Client(api_key=self.google_api_key)
@@ -174,55 +176,75 @@ Rules:
         try:
             if self.provider == "google" and self.client:
                 # GOOGLE GEMINI CALL (using official SDK)
-                try:
-                    full_prompt = system_msg + "\n\n" + user_msg
-                    
-                    response = self.client.models.generate_content(
-                        model=self.model,
-                        contents=full_prompt,
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            temperature=0.0
+                max_retries = 5
+                retry_count = 0
+                
+                while retry_count <= max_retries:
+                    try:
+                        full_prompt = system_msg + "\n\n" + user_msg
+                        
+                        response = self.client.models.generate_content(
+                            model=self.model,
+                            contents=full_prompt,
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                temperature=0.0
+                            )
                         )
-                    )
-                    
-                    if response.text:
-                        answer = response.text
-                        results_json = json.loads(answer)
                         
-                        # Process results (Shared logic)
-                        final_results = [None] * len(items_list)
-                        
-                        # Handle wrapped
-                        if isinstance(results_json, dict) and 'items' in results_json:
-                            results_json = results_json['items']
+                        if response.text:
+                            answer = response.text
+                            results_json = json.loads(answer)
                             
-                        if isinstance(results_json, list):
-                            for res in results_json:
-                                idx = res.get('index', -1) - 1
-                                cat_name = res.get('category', '').strip()
-                                clean_name = res.get('clean_name', '').strip()
+                            # Process results (Shared logic)
+                            final_results = [None] * len(items_list)
+                            
+                            # Handle wrapped
+                            if isinstance(results_json, dict) and 'items' in results_json:
+                                results_json = results_json['items']
                                 
-                                if 0 <= idx < len(items_list):
-                                    cat_norm = cat_name.lower().strip()
-                                    if cat_norm in self.subcategories_map:
-                                        result_obj = self.subcategories_map[cat_norm].copy()
-                                        result_obj['ai_clean_name'] = clean_name
-                                        final_results[idx] = result_obj
-                                        
-                                        p_norm = items_list[idx]['product'].lower().strip()
-                                        c_norm = items_list[idx]['context'].lower().strip()
-                                        self.cache[f"{p_norm}|{c_norm}"] = self.subcategories_map[cat_norm]
-                        return final_results
-                    else:
-                        print(f"[Categorizer] Google Empty Response")
-                        return [None] * len(items_list)
+                            if isinstance(results_json, list):
+                                for res in results_json:
+                                    idx = res.get('index', -1) - 1
+                                    cat_name = res.get('category', '').strip()
+                                    clean_name = res.get('clean_name', '').strip()
+                                    
+                                    if 0 <= idx < len(items_list):
+                                        cat_norm = cat_name.lower().strip()
+                                        if cat_norm in self.subcategories_map:
+                                            result_obj = self.subcategories_map[cat_norm].copy()
+                                            result_obj['ai_clean_name'] = clean_name
+                                            final_results[idx] = result_obj
+                                            
+                                            p_norm = items_list[idx]['product'].lower().strip()
+                                            c_norm = items_list[idx]['context'].lower().strip()
+                                            self.cache[f"{p_norm}|{c_norm}"] = self.subcategories_map[cat_norm]
+                            return final_results
+                        else:
+                            print(f"[Categorizer] Google Empty Response")
+                            return [None] * len(items_list)
+
+                    except Exception as e:
+                        # Specific error handling for Google GenAI SDK exceptions
+                        error_str = str(e)
                         
-                except Exception as e:
-                    print(f"[Categorizer] Google SDK Error: {e}")
-                    # If rate limit (429) happens, the SDK raises an exception.
-                    # We catch it here.
-                    return [None] * len(items_list)
+                        if "429" in error_str or "ResourceExhausted" in error_str or "quota" in error_str.lower():
+                            retry_count += 1
+                            if retry_count > max_retries:
+                                print(f"[Categorizer] Google SDK Error: Rate limit exceeded after {max_retries} retries.")
+                                return [None] * len(items_list)
+                                
+                            wait_time = 60 
+                            match = re.search(r'retry in (\d+(\.\d+)?)s', error_str)
+                            if match:
+                                wait_time = float(match.group(1)) + 2
+                            
+                            print(f"[Categorizer] Rate limit hit (Attempt {retry_count}/{max_retries}). Retrying in {wait_time:.1f}s...")
+                            time.sleep(wait_time)
+                            continue
+                        else:
+                            print(f"[Categorizer] Google SDK Error: {e}")
+                            return [None] * len(items_list)
 
             else:
                 # OLLAMA CALL (Existing logic)
@@ -248,7 +270,7 @@ Rules:
                     # Robust JSON extraction:
                     try:
                         # 1. If text contains ```json ... ``` block
-                        import re
+                        # 1. If text contains ```json ... ``` block
                         json_block = re.search(r'```(?:json)?\s*(\[.*?\])\s*```', answer, re.DOTALL)
                         if json_block:
                             answer = json_block.group(1)

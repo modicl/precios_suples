@@ -26,6 +26,79 @@ def get_local_engine():
         sys.exit(1)
     return sa.create_engine(local_target['url'])
 
+def apply_audit_fixes(df, categorizer):
+    """
+    Applies manual rules to fix known AI misclassifications based on the audit.
+    1. Removes non-creatine products from 'Creatinas'.
+    2. Fixes HMB, ZMA, Wild Foods, Beta Alanine, Citrulline.
+    """
+    print("\n--- Auditoría: Correcciones Manuales ---")
+    count_fixed = 0
+    
+    # Helper to find valid subcategory from list of candidates
+    def get_valid_sub(candidates):
+        for c in candidates:
+            c_norm = clean_text(c)
+            if c_norm in categorizer.subcategories_map:
+                return categorizer.subcategories_map[c_norm]['nombre_subcategoria']
+        return None
+
+    # Target mapping based on audit (Prioritized list of potential DB names)
+    targets = {
+        'snacks': get_valid_sub(['Snacks', 'Barritas', 'Comida', 'Alimentacion']),
+        'aminos': get_valid_sub(['Aminoacidos', 'Recuperacion', 'BCAAs', 'Aminoácidos']),
+        'vitamins': get_valid_sub(['Vitaminas', 'Multivitaminicos', 'Salud y Bienestar']),
+        'preworkout': get_valid_sub(['Pre Entrenos', 'Pre Entreno', 'Energia', 'Oxido Nitrico'])
+    }
+    
+    # Debug targets
+    # print(f"  [Audit Targets] {targets}")
+
+    for idx, row in df.iterrows():
+        prod_name = clean_text(str(row['product_name']))
+        brand = clean_text(str(row['brand']))
+        
+        # Current assigned subcategory
+        current_sub = clean_text(str(row['subcategory']))
+        new_sub = None
+
+        # --- Rule 1: Creatine Cleanup ---
+        # "Filter manually anything under Creatinas that doesn't have 'Creatina' or 'Creapure' in name"
+        if 'creatina' in current_sub:
+            if 'creatina' not in prod_name and 'creapure' not in prod_name:
+                # Sub-rule: Wild Foods -> Snacks
+                if 'wild' in brand or 'wild' in prod_name:
+                    new_sub = targets['snacks']
+                # Sub-rule: HMB -> Aminos
+                elif 'hmb' in prod_name:
+                    new_sub = targets['aminos']
+                # Sub-rule: ZMA -> Vitamins
+                elif 'zma' in prod_name:
+                    new_sub = targets['vitamins']
+                # Sub-rule: Explicit bars/snacks
+                elif 'bar' in prod_name or 'snack' in prod_name or 'munchy' in prod_name:
+                     new_sub = targets['snacks']
+                # Sub-rule: Fallback Pre-workout indicators
+                elif 'beta' in prod_name or 'pump' in prod_name or 'pre' in prod_name:
+                    new_sub = targets['preworkout']
+                
+        # --- Rule 2: Ingredient Correction (Beta Alanine, Citrulline) ---
+        # These override previous logic if matched
+        if 'beta alanina' in prod_name or 'beta alanine' in prod_name:
+            new_sub = targets['preworkout']
+        elif 'citrulina' in prod_name or 'citrulline' in prod_name:
+            new_sub = targets['preworkout']
+
+        # Apply Change if valid and different
+        if new_sub and clean_text(new_sub) != current_sub:
+            df.at[idx, 'subcategory'] = new_sub
+            # Category will be fixed by the subsequent consistency check
+            count_fixed += 1
+            # print(f"    [Fix] {row['product_name']} | {current_sub} -> {new_sub}")
+
+    print(f"Auditoría: Se corrigieron {count_fixed} productos.")
+    return df
+
 def ai_categorization_step(df, engine):
     """
     Identifies products with unknown subcategories and classifies them in batches using Ollama.
@@ -134,6 +207,9 @@ def ai_categorization_step(df, engine):
                 time.sleep(wait)
 
     print("--- Fin Fase AI ---\n")
+    
+    # AUDIT FIX: Apply manual corrections before consistency check
+    df = apply_audit_fixes(df, categorizer)
     
     # POST-PROCESSING: Enforce Category Consistency
     # Ensure all rows have the correct Parent Category for their assigned Subcategory

@@ -9,7 +9,7 @@
 ### Soluciones Implementadas
 1.  **Integración Híbrida**: Se modificó `tools/categorizer.py` para soportar tanto `ollama` como `google` mediante la variable de entorno `AI_PROVIDER`.
 2.  **SDK Oficial**: Se migró de peticiones REST crudas al SDK oficial `google-genai` para mejor manejo de errores y compatibilidad.
-3.  **Modelo Optimizado**: Se seleccionó **`gemini-2.5-flash`**, que demostró tener cuota abierta gratuita y alto rendimiento.
+3.  **Modelo Optimizado**: Se seleccionó **`gemini-2.5-flash-lite`**, que demostró tener cuota abierta gratuita y alto rendimiento.
 4.  **Batching Adaptativo (Pro Tip)**:
     *   **Google**: Lotes de **50 productos** + Pausa de 2 segundos. (Velocidad: ~0.5 seg/prod, Total: ~26 min, Estabilidad Máxima).
     *   **Ollama**: Lotes de 50 productos (Velocidad: ~1.2 seg/prod, Total: ~60 min).
