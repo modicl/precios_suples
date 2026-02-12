@@ -10,40 +10,32 @@ class SuplementosMayoristasScraper(BaseScraper):
         # Mapeo directo de las URLs proporcionadas
         self.categories_config = {
             "Proteinas": [
-                # Subcategorías
-                ("Whey Protein", "https://www.suplementosmayoristas.cl/proteinas/whey-protein"),
-                ("Whey Isolate", "https://www.suplementosmayoristas.cl/proteinas/whey-Isolate"),
-                ("Clear Whey Isolate", "https://www.suplementosmayoristas.cl/proteinas/clear-whey-isolate"),
-                ("Proteinas Veganas", "https://www.suplementosmayoristas.cl/proteinas/proteinas-veganas")
+                { "url": "https://www.suplementosmayoristas.cl/proteinas/whey-protein", "subcategory": "Proteína de Whey" },
+                { "url": "https://www.suplementosmayoristas.cl/proteinas/whey-Isolate", "subcategory": "Proteína Aislada" },
+                { "url": "https://www.suplementosmayoristas.cl/proteinas/clear-whey-isolate", "subcategory": "Proteína de Whey" },
+                { "url": "https://www.suplementosmayoristas.cl/proteinas/proteinas-veganas", "subcategory": "Proteína Vegana" }
             ],
             "Creatinas": [
-                ("Micronizada", "https://www.suplementosmayoristas.cl/creatinas/micronizada"),
-                ("Monohidratada", "https://www.suplementosmayoristas.cl/creatinas/monohidratada")
+                { "url": "https://www.suplementosmayoristas.cl/creatinas/micronizada", "subcategory": "Micronizada" },
+                { "url": "https://www.suplementosmayoristas.cl/creatinas/monohidratada", "subcategory": "Creatina Monohidrato" }
             ],
             "Perdida de Grasa": [
-                ("Quemadores", "https://www.suplementosmayoristas.cl/quemadores")
+                { "url": "https://www.suplementosmayoristas.cl/quemadores", "subcategory": "Quemadores" }
             ],
             "Pre Entrenos": [
-                 ("Pre Entrenos", "https://www.suplementosmayoristas.cl/pre-entreno")
+                 { "url": "https://www.suplementosmayoristas.cl/pre-entreno", "subcategory": "Pre Entreno" }
             ],
             "Ganadores de Peso": [
-                ("Ganador de Masa", "https://www.suplementosmayoristas.cl/ganadores-de-masa-muscular")
+                { "url": "https://www.suplementosmayoristas.cl/ganadores-de-masa-muscular", "subcategory": "Ganadores De Peso" }
             ],
-
             "Aminoacidos y BCAA": [
-                ("BCAA", "https://www.suplementosmayoristas.cl/aminoacidos/bcaa"),
-                ("EAA", "https://www.suplementosmayoristas.cl/aminoacidos/eaa"),
-                ("HMB y ZMA", "https://www.suplementosmayoristas.cl/aminoacidos/hmb-y-zma"),
-                ("Especificos", "https://www.suplementosmayoristas.cl/aminoacidos/especificos")
+                { "url": "https://www.suplementosmayoristas.cl/aminoacidos/bcaa", "subcategory": "BCAAs" },
+                { "url": "https://www.suplementosmayoristas.cl/aminoacidos/eaa", "subcategory": "EAAs (Esenciales)" },
+                { "url": "https://www.suplementosmayoristas.cl/aminoacidos/hmb-y-zma", "subcategory": "DETECTAR_HMB_ZMA" },
+                { "url": "https://www.suplementosmayoristas.cl/aminoacidos/especificos", "subcategory": "Otros Aminoacidos y BCAA" }
             ]
         }
         
-        # Flatten URLs for BaseScraper init, though we will iterate manually
-        all_urls = []
-        for cat_list in self.categories_config.values():
-            for sub, url in cat_list:
-                all_urls.append(url)
-
         # VTEX Selectors
         selectors = {
             "product_card": "section.vtex-product-summary-2-x-container", # Container más robusto
@@ -68,14 +60,17 @@ class SuplementosMayoristasScraper(BaseScraper):
             "description": ".vtex-store-components-3-x-productDescriptionText"
         }
 
-        super().__init__(base_url, headless, category_urls=all_urls, selectors=selectors, site_name="SuplementosMayoristas")
+        super().__init__(base_url, headless, category_urls=self.categories_config, selectors=selectors, site_name="SuplementosMayoristas")
 
     def extract_process(self, page):
-        print(f"[green]Iniciando scraping de {len(self.categories_config)} categorías en Suplementos Mayoristas...[/green]")
+        print(f"[green]Iniciando scraping Determinista (V2) de Suplementos Mayoristas...[/green]")
         
-        for category_name, subcategories in self.categories_config.items():
-            for subcategory_name, url in subcategories:
-                print(f"\n[bold blue]Procesando:[/bold blue] {category_name} - {subcategory_name} ({url})")
+        for main_category, items in self.categories_config.items():
+            for item in items:
+                url = item['url']
+                deterministic_sub = item['subcategory']
+                
+                print(f"\n[bold blue]Procesando:[/bold blue] {main_category} -> {deterministic_sub} ({url})")
                 
                 try:
                     page.goto(url, wait_until="networkidle", timeout=60000)
@@ -190,11 +185,23 @@ class SuplementosMayoristasScraper(BaseScraper):
                                 
                                 # Extraer imagen full
                                 if detail_page.locator(self.selectors['detail_image']).count() > 0:
-                                    detail_image_url = detail_page.locator(self.selectors['detail_image']).first.get_attribute('src')
+                                    src = detail_page.locator(self.selectors['detail_image']).first.get_attribute('src')
+                                    if src:
+                                        detail_image_url = src
                                 
-                                # Extraer descripción
-                                if detail_page.locator(self.selectors['description']).count() > 0:
-                                    description = detail_page.locator(self.selectors['description']).first.inner_text().strip()
+                                # Extraer descripción con espera explícita
+                                try:
+                                    detail_page.wait_for_selector(self.selectors['description'], timeout=5000)
+                                    if detail_page.locator(self.selectors['description']).count() > 0:
+                                        description = detail_page.locator(self.selectors['description']).first.inner_text().strip()
+                                except:
+                                    # Fallback a contenedor si falla el texto directo
+                                    try:
+                                        container = ".vtex-store-components-3-x-productDescriptionContainer"
+                                        if detail_page.locator(container).count() > 0:
+                                            description = detail_page.locator(container).first.inner_text().strip()
+                                    except:
+                                        pass
                                 
                                 # Extraer datos estructurados (JSON-LD) para Brand y SKU
                                 try:
@@ -264,17 +271,54 @@ class SuplementosMayoristasScraper(BaseScraper):
                         
                         current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                        # New Categorization Logic
-                        final_subcategory = subcategory_name
-                        cat_info = self.categorizer.classify_product(name, subcategory_name)
-                        if cat_info:
-                            final_subcategory = cat_info['nombre_subcategoria']
+                        # --- IMPLEMENTACIÓN DE DESCARGA ---
+                        site_folder = self.site_name.replace(" ", "_").lower()
+                        if image_url:
+                            local_thumb = self.download_image(image_url, subfolder=site_folder)
+                            if local_thumb: image_url = local_thumb
+                        if detail_image_url:
+                            local_img = self.download_image(detail_image_url, subfolder=site_folder)
+                            if local_img: detail_image_url = local_img
+
+                        # --- LOGICA HEURÍSTICA Y FALLBACKS ---
+                        # Usar variables temporales para no contaminar el loop
+                        final_category = main_category
+                        final_sub = deterministic_sub
+                        
+                        # 1. Packs (Global)
+                        title_lower = name.lower()
+                        if "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower:
+                            final_category = "Packs"
+                            final_sub = "Packs"
+
+                        # 2. Heurística para HMB/ZMA (Categoría Aminoacidos)
+                        elif final_sub == "DETECTAR_HMB_ZMA":
+                            name_lower = str(name).lower()
+                            desc_lower = str(description).lower()
+                            text_to_search = name_lower + " " + desc_lower
+                            
+                            # PRIORIDAD A HMB
+                            if "hmb" in text_to_search:
+                                final_category = "Aminoacidos y BCAA"
+                                final_sub = "Otros Aminoacidos y BCAA"
+                            # ZMA explicito (en nombre o descripcion)
+                            elif "zma" in text_to_search or "zmar" in text_to_search:
+                                final_category = "Vitaminas y Minerales"
+                                final_sub = "Multivitamínicos"
+                            # Magnesio o Zinc SOLO si estan en el nombre (para evitar falsos positivos por descripcion)
+                            elif "magnesio" in name_lower or "zinc" in name_lower:
+                                final_category = "Vitaminas y Minerales"
+                                final_sub = "Multivitamínicos"
+                            else:
+                                # Fallback seguro: Si no es HMB ni ZMA, sigue siendo Aminoacido (probablemente del grupo Especificos)
+                                final_category = "Aminoacidos y BCAA"
+                                final_sub = "Otros Aminoacidos y BCAA"
 
                         yield {
                             'date': current_date,
                             'site_name': self.site_name,
-                            'category': self.clean_text(category_name),
-                            'subcategory': final_subcategory,
+                            'category': self.clean_text(final_category),
+                            'subcategory': final_sub,
                             'product_name': name,
                             'brand': self.enrich_brand(brand, name),
                             'price': price,

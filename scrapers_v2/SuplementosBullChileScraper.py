@@ -5,23 +5,24 @@ import re
 
 class SuplementosBullChileScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
-        category_urls = {
-
+        # Configuración de URLs y subcategorías por defecto
+        # Nota: Como BullChile tiene URLs genéricas para categorías grandes,
+        # usaremos heurística para refinar la subcategoría cuando sea posible.
+        self.category_urls = {
             "Proteinas": [
-                "https://www.suplementosbullchile.cl/proteinas"
+                { "url": "https://www.suplementosbullchile.cl/proteinas", "subcategory": "Proteína de Whey" }
             ],
             "Creatinas": [
-                "https://www.suplementosbullchile.cl/creatina"
+                { "url": "https://www.suplementosbullchile.cl/creatina", "subcategory": "Creatina Monohidrato" }
             ],
             "Pre Entrenos": [
-                "https://www.suplementosbullchile.cl/pre-entreno"
+                { "url": "https://www.suplementosbullchile.cl/pre-entreno", "subcategory": "Pre Entreno" }
             ],
             "Perdida de Grasa": [
-                "https://www.suplementosbullchile.cl/quemador-energetico-1"
+                { "url": "https://www.suplementosbullchile.cl/quemador-energetico-1", "subcategory": "Quemadores" }
             ],
-
             "Packs": [
-                "https://www.suplementosbullchile.cl/packs"
+                { "url": "https://www.suplementosbullchile.cl/packs", "subcategory": "Packs" }
             ],
         }
 
@@ -42,18 +43,21 @@ class SuplementosBullChileScraper(BaseScraper):
             "detail_brand": ".product-page__brand", # Sometimes present
             "detail_title": "h1.product-page__title",
             # Pagination (Jumpseller standard often uses .pagination)
-            "next_button": ".pagination .next a, a.next, .pagination .next" 
+            "next_button": ".pagination .next a, a.next, .pagination .next, a:has-text('»')" 
         }
 
-        super().__init__(base_url, headless, category_urls, selectors, site_name="SuplementosBullChile")
+        super().__init__(base_url, headless, category_urls=self.category_urls, selectors=selectors, site_name="SuplementosBullChile")
 
     def extract_process(self, page):
-        print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías en SuplementosBullChile...[/green]")
+        print(f"[green]Iniciando scraping Determinista (V2) de SuplementosBullChile...[/green]")
         context = page.context
 
-        for main_category, urls in self.category_urls.items():
-            for url in urls:
-                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} ({url})")
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                url = item['url']
+                deterministic_sub = item['subcategory']
+                
+                print(f"\n[bold blue]Procesando:[/bold blue] {main_category} -> {deterministic_sub} ({url})")
                 
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=60000)
@@ -129,6 +133,7 @@ class SuplementosBullChileScraper(BaseScraper):
                             sku = ""
                             description = ""
                             brand = "N/D" # Brand often not in grid
+                            detail_page = None
 
                             if link != "N/D":
                                 try:
@@ -145,9 +150,13 @@ class SuplementosBullChileScraper(BaseScraper):
                                         else:
                                             sku = sku_text.replace('SKU:', '').strip()
 
-                                    # Description
-                                    if detail_page.locator(self.selectors['detail_desc']).count() > 0:
-                                        description = detail_page.locator(self.selectors['detail_desc']).first.inner_text().strip()
+                                    # Description con espera explícita
+                                    try:
+                                        detail_page.wait_for_selector(self.selectors['detail_desc'], timeout=5000)
+                                        if detail_page.locator(self.selectors['detail_desc']).count() > 0:
+                                            description = detail_page.locator(self.selectors['detail_desc']).first.inner_text().strip()
+                                    except:
+                                        pass
 
                                     # Brand (Try selector if not found in SKU)
                                     if brand == "N/D" and detail_page.locator(self.selectors['detail_brand']).count() > 0:
@@ -155,7 +164,6 @@ class SuplementosBullChileScraper(BaseScraper):
                                         brand = self.clean_text(raw_brand)
                                     
                                     # Main Image
-
                                     if detail_page.locator(self.selectors['detail_image']).count() > 0:
                                         # Often these are sliders, take first
                                         img_src = detail_page.locator(self.selectors['detail_image']).first.get_attribute("src")
@@ -170,20 +178,110 @@ class SuplementosBullChileScraper(BaseScraper):
 
                                 except Exception as e:
                                     print(f"[yellow]Error consiguiendo detalles de {link}: {e}[/yellow]")
-                                    try: detail_page.close()
-                                    except: pass
+                                    if detail_page:
+                                        try: detail_page.close()
+                                        except: pass
                             
-                            # New Categorization Logic
-                            final_subcategory = subcategory_name
-                            cat_info = self.categorizer.classify_product(title, subcategory_name)
-                            if cat_info:
-                                final_subcategory = cat_info['nombre_subcategoria']
+                            # --- IMPLEMENTACIÓN DE DESCARGA ---
+                            site_folder = self.site_name.replace(" ", "_").lower()
+                            if thumbnail_url:
+                                local_thumb = self.download_image(thumbnail_url, subfolder=site_folder)
+                                if local_thumb: thumbnail_url = local_thumb
+                            if image_url:
+                                local_img = self.download_image(image_url, subfolder=site_folder)
+                                if local_img: image_url = local_img
+
+                            # --- HEURÍSTICAS DE CLASIFICACIÓN ---
+                            # Temp vars to avoid polluting the loop state
+                            final_category = main_category
+                            final_sub = deterministic_sub
+                            
+                            # 1. Packs (Global)
+                            title_lower = title.lower()
+
+                            # 0. Llaveros / Accesorios (Filtro Usuario)
+                            if "llavero" in title_lower:
+                                final_category = "OTROS"
+                                final_sub = "Otros"
+
+                            elif "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower:
+                                final_category = "Packs"
+                                final_sub = "Packs"
+
+                            # 1.5 Bebidas / RTD (Global)
+                            # Detecta bebidas listas para tomar, shakes, etc.
+                            # REGLA MEJORADA: 
+                            # - Si dice explícitamente "RTD" o "Ready to Drink", es bebida.
+                            # - Si dice "Batido" o "Shake" o "Bebida", DEBE tener indicador de volumen (ml, lt) O decir "Ready".
+                            # - EXCLUSIÓN: Si tiene peso en LIBRAS (lb) o KILOS (kg) o GRAMOS (gr/g), ASUMIMOS POLVO y NO lo marcamos como bebida, 
+                            #   a menos que diga explícitamente RTD.
+                            
+                            is_liquid = "ml" in title_lower or "lt" in title_lower or "cc" in title_lower or "botella" in title_lower
+                            is_powder_weight = "lb" in title_lower or "kg" in title_lower or "gr" in title_lower or "servicios" in title_lower
+                            
+                            if ("rtd" in title_lower or "ready to drink" in title_lower):
+                                final_category = "Bebidas Nutricionales"
+                                final_sub = "Batidos de proteína"
+                                
+                            elif ("shake" in title_lower and "shaker" not in title_lower) or \
+                                 "batido" in title_lower or \
+                                 "bebida" in title_lower or \
+                                 "hydration" in title_lower:
+                                 
+                                 # Si es un "Batido/Shake" pero tiene peso de polvo (2lb, 5kg), LO IGNORAMOS (es proteina en polvo)
+                                 if not is_powder_weight:
+                                     final_category = "Bebidas Nutricionales"
+                                     final_sub = "Batidos de proteína"
+                                 elif is_liquid:
+                                     # Caso raro: Dice 2lb pero tambien 500ml? Priorizamos liquido si tiene ml explícito
+                                     final_category = "Bebidas Nutricionales"
+                                     final_sub = "Batidos de proteína"
+
+                            # 2. Heurística para Proteínas (Ya que la categoría es genérica)
+                            elif final_category == "Proteinas":
+                                # Usamos SOLO el título para clasificación de proteínas
+                                # Esto evita que palabras en la descripción (ej. "contiene aislado", "libre de carne")
+                                # causen falsos positivos.
+                                text_to_search = title.lower()
+                                
+                                # Palabras clave expandidas (Inglés y Español)
+                                if "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
+                                    final_sub = "Proteína Aislada"
+                                elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
+                                    final_sub = "Proteína Hidrolizada"
+                                elif "vegan" in text_to_search or "plant" in text_to_search or "vegetal" in text_to_search or "vegana" in text_to_search or "vegano" in text_to_search or "plant based" in text_to_search:
+                                    final_sub = "Proteína Vegana"
+                                elif "beef" in text_to_search or "carne" in text_to_search or "vacuno" in text_to_search:
+                                    final_sub = "Proteína de Carne"
+                                elif "casein" in text_to_search or "caseina" in text_to_search or "micelar" in text_to_search or "micellar" in text_to_search:
+                                    final_sub = "Caseína"
+                                else:
+                                    final_sub = "Proteína de Whey"
+
+                            # 3. Heurística para Creatinas
+                            elif final_category == "Creatinas":
+                                text_to_search = (title + " " + (description or "")).lower()
+                                
+                                if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search or "hidrocloruro" in text_to_search:
+                                    final_sub = "Clorhidrato"
+                                elif "malato" in text_to_search or "magnesio" in text_to_search or "magnapower" in text_to_search:
+                                    final_sub = "Malato y Magnesio"
+                                elif "nitrato" in text_to_search or "nitrate" in text_to_search:
+                                    final_sub = "Nitrato"
+                                elif "alkalyn" in text_to_search or "alcalina" in text_to_search:
+                                    final_sub = "Otros Creatinas"
+                                elif "monohidrat" in text_to_search or "monohydrate" in text_to_search or "creapure" in text_to_search:
+                                    final_sub = "Creatina Monohidrato"
+                                elif "micronizad" in text_to_search or "micronized" in text_to_search:
+                                    final_sub = "Micronizada"
+                                else:
+                                    final_sub = "Creatina Monohidrato"
 
                             yield {
                                 'date': current_date,
                                 'site_name': self.site_name,
-                                'category': self.clean_text(main_category),
-                                'subcategory': final_subcategory,
+                                'category': self.clean_text(final_category),
+                                'subcategory': final_sub,
                                 'product_name': title,
 
                                 'brand': self.enrich_brand(brand, title),

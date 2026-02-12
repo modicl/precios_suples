@@ -9,36 +9,36 @@ class SupleStoreScraper(BaseScraper):
         
         category_urls = {
             "Proteinas": [
-                "https://www.suplestore.cl/collection/whey-blend",
-                "https://www.suplestore.cl/collection/isoladas-hidrolizadas",
-                "https://www.suplestore.cl/collection/carne",
-                "https://www.suplestore.cl/collection/veganas",
-                "https://www.suplestore.cl/collection/sin-lactosa",
-                "https://www.suplestore.cl/collection/sin-gluten"
+                { "url": "https://www.suplestore.cl/collection/whey-blend", "subcategory": "Proteína de Whey" },
+                { "url": "https://www.suplestore.cl/collection/isoladas-hidrolizadas", "subcategory": "Proteína Aislada" },
+                { "url": "https://www.suplestore.cl/collection/carne", "subcategory": "Proteína de Carne" },
+                { "url": "https://www.suplestore.cl/collection/veganas", "subcategory": "Proteína Vegana" },
+                { "url": "https://www.suplestore.cl/collection/sin-lactosa", "subcategory": "Sin Lactosa" },
+                { "url": "https://www.suplestore.cl/collection/sin-gluten", "subcategory": "Sin Gluten" }
             ],
             "Creatinas": [
-                "https://www.suplestore.cl/collection/creatinas",
+                { "url": "https://www.suplestore.cl/collection/creatinas", "subcategory": "Creatinas" },
             ],
             "Vitaminas y Minerales": [
-                "https://www.suplestore.cl/collection/vitaminas-salud"
+                { "url": "https://www.suplestore.cl/collection/vitaminas-salud", "subcategory": "Vitaminas y Minerales" }
             ],
             "Pre Entrenos": [
-                "https://www.suplestore.cl/collection/preentrenos"
+                { "url": "https://www.suplestore.cl/collection/preentrenos", "subcategory": "Pre Entreno" }
             ],
             "Ganadores de Peso": [
-                "https://www.suplestore.cl/collection/ganadores-de-masa"
+                { "url": "https://www.suplestore.cl/collection/ganadores-de-masa", "subcategory": "Ganadores De Peso" }
             ],
             "Aminoacidos y BCAA": [
-                "https://www.suplestore.cl/collection/aminos-bcaa-s"
+                { "url": "https://www.suplestore.cl/collection/aminos-bcaa-s", "subcategory": "Aminoácidos" }
             ],
             "Perdida de Grasa": [
-                "https://www.suplestore.cl/collection/qm-y-l-carnitina",
-                "https://www.suplestore.cl/collection/quemadores",
-                "https://www.suplestore.cl/collection/cafeina"
+                { "url": "https://www.suplestore.cl/collection/qm-y-l-carnitina", "subcategory": "Quemadores" },
+                { "url": "https://www.suplestore.cl/collection/quemadores", "subcategory": "Quemadores" },
+                { "url": "https://www.suplestore.cl/collection/cafeina", "subcategory": "Cafeína" }
             ],
             "Snacks y Comida": [
-                "https://www.suplestore.cl/collection/barras-proteicas",
-                "https://www.suplestore.cl/collection/energeticas-batidos-y-geles"
+                { "url": "https://www.suplestore.cl/collection/barras-proteicas", "subcategory": "Barritas Y Snacks Proteicas" },
+                { "url": "https://www.suplestore.cl/collection/energeticas-batidos-y-geles", "subcategory": "Bebidas Nutricionales" }
             ]
         }
         
@@ -57,16 +57,16 @@ class SupleStoreScraper(BaseScraper):
         super().__init__(base_url, headless, category_urls, selectors, site_name="SupleStore")
 
     def extract_process(self, page):
-        print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en SupleStore...[/green]")
+        print(f"[green]Iniciando scraping Determinista (V2) de SupleStore...[/green]")
         
         context = page.context
 
-        for main_category, urls in self.category_urls.items():
-            for url in urls:
-                subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
-                subcategory_name = self.clean_text(subcategory_name)
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                url = item['url']
+                deterministic_sub = item['subcategory']
                 
-                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {subcategory_name} ({url})")
+                print(f"\n[bold blue]Procesando:[/bold blue] {main_category} -> {deterministic_sub} ({url})")
 
                 
                 try:
@@ -145,6 +145,7 @@ class SupleStoreScraper(BaseScraper):
                             description = ""
 
                             if link != "N/D":
+                                detail_page = None
                                 try:
                                     detail_page = context.new_page()
                                     detail_page.goto(link, wait_until="domcontentloaded", timeout=40000)
@@ -199,8 +200,9 @@ class SupleStoreScraper(BaseScraper):
                                     
                                 except Exception as e:
                                     print(f"[yellow]Error loading details for {link}: {e}[/yellow]")
-                                    try: detail_page.close()
-                                    except: pass
+                                    if detail_page:
+                                        try: detail_page.close()
+                                        except: pass
 
                             # --- IMPLEMENTACIÓN DE DESCARGA ---
                             site_folder = self.site_name.replace(" ", "_").lower()
@@ -211,17 +213,47 @@ class SupleStoreScraper(BaseScraper):
                                 local_img = self.download_image(image_url, subfolder=site_folder)
                                 if local_img: image_url = local_img
 
-                            # New Categorization Logic
-                            final_subcategory = subcategory_name
-                            cat_info = self.categorizer.classify_product(title, subcategory_name)
-                            if cat_info:
-                                final_subcategory = cat_info['nombre_subcategoria']
+                            # Lógica Heurística Específica para Creatinas
+                            # Temp vars to avoid polluting the loop state
+                            final_category = main_category
+                            final_sub = deterministic_sub
+
+                            if final_category == "Creatinas":
+                                # Texto de búsqueda: Título + Descripción en minúsculas
+                                text_to_search = (title + " " + (description or "")).lower()
+                                
+                                # 1. Variantes Químicas Específicas (Alta prioridad)
+                                if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search:
+                                    final_sub = "Clorhidrato"
+                                    
+                                elif "malato" in text_to_search or "magnesio" in text_to_search or "magnapower" in text_to_search:
+                                    final_sub = "Malato y Magnesio"
+                                    
+                                elif "nitrato" in text_to_search or "nitrate" in text_to_search:
+                                    final_sub = "Nitrato"
+
+                                # Check for buffered/alkaline creatine
+                                elif "alkalyn" in text_to_search or "alcalina" in text_to_search:
+                                    final_sub = "Otros Creatinas"
+
+                                # 2. Monohidrato (Prioridad sobre Micronizada)
+                                # Incluye "Creapure" que es sello de Monohidrato de alta calidad
+                                elif "monohidrat" in text_to_search or "monohydrate" in text_to_search or "creapure" in text_to_search or "monohidrato" in text_to_search or "monohidratada" in text_to_search:
+                                    final_sub = "Creatina Monohidrato"
+
+                                # 3. Micronizada (Solo si NO fue detectada como Monohidrato antes)
+                                elif "micronizad" in text_to_search or "micronized" in text_to_search or "micronizada" in text_to_search or "micronizado" in text_to_search:
+                                    final_sub = "Micronizada"
+
+                                # 4. Fallback por defecto (Asumiremos que la creatina es monohidrato por la popularidad)
+                                else:
+                                    final_sub = "Creatina Monohidrato"
 
                             yield {
                                 'date': current_date,
                                 'site_name': self.site_name,
-                                'category': self.clean_text(main_category),
-                                'subcategory': final_subcategory,
+                                'category': self.clean_text(final_category),
+                                'subcategory': final_sub,
                                 'product_name': title,
 
                                 'brand': self.enrich_brand(brand, title),

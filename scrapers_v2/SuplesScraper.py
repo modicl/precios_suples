@@ -9,66 +9,66 @@ class SuplesScraper(BaseScraper):
         
         category_urls = {
             "Proteinas": [
-                "https://www2.suples.cl/collections/proteina-whey",
-                "https://www2.suples.cl/collections/proteina-isolate",
-                "https://www2.suples.cl/collections/proteinas-hidrolizadas",
-                "https://www2.suples.cl/collections/proteinas-caseinas",
-                "https://www2.suples.cl/collections/proteinas-de-carne",
-                "https://www2.suples.cl/collections/proteinas-veganas",
-                "https://www2.suples.cl/collections/proteinas-liquidas"
+                { "url": "https://www2.suples.cl/collections/proteina-whey", "subcategory": "Proteína de Whey" },
+                { "url": "https://www2.suples.cl/collections/proteina-isolate", "subcategory": "Proteína Aislada" },
+                { "url": "https://www2.suples.cl/collections/proteinas-hidrolizadas", "subcategory": "Proteína Hidrolizada" },
+                { "url": "https://www2.suples.cl/collections/proteinas-caseinas", "subcategory": "Caseína" },
+                { "url": "https://www2.suples.cl/collections/proteinas-de-carne", "subcategory": "Proteína de Carne" },
+                { "url": "https://www2.suples.cl/collections/proteinas-veganas", "subcategory": "Proteína Vegana" },
+                { "url": "https://www2.suples.cl/collections/proteinas-liquidas", "subcategory": "Shakes Proteicos" }
             ],
             "Creatinas": [
-                "https://www2.suples.cl/collections/creatinas",
+                { "url": "https://www2.suples.cl/collections/creatinas", "subcategory": "Creatinas" },
             ],
             "Vitaminas y Minerales": [
-                "https://www2.suples.cl/collections/multivitaminicos",
-                "https://www2.suples.cl/collections/vitamina-b",
-                "https://www2.suples.cl/collections/vitamina-c",
-                "https://www2.suples.cl/collections/vitamina-d",
-                "https://www2.suples.cl/collections/vitamina-e",
-                "https://www2.suples.cl/collections/magnesio",
-                "https://www2.suples.cl/collections/calcio",
-                "https://www2.suples.cl/collections/omega-y-acidos-grasos-1", 
-                "https://www2.suples.cl/collections/magnesio-y-minerales-1",
-                "https://www2.suples.cl/collections/sistema-digestivo-y-probioticos",
-                "https://www2.suples.cl/collections/colageno-y-articulaciones",
-                "https://www2.suples.cl/collections/antimicrobianos-naturales-y-acido-caprilico",
-                "https://www2.suples.cl/collections/equilibrante-natural-adaptogenos-y-bienestar-general",
-                "https://www2.suples.cl/collections/aminoacidos-y-nutrientes-esenciales",
-                "https://www2.suples.cl/collections/sistemas-nervioso-y-cognitivo",
-                "https://www2.suples.cl/collections/bienestar-natural-y-salud-integral",
-                "https://www2.suples.cl/collections/arginina",
-                "https://www2.suples.cl/collections/antioxidantes",
-                "https://www2.suples.cl/collections/colagenos-1",
-                "https://www2.suples.cl/collections/hmb",
-                "https://www2.suples.cl/collections/omega-3",
-                "https://www2.suples.cl/collections/probioticos",
-                "https://www2.suples.cl/collections/zma"
+                { "url": "https://www2.suples.cl/collections/multivitaminicos", "subcategory": "Multivitamínicos" },
+                { "url": "https://www2.suples.cl/collections/vitamina-b", "subcategory": "Vitamina B / Complejo B" },
+                { "url": "https://www2.suples.cl/collections/vitamina-c", "subcategory": "Vitamina C" },
+                { "url": "https://www2.suples.cl/collections/vitamina-d", "subcategory": "Vitamina D" },
+                { "url": "https://www2.suples.cl/collections/vitamina-e", "subcategory": "Vitamina E" },
+                { "url": "https://www2.suples.cl/collections/magnesio", "subcategory": "Magnesio" },
+                { "url": "https://www2.suples.cl/collections/calcio", "subcategory": "Calcio" },
+                { "url": "https://www2.suples.cl/collections/omega-y-acidos-grasos-1", "subcategory": "Omega 3 y Aceites" },
+                { "url": "https://www2.suples.cl/collections/magnesio-y-minerales-1", "subcategory": "Minerales (Varios)" },
+                { "url": "https://www2.suples.cl/collections/sistema-digestivo-y-probioticos", "subcategory": "Probióticos" },
+                { "url": "https://www2.suples.cl/collections/colageno-y-articulaciones", "subcategory": "Colágeno" },
+                { "url": "https://www2.suples.cl/collections/antimicrobianos-naturales-y-acido-caprilico", "subcategory": "Otros Vitaminas y Minerales" },
+                { "url": "https://www2.suples.cl/collections/equilibrante-natural-adaptogenos-y-bienestar-general", "subcategory": "Otros Vitaminas y Minerales" },
+                { "url": "https://www2.suples.cl/collections/sistemas-nervioso-y-cognitivo", "subcategory": "Otros Vitaminas y Minerales" },
+                { "url": "https://www2.suples.cl/collections/bienestar-natural-y-salud-integral", "subcategory": "Otros Vitaminas y Minerales" },
+                { "url": "https://www2.suples.cl/collections/antioxidantes", "subcategory": "Antioxidantes" },
+                { "url": "https://www2.suples.cl/collections/colagenos-1", "subcategory": "Colágeno" },
+                { "url": "https://www2.suples.cl/collections/omega-3", "subcategory": "Omega 3 y Aceites" },
+                { "url": "https://www2.suples.cl/collections/probioticos", "subcategory": "Probióticos" }
             ],
             "Pre Entrenos": [
-                "https://www2.suples.cl/collections/pre-workout"
+                { "url": "https://www2.suples.cl/collections/pre-workout", "subcategory": "Pre Entreno" }
             ],
             "Ganadores de Peso": [
-                "https://www2.suples.cl/collections/ganadores-de-masa"
+                { "url": "https://www2.suples.cl/collections/ganadores-de-masa", "subcategory": "Ganadores de Peso" }
             ],
             "Aminoacidos y BCAA": [
-                "https://www2.suples.cl/collections/aminoacidos"
+                { "url": "https://www2.suples.cl/collections/aminoacidos", "subcategory": "Aminoácidos" },
+                { "url": "https://www2.suples.cl/collections/aminoacidos-y-nutrientes-esenciales", "subcategory": "Otros Aminoacidos y BCAA" },
+                { "url": "https://www2.suples.cl/collections/arginina", "subcategory": "Otros Aminoacidos y BCAA" },
+                { "url": "https://www2.suples.cl/collections/hmb", "subcategory": "Otros Aminoacidos y BCAA" },
+                { "url": "https://www2.suples.cl/collections/zma", "subcategory": "Minerales (Magnesio/ZMA)" }
             ],
             "Perdida de Grasa": [
-                "https://www2.suples.cl/collections/cafeina",
-                "https://www2.suples.cl/collections/quemadores-termogenicos",
-                "https://www2.suples.cl/collections/quemadores-liquidos",
-                "https://www2.suples.cl/collections/quemadores-naturales",
-                "https://www2.suples.cl/collections/eliminadores-de-retencion",
-                "https://www2.suples.cl/collections/quemadores-localizados",
-                "https://www2.suples.cl/collections/cremas-reductoras"
+                { "url": "https://www2.suples.cl/collections/cafeina", "subcategory": "Cafeína" },
+                { "url": "https://www2.suples.cl/collections/quemadores-termogenicos", "subcategory": "Quemadores Termogenicos" },
+                { "url": "https://www2.suples.cl/collections/quemadores-liquidos", "subcategory": "Quemadores Liquidos" },
+                { "url": "https://www2.suples.cl/collections/quemadores-naturales", "subcategory": "Quemadores Naturales" },
+                { "url": "https://www2.suples.cl/collections/eliminadores-de-retencion", "subcategory": "Eliminadores De Retencion" },
+                { "url": "https://www2.suples.cl/collections/quemadores-localizados", "subcategory": "Quemadores Localizados" },
+                { "url": "https://www2.suples.cl/collections/cremas-reductoras", "subcategory": "Cremas Reductoras" }
             ],
             "Snacks y Comida": [
-                "https://www2.suples.cl/collections/barritas-y-snacks-proteicas",
-                "https://www2.suples.cl/collections/alimentos-outdoor"
+                { "url": "https://www2.suples.cl/collections/barritas-y-snacks-proteicas", "subcategory": "Barritas Y Snacks Proteicas" },
+                { "url": "https://www2.suples.cl/collections/alimentos-outdoor", "subcategory": "Otros Snacks y Comida" }
             ],
-            "Por Objetivo": [
-                "https://www2.suples.cl/collections/por-objetivo"
+            "OTROS": [
+                { "url": "https://www2.suples.cl/collections/por-objetivo", "subcategory": "Otros" }
             ]
         }
         
@@ -89,18 +89,16 @@ class SuplesScraper(BaseScraper):
         super().__init__(base_url, headless, category_urls, selectors, site_name="Suples.cl")
 
     def extract_process(self, page):
-        print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en Suples.cl...[/green]")
+        print(f"[green]Iniciando scraping Determinista (V2) de Suples.cl...[/green]")
         
         context = page.context
 
-        for main_category, urls in self.category_urls.items():
-            batch_buffer = []
-            for url in urls:
-                subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
-                subcategory_name = self.clean_text(subcategory_name)
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                url = item['url']
+                deterministic_sub = item['subcategory']
                 
-                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {subcategory_name} ({url})")
-
+                print(f"\n[bold blue]Procesando:[/bold blue] {main_category} -> {deterministic_sub} ({url})")
                 
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=60000)
@@ -202,6 +200,7 @@ class SuplesScraper(BaseScraper):
                             image_url = ""
                             sku = ""
                             description = ""
+                            detail_page = None
 
                             if link != "N/D":
                                 try:
@@ -265,8 +264,9 @@ class SuplesScraper(BaseScraper):
                                     
                                 except Exception as e:
                                     print(f"[yellow]Error loading details for {link}: {e}[/yellow]")
-                                    try: detail_page.close()
-                                    except: pass
+                                    if detail_page:
+                                        try: detail_page.close()
+                                        except: pass
 
                             # --- IMPLEMENTACIÓN DE DESCARGA ---
                             site_folder = self.site_name.replace(" ", "_").lower()
@@ -277,17 +277,54 @@ class SuplesScraper(BaseScraper):
                                 local_img = self.download_image(image_url, subfolder=site_folder)
                                 if local_img: image_url = local_img
 
-                            # New Categorization Logic
-                            final_subcategory = subcategory_name
-                            cat_info = self.categorizer.classify_product(title, subcategory_name)
-                            if cat_info:
-                                final_subcategory = cat_info['nombre_subcategoria']
-
+                            # Lógica Heurística para Packs (Global)
+                            # Detecta palabras clave como "Pack", "Paquete", "Combo" o la presencia de "+"
+                            # Temp vars to avoid polluting the loop state
+                            final_category = main_category
+                            final_sub = deterministic_sub
+                            
+                            title_lower = title.lower()
+                            if "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower:
+                                final_category = "Packs"
+                                final_sub = "Packs"
+ 
+                            # Lógica Heurística Específica para Creatinas
+                            if final_category == "Creatinas":
+                                # Texto de búsqueda: Título + Descripción en minúsculas
+                                text_to_search = (title + " " + (description or "")).lower()
+                                
+                                # 1. Variantes Químicas Específicas (Alta prioridad)
+                                if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search:
+                                    final_sub = "Clorhidrato"
+                                    
+                                elif "malato" in text_to_search or "magnesio" in text_to_search or "magnapower" in text_to_search:
+                                    final_sub = "Malato y Magnesio"
+                                    
+                                elif "nitrato" in text_to_search or "nitrate" in text_to_search:
+                                    final_sub = "Nitrato"
+ 
+                                # Check for buffered/alkaline creatine
+                                elif "alkalyn" in text_to_search or "alcalina" in text_to_search:
+                                    final_sub = "Otros Creatinas"
+ 
+                                # 2. Monohidrato (Prioridad sobre Micronizada)
+                                # Incluye "Creapure" que es sello de Monohidrato de alta calidad
+                                elif "monohidrat" in text_to_search or "monohydrate" in text_to_search or "creapure" in text_to_search or "monohidrato" in text_to_search or "monohidratada" in text_to_search:
+                                    final_sub = "Creatina Monohidrato"
+ 
+                                # 3. Micronizada (Solo si NO fue detectada como Monohidrato antes)
+                                elif "micronizad" in text_to_search or "micronized" in text_to_search or "micronizada" in text_to_search or "micronizado" in text_to_search:
+                                    final_sub = "Micronizada"
+ 
+                                # 4. Fallback por defecto (Asumiremos que la creatina es monohidrato por la popularidad)
+                                else:
+                                    final_sub = "Creatina Monohidrato"
+ 
                             product_obj = {
                                 'date': current_date,
                                 'site_name': self.site_name,
-                                'category': self.clean_text(main_category),
-                                'subcategory': final_subcategory,
+                                'category': self.clean_text(final_category),
+                                'subcategory': final_sub,
                                 'product_name': title,
 
                                 'brand': self.enrich_brand(brand, title),
@@ -321,35 +358,6 @@ class SuplesScraper(BaseScraper):
                             
                 except Exception as e:
                     print(f"[red]Error procesando {url}: {e}[/red]")
-            
-            # End of category loop - No buffer needed
-                            else:
-                                yield product_obj
-                        
-                        # Paginación
-                        next_btn = page.locator(self.selectors['next_button'])
-                        if next_btn.count() > 0 and next_btn.first.is_visible():
-                            href_next = next_btn.first.get_attribute("href")
-                            if href_next:
-                                page.goto(self.base_url + href_next if href_next.startswith('/') else href_next)
-                                page_number += 1
-                                page.wait_for_timeout(2000)
-                            else:
-                                next_btn.first.click()
-                                page.wait_for_timeout(3000)
-                                page_number += 1
-                        else:
-                            break
-                            
-                except Exception as e:
-                    print(f"[red]Error procesando {url}: {e}[/red]")
-            
-            # Flush remaining buffer for this category
-            if main_category == "Por Objetivo" and batch_buffer:
-                classified_batch = self.classify_batch(batch_buffer)
-                for cp in classified_batch:
-                    yield cp
-                batch_buffer = []
 
 if __name__ == "__main__":
     base_url = "https://www2.suples.cl"

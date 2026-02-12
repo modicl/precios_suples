@@ -16,18 +16,17 @@ class SupleTechScraper(BaseScraper):
                 { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/hidrolizadas", "subcategory": "Proteína Hidrolizada" },
                 { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/clear-whey-isolate", "subcategory": "Proteína Aislada" },
                 { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/proteinas-veganas", "subcategory": "Proteína Vegana" },
-                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/proteinas-de-carne", "subcategory": "Proteína de Carne" },
-                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/colageno", "subcategory": "Colágeno" }
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/proteinas-de-carne", "subcategory": "Proteína de Carne" }
             ],
             "Creatinas": [
-                { "url": "https://www.supletech.cl/suplementos-alimenticios/creatinas/micronizada", "subcategory": "Creatina Monohidrato" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/creatinas/micronizada", "subcategory": "Micronizada" },
                 { "url": "https://www.supletech.cl/suplementos-alimenticios/creatinas/monohidratada", "subcategory": "Creatina Monohidrato" }
             ],
             "Vitaminas y Minerales": [
                 { "url": "https://www.supletech.cl/bienestar/vitaminas-y-minerales", "subcategory": "Vitaminas y Minerales" },
                 { "url": "https://www.supletech.cl/bienestar/probioticos-y-prebioticos", "subcategory": "Probióticos" },
                 { "url": "https://www.supletech.cl/bienestar/omega", "subcategory": "Omega 3 y Aceites" },
-                { "url": "https://www.supletech.cl/bienestar/biotina-y-colageno", "subcategory": "Colágeno" },
+                { "url": "https://www.supletech.cl/bienestar/biotina-y-colageno", "subcategory": "Vitaminas y Minerales" },
                 { "url": "https://www.supletech.cl/bienestar/descanso-y-sueno", "subcategory": "Bienestar General" },
                 { "url": "https://www.supletech.cl/bienestar/gummies", "subcategory": "Gummies" }
             ],
@@ -35,21 +34,26 @@ class SupleTechScraper(BaseScraper):
                 { "url": "https://www.supletech.cl/quemadores-y-pre-entrenos/pre-entreno", "subcategory": "Pre Entreno" }
             ],
             "Ganadores de Peso": [
-                { "url": "https://www.supletech.cl/suplementos-alimenticios/aumento-de-masa-corporal", "subcategory": "Ganador de Masa" }
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/aumento-de-masa-corporal", "subcategory": "Ganadores de Peso" }
             ],
             "Aminoacidos y BCAA": [
                 { "url": "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/bcaa", "subcategory": "BCAAs" },
                 { "url": "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/eaa", "subcategory": "EAAs (Esenciales)" },
-                { "url": "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/hmb-y-zma", "subcategory": "HMB y ZMA" },
-                { "url": "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/especificos", "subcategory": "Especificos" }
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/especificos", "subcategory": "Otros Aminoacidos y BCAA" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/aminoacidos/hmb-y-zma", "subcategory": "DETECTAR_HMB_ZMA" }
             ],
             "Perdida de Grasa": [
                 { "url": "https://www.supletech.cl/quemadores-y-pre-entrenos/quemadores", "subcategory": "Quemadores" }
             ],
             "Snacks y Comida": [
                 { "url": "https://www.supletech.cl/barritas-geles-y-liquidos/barritas-proteicas", "subcategory": "Barritas Y Snacks Proteicas" },
-                { "url": "https://www.supletech.cl/barritas-geles-y-liquidos/shake-proteicos", "subcategory": "Shake Proteicos" },
-                { "url": "https://www.supletech.cl/barritas-geles-y-liquidos/bebidas-energeticas", "subcategory": "Energía (Geles/Café)" }
+                { "url": "https://www.supletech.cl/barritas-geles-y-liquidos/shake-proteicos", "subcategory": "Shake Proteicos" }
+            ],
+            "Colageno": [
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/colageno", "subcategory": "Colageno" }
+            ],
+            "Bebidas Nutricionales": [
+                { "url": "https://www.supletech.cl/barritas-geles-y-liquidos/bebidas-energeticas", "subcategory": "Bebidas Nutricionales" }
             ]
         }
         
@@ -214,11 +218,32 @@ class SupleTechScraper(BaseScraper):
                                         try: detail_page.close()
                                         except: pass
 
+                                # Temp vars to avoid polluting the loop state
+                                final_category = main_category
+                                final_sub = deterministic_sub
+
+                                # Heuristic Logic for HMB and ZMA
+                                if deterministic_sub == "DETECTAR_HMB_ZMA":
+                                    text_to_search = (title + " " + description).lower()
+                                    
+                                    if "zma" in text_to_search or "zmar" in text_to_search:
+                                        # ZMA -> Vitaminas y Minerales / Multivitamínicos
+                                        final_category = "Vitaminas y Minerales"
+                                        final_sub = "Multivitamínicos"
+                                    elif "hmb" in text_to_search:
+                                        # HMB -> Aminoacidos y BCAA / Otros Aminoacidos y BCAA
+                                        final_sub = "Otros Aminoacidos y BCAA"
+                                        final_category = "Aminoacidos y BCAA"
+                                    else:
+                                        # Fallback
+                                        final_category = "Aminoacidos y BCAA" # Changed from OTROS to match logic
+                                        final_sub = "Otros Aminoacidos y BCAA"
+
                                 yield {
                                     'date': current_date,
                                     'site_name': self.site_name,
-                                    'category': self.clean_text(main_category),
-                                    'subcategory': deterministic_sub, # EXPLICIT
+                                    'category': self.clean_text(final_category),
+                                    'subcategory': final_sub, # EXPLICIT
                                     'product_name': title,
                                     'brand': self.enrich_brand(brand, title),
 

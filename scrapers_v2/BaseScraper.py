@@ -300,9 +300,20 @@ class BaseScraper:
                 headers = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
                 }
-                response = requests.get(url, headers=headers, stream=True, timeout=15)
                 
-                if response.status_code == 200:
+                # Implementación de Retry (3 intentos)
+                response = None
+                for attempt in range(3):
+                    try:
+                        response = requests.get(url, headers=headers, stream=True, timeout=30)
+                        if response.status_code == 200:
+                            break # Éxito
+                    except requests.exceptions.RequestException:
+                        if attempt < 2:
+                            import time
+                            time.sleep(2)
+
+                if response and response.status_code == 200:
                     response.raw.decode_content = True
                     
                     # Detectar content-type real si es posible, o fallback
@@ -375,8 +386,8 @@ class BaseScraper:
             context = browser.new_context()
             page = context.new_page()
             
-            # Crear directorio raw_data si no existe
-            output_dir = "raw_data"
+            # Crear directorio raw_data en la raíz del proyecto
+            output_dir = os.path.join(project_root, "raw_data")
             os.makedirs(output_dir, exist_ok=True)
             
             # Nombre del archivo CSV estandarizado dentro de raw_data
