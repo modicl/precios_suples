@@ -173,14 +173,16 @@ def normalize_step(input_file, output_file):
     print(f"[green]Archivo normalizado guardado en: [bold]{output_file}[/bold][/green]")
 
 def main():
-    print("--- PASO 3: Normalización de Productos ---")
+    print("--- PASO 2: Normalización de Productos ---")
     
-    # Use 'latest' pointer from Step 2 folder
-    input_csv = os.path.join("local_processing_testing", "data", "2_cleaned", "latest_cleaned.csv")
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Use 'latest' pointer from Step 1 folder
+    input_csv = os.path.join(current_dir, "data", "1_cleaned", "latest_cleaned.csv")
     
     # Output logic
     today_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    output_dir = os.path.join("local_processing_testing", "data", "3_normalized")
+    output_dir = os.path.join(current_dir, "data", "2_normalized")
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     output_csv = os.path.join(output_dir, f"normalized_{today_str}.csv")
@@ -189,7 +191,7 @@ def main():
     latest_norm_path = os.path.join(output_dir, "latest_normalized.csv")
     
     if not os.path.exists(input_csv):
-        print(f"Error: No se encontró {input_csv}. Ejecuta el Paso 2 primero.")
+        print(f"Error: No se encontró {input_csv}. Ejecuta el Paso 1 primero.")
         return
         
     normalize_step(input_csv, output_csv)

@@ -9,7 +9,12 @@ from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from tools.db_multiconnect import get_targets
 
-def clean_text(text):
+def clean_display_text(text):
+    if isinstance(text, str):
+        return text.strip()
+    return ""
+
+def make_key(text):
     if isinstance(text, str):
         return text.lower().strip()
     return ""
@@ -31,31 +36,15 @@ def insert_data_bulk(engine, df):
         
         # Categorias
         existing_cats = conn.execute(sa.text("SELECT nombre_categoria FROM categorias")).fetchall()
-        existing_cats_set = {clean_text(row.nombre_categoria) for row in existing_cats}
+        existing_cats_set = {make_key(row.nombre_categoria) for row in existing_cats}
         
-        # MODIFICADO: Bloquear creación de nuevas categorías
-        # cats_to_insert = df['category'].dropna().unique()
-        # new_cats = [{"nombre_categoria": c} for c in cats_to_insert if clean_text(c) not in existing_cats_set]
-        # if new_cats:
-        #     conn.execute(sa.text("INSERT INTO categorias (nombre_categoria) VALUES (:nombre_categoria) ON CONFLICT DO NOTHING"), new_cats)
-        #     conn.commit()
-        
-        cat_map = {clean_text(row.nombre_categoria): row.id_categoria for row in conn.execute(sa.text("SELECT * FROM categorias")).fetchall()}
+        cat_map = {make_key(row.nombre_categoria): row.id_categoria for row in conn.execute(sa.text("SELECT * FROM categorias")).fetchall()}
 
         # Subcategorias
-        # MODIFICADO: Usar solo las existentes. Si no existe -> Fallback a 'Otros'
-        existing_subs = conn.execute(sa.text("SELECT nombre_subcategoria, id_categoria FROM subcategorias")).fetchall()
-        
-        # Mapa estricto: clean_name -> id_subcategoria
-        # Also map: clean_name -> id_categoria (to allow fallback lookup)
-        # We need a way to look up the subcategory object to check its parent category, OR load a map of Fallbacks.
-        
         all_subs = conn.execute(sa.text("SELECT id_subcategoria, nombre_subcategoria, id_categoria FROM subcategorias")).fetchall()
         
-        subcat_map = {} # clean_sub_name -> id_sub
+        subcat_map = {} # key -> id_sub
         cat_of_sub_map = {} # id_sub -> id_cat
-        
-        # Build map of category_id -> id_sub_otros
         fallback_map = {} # id_cat -> id_sub_otros
         
         for row in all_subs:
@@ -63,84 +52,78 @@ def insert_data_bulk(engine, df):
             s_id = row.id_subcategoria
             c_id = row.id_categoria
             
-            subcat_map[clean_text(s_name)] = s_id
+            subcat_map[make_key(s_name)] = s_id
             cat_of_sub_map[s_id] = c_id
             
-            # Identify if this is the "Otros" for this category
-            # We look for "Otros {CatName}" or just "Otros" belonging to this cat
             if s_name.lower().startswith("otros"):
-                # Ideally check if it matches "Otros {CatName}" logic or just generic "Otros"
-                # Simpler: last "Otros" seen for this cat wins as fallback
                 fallback_map[c_id] = s_id
-
-        # Bloque de inserción de subcategorías eliminado para proteger la integridad de la BD
-        # subs_to_insert = [] ... (Eliminado)
-        
-        # Opcional: Buscar ID de 'Otros' o fallback si es necesario
-        # fallback_sub_id = subcat_map.get('otros') 
-
-        # Bloque de inserción de subcategorías eliminado para proteger la integridad de la BD
-        # subs_to_insert = [] ... (Eliminado)
-
 
         # Marcas
         existing_brands = conn.execute(sa.text("SELECT nombre_marca FROM marcas")).fetchall()
-        existing_brands_set = {clean_text(row.nombre_marca) for row in existing_brands}
+        existing_brands_set = {make_key(row.nombre_marca) for row in existing_brands}
         
         brands_to_insert = df['brand'].dropna().unique()
-        new_brands = [{"nombre_marca": b} for b in brands_to_insert if clean_text(b) not in existing_brands_set]
+        # Use display text for insertion, check key for existence
+        new_brands = [{"nombre_marca": clean_display_text(b)} for b in brands_to_insert if make_key(b) not in existing_brands_set]
+        
         if new_brands:
             conn.execute(sa.text("INSERT INTO marcas (nombre_marca) VALUES (:nombre_marca) ON CONFLICT DO NOTHING"), new_brands)
             conn.commit()
-        brand_map = {clean_text(row.nombre_marca): row.id_marca for row in conn.execute(sa.text("SELECT * FROM marcas")).fetchall()}
+            
+        brand_map = {make_key(row.nombre_marca): row.id_marca for row in conn.execute(sa.text("SELECT * FROM marcas")).fetchall()}
 
         # Tiendas
         existing_shops = conn.execute(sa.text("SELECT nombre_tienda FROM tiendas")).fetchall()
-        existing_shops_set = {clean_text(row.nombre_tienda) for row in existing_shops}
+        existing_shops_set = {make_key(row.nombre_tienda) for row in existing_shops}
         
         shops_to_insert = df['site_name'].dropna().unique()
-        new_shops = [{"nombre_tienda": s} for s in shops_to_insert if clean_text(s) not in existing_shops_set]
+        new_shops = [{"nombre_tienda": clean_display_text(s)} for s in shops_to_insert if make_key(s) not in existing_shops_set]
+        
         if new_shops:
             conn.execute(sa.text("INSERT INTO tiendas (nombre_tienda) VALUES (:nombre_tienda) ON CONFLICT DO NOTHING"), new_shops)
             conn.commit()
-        shop_map = {clean_text(row.nombre_tienda): row.id_tienda for row in conn.execute(sa.text("SELECT * FROM tiendas")).fetchall()}
+            
+        shop_map = {make_key(row.nombre_tienda): row.id_tienda for row in conn.execute(sa.text("SELECT * FROM tiendas")).fetchall()}
 
         # --- FASE 1: PRODUCTOS (Bulk Upsert) ---
         print("Preparando lote de Productos...")
-        products_to_process = []
-        # Use a dict to dedup by (name, brand, subcat) within this batch
+        
+        # Use a dict to dedup by (name_key, brand_id, subcat_id)
+        # But we store the DISPLAY name in the values
         products_dedup = {}
         
         fallback_brand_id = brand_map.get('n/d', 14)
 
         for _, row in df.iterrows():
-            # Use 'normalized_name' as the official product name (now derived from AI Clean Name)
-            p_name = row.get('normalized_name', row['product_name'])
-            if pd.isna(p_name): p_name = row['product_name']
+            # Get generic name
+            p_display = row.get('normalized_name', row['product_name'])
+            if pd.isna(p_display): p_display = row['product_name']
+            p_display = clean_display_text(p_display)
+            if not p_display: continue
             
-            # Clean it again just in case
-            p_name = clean_text(p_name)
-            if not p_name: continue
+            # Key for lookup/dedup (LOWERCASE)
+            p_key = make_key(p_display)
             
-            b_norm = clean_text(row['brand'])
-            s_norm = clean_text(row['subcategory'])
-            c_norm = clean_text(row['category'])
+            b_key = make_key(row['brand'])
+            s_key = make_key(row['subcategory'])
+            c_key = make_key(row['category'])
             
-            b_id = brand_map.get(b_norm, fallback_brand_id)
-            s_id = subcat_map.get(s_norm)
-            c_id = cat_map.get(c_norm)
+            b_id = brand_map.get(b_key, fallback_brand_id)
+            s_id = subcat_map.get(s_key)
+            c_id = cat_map.get(c_key)
             
             # Fallback logic for subcategory
             if not s_id and c_id:
-                # Use the 'Otros' subcategory for this specific category
                 s_id = fallback_map.get(c_id)
             
             if not s_id: continue
             
-            key = (p_name, b_id, s_id)
+            # DEDUP KEY uses ids and LOWERCASE name
+            key = (p_key, b_id, s_id)
+            
             if key not in products_dedup:
                 products_dedup[key] = {
-                    "nombre_producto": p_name,
+                    "nombre_producto": p_display, # INSERT THIS (Title Case)
                     "url_imagen": row.get('image_url', ''),
                     "url_thumb_imagen": row.get('thumbnail_image_url', ''),
                     "id_marca": b_id,
@@ -166,7 +149,8 @@ def insert_data_bulk(engine, df):
         # Select all involved products to build map
         print("Recuperando IDs de productos...")
         all_prods = conn.execute(sa.text("SELECT id_producto, nombre_producto, id_marca, id_subcategoria FROM productos")).fetchall()
-        prod_id_map = {(row.nombre_producto, row.id_marca, row.id_subcategoria): row.id_producto for row in all_prods}
+        # Use make_key for the product name in the map key to ensure case-insensitive lookup
+        prod_id_map = {(make_key(row.nombre_producto), row.id_marca, row.id_subcategoria): row.id_producto for row in all_prods}
         print(f"Mapa de productos cargado: {len(prod_id_map)} entradas.")
 
         # --- FASE 2: PRODUCTO_TIENDA (Bulk Upsert) ---
@@ -176,21 +160,24 @@ def insert_data_bulk(engine, df):
         miss_pid_count = 0
         
         for _, row in df.iterrows():
-            p_name = row.get('normalized_name', row['product_name'])
-            if pd.isna(p_name): p_name = row['product_name']
+            p_display = row.get('normalized_name', row['product_name'])
+            if pd.isna(p_display): p_display = row['product_name']
             
-            # Clean it again just in case
-            p_name = clean_text(p_name)
-            if not p_name: continue
+            p_display = clean_display_text(p_display)
+            if not p_display: continue
             
-            b_norm = clean_text(row['brand'])
-            s_norm = clean_text(row['subcategory'])
-            c_norm = clean_text(row['category'])
+            # Key for lookup
+            p_key = make_key(p_display)
             
-            b_id = brand_map.get(b_norm, fallback_brand_id)
-            s_id = subcat_map.get(s_norm)
-            c_id = cat_map.get(c_norm)
-            t_id = shop_map.get(clean_text(row['site_name']))
+            b_key = make_key(row['brand'])
+            s_key = make_key(row['subcategory'])
+            c_key = make_key(row['category'])
+            t_key = make_key(row['site_name'])
+            
+            b_id = brand_map.get(b_key, fallback_brand_id)
+            s_id = subcat_map.get(s_key)
+            c_id = cat_map.get(c_key)
+            t_id = shop_map.get(t_key)
             
             # Fallback logic for subcategory
             if not s_id and c_id:
@@ -198,7 +185,7 @@ def insert_data_bulk(engine, df):
             
             if not s_id or not t_id: continue
             
-            pid = prod_id_map.get((p_name, b_id, s_id))
+            pid = prod_id_map.get((p_key, b_id, s_id))
             if not pid: 
                 miss_pid_count += 1
                 # Optional: print first few misses
@@ -240,21 +227,23 @@ def insert_data_bulk(engine, df):
         miss_ptid_count = 0
         
         for _, row in df.iterrows():
-            p_name = row.get('normalized_name', row['product_name'])
-            if pd.isna(p_name): p_name = row['product_name']
+            p_display = row.get('normalized_name', row['product_name'])
+            if pd.isna(p_display): p_display = row['product_name']
             
-            # Clean it again just in case
-            p_name = clean_text(p_name)
-            if not p_name: continue
+            p_display = clean_display_text(p_display)
+            if not p_display: continue
             
-            b_norm = clean_text(row['brand'])
-            s_norm = clean_text(row['subcategory'])
-            c_norm = clean_text(row['category'])
+            p_key = make_key(p_display)
             
-            b_id = brand_map.get(b_norm, fallback_brand_id)
-            s_id = subcat_map.get(s_norm)
-            t_id = shop_map.get(clean_text(row['site_name']))
-            c_id = cat_map.get(c_norm)
+            b_key = make_key(row['brand'])
+            s_key = make_key(row['subcategory'])
+            c_key = make_key(row['category'])
+            t_key = make_key(row['site_name'])
+            
+            b_id = brand_map.get(b_key, fallback_brand_id)
+            s_id = subcat_map.get(s_key)
+            t_id = shop_map.get(t_key)
+            c_id = cat_map.get(c_key)
             
             # Fallback logic for subcategory
             if not s_id and c_id:
@@ -262,7 +251,7 @@ def insert_data_bulk(engine, df):
             
             if not s_id or not t_id: continue
             
-            pid = prod_id_map.get((p_name, b_id, s_id))
+            pid = prod_id_map.get((p_key, b_id, s_id))
             if not pid: continue
             
             ptid = link_id_map.get((pid, t_id))
@@ -306,12 +295,15 @@ def insert_data_bulk(engine, df):
     print("Proceso Batch Finalizado.")
 
 def main():
-    print("--- PASO 4: Inserción en Base de Datos (BATCH) ---")
-    # Use 'latest' pointer from Step 3 folder
-    input_csv = os.path.join("local_processing_testing", "data", "3_normalized", "latest_normalized.csv")
+    print("--- PASO 3: Inserción en Base de Datos (BATCH) ---")
+    
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Use 'latest' pointer from Step 2 folder
+    input_csv = os.path.join(current_dir, "data", "2_normalized", "latest_normalized.csv")
     
     if not os.path.exists(input_csv):
-        print(f"Error: No se encontró {input_csv}. Ejecuta el Paso 3 primero.")
+        print(f"Error: No se encontró {input_csv}. Ejecuta el Paso 2 primero.")
         return
         
     df = pd.read_csv(input_csv)

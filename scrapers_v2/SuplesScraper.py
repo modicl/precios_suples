@@ -108,7 +108,7 @@ class SuplesScraper(BaseScraper):
                         print(f"--- Página {page_number} ---")
                         try:
                             # Increasing wait time slightly for robustness
-                            page.wait_for_selector(self.selectors['product_card'], timeout=6000)
+                            page.wait_for_selector(self.selectors['product_card'], timeout=60000)
                         except:
                             print(f"[red]No se encontraron productos en {url} o tardó demasiado.[/red]")
                             break
@@ -295,7 +295,11 @@ class SuplesScraper(BaseScraper):
                                 
                                 # 1. Variantes Químicas Específicas (Alta prioridad)
                                 if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search:
-                                    final_sub = "Clorhidrato"
+                                    # Si tiene monohidrato en el titulo, es Creatina Monohidrato y el Clorhidrato es un ingrediente "menor"
+                                    if "monohidrat" in title_lower or "monohydrate" in title_lower or "creapure" in title_lower or "monohidrato" in title_lower or "monohidratada" in title_lower:
+                                        final_sub = "Creatina Monohidrato"
+                                    else:
+                                        final_sub = "Clorhidrato"
                                     
                                 elif "malato" in text_to_search or "magnesio" in text_to_search or "magnapower" in text_to_search:
                                     final_sub = "Malato y Magnesio"

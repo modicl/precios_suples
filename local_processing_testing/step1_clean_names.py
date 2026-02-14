@@ -135,22 +135,41 @@ def standardize_units(name):
     return name.strip()
 
 def process_cleaning():
-    print("--- PASO 2: Limpieza Determinista de Nombres ---")
+    print("--- PASO 1: Limpieza Determinista de Nombres ---")
     
-    # Read from Step 1 folder
-    input_csv = os.path.join("local_processing_testing", "data", "1_classified", "latest_classified.csv")
-    if not os.path.exists(input_csv):
-        print(f"Error: No se encontró {input_csv}. Ejecuta el Paso 1 primero.")
+    # Determine Project Root (parent of 'local_processing_testing')
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)
+    
+    # Read from raw_data (absolute path)
+    raw_data_dir = os.path.join(project_root, "raw_data")
+    import glob
+    raw_files = glob.glob(os.path.join(raw_data_dir, "*.csv"))
+    
+    if not raw_files:
+        print(f"Error: No hay archivos CSV en {raw_data_dir}")
         return
 
+    print(f"Encontrados {len(raw_files)} archivos raw en {raw_data_dir}.")
+    dfs = []
+    for f in raw_files:
+        try:
+            df = pd.read_csv(f)
+            dfs.append(df)
+        except Exception as e:
+            print(f"Error leyendo {f}: {e}")
+    
+    if not dfs: return
+    df = pd.concat(dfs, ignore_index=True)
+
     # Load Data
-    df = pd.read_csv(input_csv)
+    # df = pd.read_csv(input_csv) # Already loaded via concat
     print(f"Cargados {len(df)} registros.")
     
     # Load Brands
-    brands_path = "marcas_dictionary.csv" # Root
+    brands_path = os.path.join(project_root, "marcas_dictionary.csv")
     brands = load_brands(brands_path)
-    print(f"Cargadas {len(brands)} marcas para limpieza.")
+    print(f"Cargadas {len(brands)} marcas para limpieza desde {brands_path}")
     
     # Compile Regex for Brands
     # We escape regex chars in brand names just in case
@@ -178,9 +197,11 @@ def process_cleaning():
             
         final_name = clean_name_logic(str(original_source), brands_pattern)
         if final_name is None: # Stopword guard triggered
-            final_name = str(original_source) # Revert
-        else:
-            final_name = standardize_units(final_name) # Apply unit standardization
+            # Revert to original but Clean it (Title Case)
+            final_name = str(original_source).title()
+        
+        # Apply unit standardization ALWAYS (to both cleaned and reverted names)
+        final_name = standardize_units(final_name)
         
         # Check if changed (ignoring case for change detection)
         # Ensure final_name is string (it should be, but safety first)
@@ -197,7 +218,9 @@ def process_cleaning():
     today_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     
     # Create folder if not exists (though data exists)
-    output_dir = os.path.join("local_processing_testing", "data", "2_cleaned")
+    # output_dir is inside local_processing_testing/data/1_cleaned
+    # We use current_dir (which is local_processing_testing)
+    output_dir = os.path.join(current_dir, "data", "1_cleaned")
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         

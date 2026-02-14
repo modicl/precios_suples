@@ -221,10 +221,15 @@ class SupleStoreScraper(BaseScraper):
                             if final_category == "Creatinas":
                                 # Texto de búsqueda: Título + Descripción en minúsculas
                                 text_to_search = (title + " " + (description or "")).lower()
+                                title_lower = title.lower()
                                 
                                 # 1. Variantes Químicas Específicas (Alta prioridad)
                                 if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search:
-                                    final_sub = "Clorhidrato"
+                                    # Si tiene monohidrato en el titulo, es Creatina Monohidrato y el Clorhidrato es un ingrediente "menor"
+                                    if "monohidrat" in title_lower or "monohydrate" in title_lower or "creapure" in title_lower or "monohidrato" in title_lower or "monohidratada" in title_lower:
+                                        final_sub = "Creatina Monohidrato"
+                                    else:
+                                        final_sub = "Clorhidrato"
                                     
                                 elif "malato" in text_to_search or "magnesio" in text_to_search or "magnapower" in text_to_search:
                                     final_sub = "Malato y Magnesio"

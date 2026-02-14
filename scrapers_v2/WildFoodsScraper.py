@@ -67,11 +67,11 @@ class WildFoodsScraper(BaseScraper):
         }
         
         selectors = {
-            'product_card': '.product-item, .product-card', 
-            'product_name': '.product-item__title, .product-card__title',
-            'price': '.product-item__price, .price-item--sale, .price-item--regular',
-            'link': 'a.product-item__image-wrapper, a.product-card__image-wrapper, .product-item__title a',
-            'image': '.product-item__image img, .product-card__image img',
+            'product_card': '.product-item', 
+            'product_name': '.product-item__title',
+            'price': '.product-price--original, .price-item--sale, .price-item--regular',
+            'link': '.product-item__title', 
+            'image': '.product-item__image img',
             'next_button': '.pagination__next'
         }
         
@@ -83,7 +83,6 @@ class WildFoodsScraper(BaseScraper):
         for main_category, items in self.category_urls.items():
             for item in items:
                 url = item['url']
-                # The Golden Key: Explicit Subcategory from Config
                 deterministic_sub = item['subcategory'] 
                 
                 print(f"\n[bold blue]Procesando:[/bold blue] {main_category} -> {deterministic_sub} ({url})")
@@ -91,12 +90,10 @@ class WildFoodsScraper(BaseScraper):
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=60000)
                     
-                    # Handle "Show More" or Pagination
                     while True:
-                        # Auto-scroll
                         page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                        # Smart wait
                         try:
+                            # Wait for specifically our card selector
                             page.wait_for_selector(self.selectors['product_card'], timeout=5000)
                         except:
                             print(f"[yellow]No productos visibles en {url}[/yellow]")
@@ -115,19 +112,34 @@ class WildFoodsScraper(BaseScraper):
                                 name_el = p.locator(self.selectors['product_name']).first
                                 name = self.clean_text(name_el.inner_text()) if name_el.count() > 0 else "N/D"
                                 
-                                # Price
+                                # Price Logic
                                 price = 0
-                                price_el = p.locator(self.selectors['price'])
-                                # Prioritize sale price
+                                p_text = ""
+                                
+                                # Priority 1: .product-price--original (Found by agent)
+                                price_el = p.locator('.product-price--original')
                                 if price_el.count() > 0:
-                                    # Get text, strip 'Desde', '$', '.'
                                     p_text = price_el.first.inner_text()
+                                else:
+                                    # Priority 2: Standard Shopify Sale/Regular
+                                    sale_el = p.locator('.price-item--sale')
+                                    if sale_el.count() > 0:
+                                        p_text = sale_el.first.inner_text()
+                                    else:
+                                        reg_el = p.locator('.price-item--regular')
+                                        if reg_el.count() > 0:
+                                            p_text = reg_el.first.inner_text()
+                                
+                                if p_text:
+                                    # Extract first number sequence found
+                                    # "54.990" or "$ 54.990"
                                     clean_p = re.sub(r'[^\d]', '', p_text)
                                     if clean_p:
                                         price = int(clean_p)
 
                                 # Link
                                 link = "N/D"
+                                # The title IS the link in the new layout
                                 link_el = p.locator(self.selectors['link']).first
                                 if link_el.count() > 0:
                                     href = link_el.get_attribute('href')
@@ -138,12 +150,39 @@ class WildFoodsScraper(BaseScraper):
                                 image_url = ""
                                 img_el = p.locator(self.selectors['image']).first
                                 if img_el.count() > 0:
-                                    src = img_el.get_attribute('src') or img_el.get_attribute('data-src') or img_el.get_attribute('srcset')
-                                    if src:
-                                        if src.startswith('//'):
-                                            src = "https:" + src
-                                        # Clean query params for cleaner URL
-                                        image_url = src.split('?')[0]
+                                    # Priority: srcset (biggest) > data-src > src
+                                    # Usually src is small, data-src is lazy large, srcset has multiple
+                                    srcset = img_el.get_attribute('srcset')
+                                    data_src = img_el.get_attribute('data-src')
+                                    src = img_el.get_attribute('src')
+                                    
+                                    raw_url = ""
+                                    if srcset:
+                                        # "url1 1x, url2 2x" -> take last one (highest res usually)
+                                        # or "url 500w, url 1000w"
+                                        candidates = srcset.split(',')
+                                        if candidates:
+                                            raw_url = candidates[-1].strip().split(' ')[0]
+                                    
+                                    if not raw_url and data_src:
+                                        raw_url = data_src
+                                    
+                                    if not raw_url and src:
+                                        raw_url = src
+                                        
+                                    if raw_url:
+                                        if raw_url.startswith('//'):
+                                            raw_url = "https:" + raw_url
+                                        
+                                        # Clean URL
+                                        # Remove query params
+                                        clean_url = raw_url.split('?')[0]
+                                        # Remove Shopify size suffix like _300x.jpg, _small.png, etc.
+                                        # Pattern: _[number]x[number]? or _[number]x? before extension
+                                        # Example: product_500x.jpg -> product.jpg
+                                        clean_url = re.sub(r'_\d+x(\d+)?', '', clean_url)
+                                        
+                                        image_url = clean_url
 
                                 # Brand Strategy: Wild Foods is the brand
                                 brand = "Wild Foods" 

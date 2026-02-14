@@ -17,12 +17,12 @@ IMPORTANT_CATEGORIES = {
 
 LOW_PRIORITY_KEYWORDS = ["oferta", "pack", "promo", "bundle", "especial", "outlet", "liquidacion", "cyber", "black"]
 
-def get_score(cat_name):
+def get_score(cat_name, prod_name):
     score = 0
     if not cat_name:
-        return score
+        pass # score 0
     
-    cat_lower = cat_name.lower()
+    cat_lower = cat_name.lower() if cat_name else ""
     
     if cat_name in IMPORTANT_CATEGORIES:
         score += 10
@@ -30,8 +30,12 @@ def get_score(cat_name):
     for keyword in LOW_PRIORITY_KEYWORDS:
         if keyword in cat_lower:
             score -= 100
-            break 
+            break
             
+    # Prefer Title Case or non-lowercase names
+    if prod_name and not prod_name.islower():
+        score += 20 # Strong preference for Title Case
+        
     return score
 
 def fetch_categories_bulk(conn, product_ids):
@@ -86,16 +90,17 @@ def get_local_engine():
     return sa.create_engine(local_target['url'])
 
 def fix_duplicates(engine):
-    print("\n--- Deduplicando Productos (V2 Optimized) ---")
+    print("\n--- Deduplicando Productos (V2 Optimized - Case Insensitive) ---")
 
     with engine.begin() as conn:
-        print("  Buscando grupos de duplicados...")
+        print("  Buscando grupos de duplicados (insensible a mayúsculas)...")
         
-        # 1. Buscar Grupos (Same Name, Same Brand)
+        # 1. Buscar Grupos (Same Name LOWER, Same Brand)
+        # Also fetch the array of names to check casing
         query = sa.text("""
-            SELECT nombre_producto, id_marca, array_agg(id_producto) as ids
+            SELECT lower(nombre_producto) as clean_name, id_marca, array_agg(id_producto) as ids, array_agg(nombre_producto) as names
             FROM productos
-            GROUP BY nombre_producto, id_marca
+            GROUP BY lower(nombre_producto), id_marca
             HAVING count(*) > 1
         """)
         grupos = conn.execute(query).fetchall()
@@ -132,15 +137,21 @@ def fix_duplicates(engine):
         
         for row in grupos:
             raw_ids = row.ids
+            raw_names = row.names
+            
+            # Create map of id -> name
+            id_to_name = dict(zip(raw_ids, raw_names))
             
             # Score Candidates
             candidates = []
             for pid in raw_ids:
                 cat_name = categories_map.get(pid, "")
-                score = get_score(cat_name)
+                p_name = id_to_name.get(pid, "")
+                score = get_score(cat_name, p_name)
                 candidates.append({'id': pid, 'score': score})
             
-            # Sort: High Score first, then Low ID (older is master usually, or whatever)
+            # Sort: High Score first, then Low ID (older is master usually, BUT here we want Title Case master)
+            # If Title Case is new (Highest ID), it has High Score, so it comes first.
             candidates.sort(key=lambda x: (-x['score'], x['id']))
             
             master_id = candidates[0]['id']
@@ -213,7 +224,7 @@ def fix_duplicates(engine):
         print(f"  Deduplicación completada. Grupos: {processed_count}. Productos eliminados: {len(ops_delete_product_ids)}.")
 
 def main():
-    print("--- PASO 5: Deduplicación de Productos ---")
+    print("--- PASO 4: Deduplicación de Productos ---")
     engine = get_local_engine()
     fix_duplicates(engine)
 

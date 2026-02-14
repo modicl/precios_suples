@@ -92,7 +92,7 @@ def refresh_views(engine):
     print(f"Vistas actualizadas en {elapsed:.2f} segundos.")
 
 def main():
-    print("--- PASO 6: Refresh Materialized Views ---")
+    print("--- PASO 5: Refresh Materialized Views ---")
     engine = get_local_engine()
     refresh_views(engine)
 

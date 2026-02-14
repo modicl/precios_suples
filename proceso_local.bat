@@ -21,34 +21,29 @@ echo ---------------------------------------------------
 pause
 
 echo.
-echo 2. PASO 1: Clasificacion con Inteligencia Artificial (Ollama)
+echo 2. PASO 1: Limpieza Determinista de Nombres
 echo ---------------------------------------------------
-python local_processing_testing/step1_ai_classification.py
+python local_processing_testing/step1_clean_names.py
 
 echo.
-echo 3. PASO 2: Limpieza Determinista de Nombres (Marcas)
+echo 3. PASO 2: Normalizacion de Nombres (Fuzzy Matching)
 echo ---------------------------------------------------
-python local_processing_testing/step2_clean_names.py
+python local_processing_testing/step2_normalization.py
 
 echo.
-echo 4. PASO 3: Normalizacion de Nombres (Fuzzy Matching)
+echo 4. PASO 3: Insercion en Base de Datos Local
 echo ---------------------------------------------------
-python local_processing_testing/step3_normalization.py
+python local_processing_testing/step3_db_insertion.py
 
 echo.
-echo 5. PASO 4: Insercion en Base de Datos Local
+echo 5. PASO 4: Deduplicacion de Productos (Link Fusion)
 echo ---------------------------------------------------
-python local_processing_testing/step4_db_insertion.py
+python local_processing_testing/step4_deduplication.py
 
 echo.
-echo 6. PASO 5: Deduplicacion de Productos (Link Fusion)
+echo 6. PASO 5: Refresco de Vistas Materializadas
 echo ---------------------------------------------------
-python local_processing_testing/step5_deduplication.py
-
-echo.
-echo 7. PASO 6: Refresco de Vistas Materializadas
-echo ---------------------------------------------------
-python local_processing_testing/step6_refresh_views.py
+python local_processing_testing/step5_refresh_views.py
 
 echo.
 echo ===================================================
