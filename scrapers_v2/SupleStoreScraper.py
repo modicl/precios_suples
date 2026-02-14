@@ -9,12 +9,7 @@ class SupleStoreScraper(BaseScraper):
         
         category_urls = {
             "Proteinas": [
-                { "url": "https://www.suplestore.cl/collection/whey-blend", "subcategory": "Proteína de Whey" },
-                { "url": "https://www.suplestore.cl/collection/isoladas-hidrolizadas", "subcategory": "Proteína Aislada" },
-                { "url": "https://www.suplestore.cl/collection/carne", "subcategory": "Proteína de Carne" },
-                { "url": "https://www.suplestore.cl/collection/veganas", "subcategory": "Proteína Vegana" },
-                { "url": "https://www.suplestore.cl/collection/sin-lactosa", "subcategory": "Sin Lactosa" },
-                { "url": "https://www.suplestore.cl/collection/sin-gluten", "subcategory": "Sin Gluten" }
+                { "url": "https://www.suplestore.cl/collection/proteinas", "subcategory": "CATEGORIZAR_PROTEINA" }
             ],
             "Creatinas": [
                 { "url": "https://www.suplestore.cl/collection/creatinas", "subcategory": "Creatinas" },
@@ -253,6 +248,26 @@ class SupleStoreScraper(BaseScraper):
                                 # 4. Fallback por defecto (Asumiremos que la creatina es monohidrato por la popularidad)
                                 else:
                                     final_sub = "Creatina Monohidrato"
+
+                            elif final_category == "Proteinas" and (deterministic_sub == "CATEGORIZAR_PROTEINA"):
+                                # Usamos SOLO el título para clasificación de proteínas
+                                text_to_search = title.lower()
+                                
+                                # Palabras clave expandidas (Inglés y Español)
+                                if "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
+                                    final_sub = "Proteína Aislada"
+                                elif "cascarafoods proteina lean active" in text_to_search: # Caso extremadamente unico, en ninguna parte dice una de las 20 keywords!
+                                    final_sub = "Proteína Aislada"
+                                elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
+                                    final_sub = "Proteína Hidrolizada"
+                                elif "vegan" in text_to_search or "plant" in text_to_search or "vegetal" in text_to_search or "vegana" in text_to_search or "vegano" in text_to_search or "plant based" in text_to_search:
+                                    final_sub = "Proteína Vegana"
+                                elif "beef" in text_to_search or "carne" in text_to_search or "vacuno" in text_to_search:
+                                    final_sub = "Proteína de Carne"
+                                elif "casein" in text_to_search or "caseina" in text_to_search or "micelar" in text_to_search or "micellar" in text_to_search:
+                                    final_sub = "Caseína"
+                                else:
+                                    final_sub = "Proteína de Whey"
 
                             yield {
                                 'date': current_date,

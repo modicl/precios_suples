@@ -11,12 +11,15 @@ class SupleTechScraper(BaseScraper):
         # Structure: "Category Name": [ { "url": "...", "subcategory": "Exact DB Subcategory" } ]
         category_urls = {
             "Proteinas": [
-                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/concentradas", "subcategory": "Proteína Concentrada" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/concentradas", "subcategory": "Proteína de Whey" },
                 { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/isolate-protein", "subcategory": "Proteína Aislada" },
                 { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/hidrolizadas", "subcategory": "Proteína Hidrolizada" },
                 { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/whey-protein/clear-whey-isolate", "subcategory": "Proteína Aislada" },
                 { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/proteinas-veganas", "subcategory": "Proteína Vegana" },
-                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/proteinas-de-carne", "subcategory": "Proteína de Carne" }
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/proteinas-de-carne", "subcategory": "Proteína de Carne" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/caseina", "subcategory": "Caseína" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/otras-proteinas", "subcategory": "Otros Proteinas" },
+                { "url": "https://www.supletech.cl/suplementos-alimenticios/proteinas/blend", "subcategory": "Proteína de Whey" }
             ],
             "Creatinas": [
                 { "url": "https://www.supletech.cl/suplementos-alimenticios/creatinas/micronizada", "subcategory": "Micronizada" },
@@ -223,7 +226,7 @@ class SupleTechScraper(BaseScraper):
                                 final_sub = deterministic_sub
 
                                 # Heuristic Logic for HMB and ZMA
-                                if deterministic_sub == "DETECTAR_HMB_ZMA":
+                                if deterministic_sub == "DETECTAR_HMB_ZMA" or deterministic_sub == "Bienestar General" :
                                     text_to_search = (title + " " + description).lower()
                                     
                                     if "zma" in text_to_search or "zmar" in text_to_search:
@@ -234,10 +237,27 @@ class SupleTechScraper(BaseScraper):
                                         # HMB -> Aminoacidos y BCAA / Otros Aminoacidos y BCAA
                                         final_sub = "Otros Aminoacidos y BCAA"
                                         final_category = "Aminoacidos y BCAA"
+                                    elif "gummies" in text_to_search:
+                                        # Gummies -> Vitaminas y Minerales / Gummies
+                                        final_category = "Vitaminas y Minerales"
+                                        final_sub = "Gummies"
+                                    elif "magnesium" in text_to_search or "magnesio" in text_to_search or "bisglycinate" in text_to_search or "bisglicinato" in text_to_search:
+                                        # Magnesium -> Vitaminas y Minerales / Multivitamínicos
+                                        final_category = "Vitaminas y Minerales"
+                                        final_sub = "Magnesio"
                                     else:
-                                        # Fallback
-                                        final_category = "Aminoacidos y BCAA" # Changed from OTROS to match logic
-                                        final_sub = "Otros Aminoacidos y BCAA"
+                                        if deterministic_sub == "DETECTAR_HMB_ZMA":
+                                            # Fallback (aplica para DETECTAR_HMB_ZMA , Bienestar General tiene su forma deterministica)
+                                            final_category = "Aminoacidos y BCAA" 
+                                            final_sub = "Otros Aminoacidos y BCAA"
+                                        elif deterministic_sub == "Bienestar General":
+                                            # Fallback (aplica para DETECTAR_HMB_ZMA , Bienestar General tiene su forma deterministica , pero como sub no debe existir)
+                                            final_category = "Vitaminas y Minerales" 
+                                            final_sub = "Vitaminas y Minerales" 
+                                        else:
+                                            # Caso que no debe ocurrir sin embargo se deja por si acaso
+                                            final_category = "ERROR" 
+                                            final_sub = "ERROR"
 
                                 yield {
                                     'date': current_date,

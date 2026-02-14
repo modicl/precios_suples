@@ -1,5 +1,11 @@
 # Changelog - Pipeline V2
 
+## [2026-02-14 17:00] - Integracion forma deterministica y heuristica
+### Problemas Detectados
+
+### Soluciones Implementadas
+
+
 ## [2026-02-10 00:30] - Integración Google Gemini (Cloud)
 
 ### Problemas Detectados

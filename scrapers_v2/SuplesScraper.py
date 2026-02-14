@@ -29,7 +29,7 @@ class SuplesScraper(BaseScraper):
                 { "url": "https://www2.suples.cl/collections/magnesio", "subcategory": "Magnesio" },
                 { "url": "https://www2.suples.cl/collections/calcio", "subcategory": "Calcio" },
                 { "url": "https://www2.suples.cl/collections/omega-y-acidos-grasos-1", "subcategory": "Omega 3 y Aceites" },
-                { "url": "https://www2.suples.cl/collections/magnesio-y-minerales-1", "subcategory": "Minerales (Varios)" },
+                { "url": "https://www2.suples.cl/collections/magnesio-y-minerales-1", "subcategory": "Vitaminas y Minerales" },
                 { "url": "https://www2.suples.cl/collections/sistema-digestivo-y-probioticos", "subcategory": "Probióticos" },
                 { "url": "https://www2.suples.cl/collections/colageno-y-articulaciones", "subcategory": "Colágeno" },
                 { "url": "https://www2.suples.cl/collections/antimicrobianos-naturales-y-acido-caprilico", "subcategory": "Otros Vitaminas y Minerales" },
