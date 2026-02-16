@@ -192,7 +192,6 @@ class SuplementosBullChileScraper(BaseScraper):
                                 if local_img: image_url = local_img
 
                             # --- HEURÍSTICAS DE CLASIFICACIÓN ---
-                            # Temp vars to avoid polluting the loop state
                             final_category = main_category
                             final_sub = deterministic_sub
                             

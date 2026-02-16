@@ -192,7 +192,8 @@ class StrongestScraper(BaseScraper):
                             if local_img: image_url = local_img
 
                         # --- HEURÍSTICAS DE CLASIFICACIÓN (Refactored) ---
-                        final_category, final_subcategory = self._classify_product(title, description, main_category, deterministic_subcategory)
+                        enriched_brand = self.enrich_brand(brand, title)
+                        final_category, final_subcategory = self._classify_product(title, description, main_category, deterministic_subcategory, enriched_brand)
 
                         yield {
                             'date': current_date,
@@ -200,7 +201,7 @@ class StrongestScraper(BaseScraper):
                             'category': self.clean_text(final_category),
                             'subcategory': final_subcategory,
                             'product_name': title,
-                            'brand': self.enrich_brand(brand, title),
+                            'brand': enriched_brand,
                             'price': price,
                             'link': link,
                             'rating': "0",
@@ -244,7 +245,7 @@ class StrongestScraper(BaseScraper):
             except Exception as e:
                 print(f"[red]Error procesando categoría {main_category}: {e}[/red]")
 
-    def _classify_product(self, title, description, main_category, deterministic_subcategory):
+    def _classify_product(self, title, description, main_category, deterministic_subcategory, brand):
         """
         Aplica heurísticas para determinar la categoría y subcategoría final.
         """
@@ -289,42 +290,54 @@ class StrongestScraper(BaseScraper):
         elif final_category == "Proteinas":
             # Usamos Título + Descripción
             text_to_search = (title + " " + (description or "")).lower()
-            
-            if "vegan" in text_to_search or "plant" in text_to_search or "vegana" in text_to_search or "vegano" in text_to_search or "plant based" in text_to_search:
-                final_subcategory = "Proteína Vegana"
-            elif "beef" in text_to_search or "carne" in text_to_search or "vacuno" in text_to_search:
-                final_subcategory = "Proteína de Carne"
-            elif "casein" in text_to_search or "caseina" in text_to_search or "micelar" in text_to_search or "micellar" in text_to_search:
-                final_subcategory = "Caseína"
-            
-            # Regla de Pureza: Si tiene concentrado o blend, es Whey Estándar (aunque diga Isolate/Hydro)
-            # EXCEPCIONES: Limpiamos frases benignas donde "mezcla" o "combinación" no se refieren a ingredientes
-            purity_check_text = text_to_search
-            benign_phrases = [
-                "se mezcla", "fácil mezcla", "facil mezcla", "mezclabilidad", "mezcla instantánea", "mezcla instantanea",
-                "combinación perfecta", "perfecta combinación", "excelente combinación",
-                "combinacion perfecta", "perfecta combinacion", "excelente combinacion",
-                "mezclar", "mezclado", "mezclando",
-                "mezcla 1 scoop", "mezcla un scoop", "mezcla 1 porción", "mezcla una porción", "mezcla 1 serv", "mezcla un serv",
-                "mezcla el polvo", "mezcla con agua", "mezcla con leche"
-            ]
-            for phrase in benign_phrases:
-                purity_check_text = purity_check_text.replace(phrase, "")
 
-            if "concentrado" in purity_check_text or "combinación" in purity_check_text or "combinacion" in purity_check_text or "concentrate" in purity_check_text or "blend" in purity_check_text or "mezcla" in purity_check_text:
-                final_subcategory = "Proteína de Whey"
-            elif "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
-                final_subcategory = "Proteína Aislada"
-            elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
-                final_subcategory = "Proteína Hidrolizada"
+            # Logica para productos Dymatize que estan siendo mal clasificados debido al marketing barato de la pagina
+            if brand.lower() == "dymatize":
+                if "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
+                    final_subcategory = "Proteína Aislada"
+                elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
+                    final_subcategory = "Proteína Hidrolizada"
+                else:
+                    final_subcategory = "Proteína de Whey"
+
+            # Si la marca no era Dymatize usamos para los genericos de esta pagina
             else:
-                final_subcategory = "Proteína de Whey"
+                if "vegan" in text_to_search or "plant" in text_to_search or "vegana" in text_to_search or "vegano" in text_to_search or "plant based" in text_to_search:
+                    final_subcategory = "Proteína Vegana"
+                elif "beef" in text_to_search or "carne" in text_to_search or "vacuno" in text_to_search:
+                    final_subcategory = "Proteína de Carne"
+                elif "casein" in text_to_search or "caseina" in text_to_search or "micelar" in text_to_search or "micellar" in text_to_search:
+                    final_subcategory = "Caseína"
+                
+                else:
+                    # Regla de Pureza: Si tiene concentrado o blend, es Whey Estándar (aunque diga Isolate/Hydro)
+                    # EXCEPCIONES: Limpiamos frases benignas donde "mezcla" o "combinación" no se refieren a ingredientes
+                    purity_check_text = text_to_search
+                    benign_phrases = [
+                        "se mezcla", "fácil mezcla", "facil mezcla", "mezclabilidad", "mezcla instantánea", "mezcla instantanea",
+                        "combinación perfecta", "perfecta combinación", "excelente combinación",
+                        "combinacion perfecta", "perfecta combinacion", "excelente combinacion",
+                        "mezclar", "mezclado", "mezclando",
+                        "mezcla 1 scoop", "mezcla un scoop", "mezcla 1 porción", "mezcla una porción", "mezcla 1 serv", "mezcla un serv",
+                        "mezcla el polvo", "mezcla con agua", "mezcla con leche"
+                    ]
+                    for phrase in benign_phrases:
+                        purity_check_text = purity_check_text.replace(phrase, "")
+
+                    if "concentrado" in purity_check_text or "combinación" in purity_check_text or "combinacion" in purity_check_text or "concentrate" in purity_check_text or "blend" in purity_check_text or "mezcla" in purity_check_text:
+                        final_subcategory = "Proteína de Whey"
+                    elif "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
+                        final_subcategory = "Proteína Aislada"
+                    elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
+                        final_subcategory = "Proteína Hidrolizada"
+                    else:
+                        final_subcategory = "Proteína de Whey"
 
         # 3. Heurística para Creatinas
         elif final_category == "Creatinas":
             text_to_search = (title + " " + (description or "")).lower()
 
-            if "monohidrat" in text_to_search or "monohydrate" in text_to_search or "creapure" in text_to_search:
+            if "monohidrat" in text_to_search or "monohydrate" in text_to_search or "creapure" in text_to_search: # Siempre por encima de las demas
                 final_subcategory = "Creatina Monohidrato"
             elif "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search or "hidrocloruro" in text_to_search:
                 final_subcategory = "Clorhidrato"

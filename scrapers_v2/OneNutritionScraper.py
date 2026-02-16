@@ -9,77 +9,22 @@ class OneNutritionScraper(BaseScraper):
         
         category_urls = {
             "Proteinas": [
-                {"url": "https://onenutrition.cl/tienda/whey-protein", "subcategory": "Whey Protein"},
-                {"url": "https://onenutrition.cl/tienda/isolate-aislada", "subcategory": "Isolate Aislada"},
-                {"url": "https://onenutrition.cl/tienda/sin-sabor-cocinar", "subcategory": "Sin Sabor Cocinar"},
-                {"url": "https://onenutrition.cl/tienda/vegana", "subcategory": "Vegana"},
-                {"url": "https://onenutrition.cl/tienda/sin-lactosa", "subcategory": "Sin Lactosa"},
-                {"url": "https://onenutrition.cl/tienda/carne", "subcategory": "Carne"},
-                {"url": "https://onenutrition.cl/tienda/caseina-", "subcategory": "Caseina"},
-                {"url": "https://onenutrition.cl/tienda/matriz-de-proteina-", "subcategory": "Matriz De Proteina"},
-                {"url": "https://onenutrition.cl/tienda/soya", "subcategory": "Soya"},
-                {"url": "https://onenutrition.cl/tienda/liquidas", "subcategory": "Liquidas"}
+                {"url": "https://onenutrition.cl/tienda/proteinas", "subcategory": "Proteína de Whey"}
             ],
             "Creatinas": [
-                {"url": "https://onenutrition.cl/tienda/sello-creapure", "subcategory": "Sello Creapure"},
-                {"url": "https://onenutrition.cl/tienda/creatinas-", "subcategory": "Creatinas"}
+                {"url": "https://onenutrition.cl/tienda/creatinas", "subcategory": "Creatina Monohidrato"}
             ],
             "Vitaminas y Minerales": [
-                {"url": "https://onenutrition.cl/tienda/vitaminas-a-z", "subcategory": "Vitaminas A Z"},
-                {"url": "https://onenutrition.cl/tienda/omega-fish-oil", "subcategory": "Omega Fish Oil"},
-                {"url": "https://onenutrition.cl/tienda/ashwagandha", "subcategory": "Ashwagandha"},
-                {"url": "https://onenutrition.cl/tienda/dhea", "subcategory": "Dhea"},
-                {"url": "https://onenutrition.cl/tienda/buen-dormir", "subcategory": "Buen Dormir"},
-                {"url": "https://onenutrition.cl/tienda/magnesio", "subcategory": "Magnesio"},
-                {"url": "https://onenutrition.cl/tienda/enzimas-digestivas", "subcategory": "Enzimas Digestivas"},
-                {"url": "https://onenutrition.cl/tienda/oregano-oil", "subcategory": "Oregano Oil"},
-                {"url": "https://onenutrition.cl/tienda/zma-zmb", "subcategory": "Zma Zmb"},
-                {"url": "https://onenutrition.cl/tienda/salud-articular", "subcategory": "Salud Articular"},
-                {"url": "https://onenutrition.cl/tienda/resveratrol-nadh", "subcategory": "Resveratrol Nadh"},
-                {"url": "https://onenutrition.cl/tienda/pro-hormonales", "subcategory": "Pro Hormonales"},
-                {"url": "https://onenutrition.cl/tienda/probiotico-prebiotico", "subcategory": "Probiotico Prebiotico"},
-                {"url": "https://onenutrition.cl/tienda/gaba-5-htp", "subcategory": "Gaba 5 Htp"},
-                {"url": "https://onenutrition.cl/tienda/maca-tribulus", "subcategory": "Maca Tribulus"},
-                {"url": "https://onenutrition.cl/tienda/melena-de-leon", "subcategory": "Melena De Leon"},
-                {"url": "https://onenutrition.cl/tienda/acido-alfa-lipoico", "subcategory": "Acido Alfa Lipoico"},
-                {"url": "https://onenutrition.cl/tienda/nac", "subcategory": "Nac"},
-                {"url": "https://onenutrition.cl/tienda/mct-oil", "subcategory": "Mct Oil"},
-                {"url": "https://onenutrition.cl/tienda/hongos-funcionales", "subcategory": "Hongos Funcionales"},
-                {"url": "https://onenutrition.cl/tienda/colageno-biotina", "subcategory": "Colageno Biotina"},
-                {"url": "https://onenutrition.cl/tienda/lisina", "subcategory": "Lisina"},
-                {"url": "https://onenutrition.cl/tienda/gummies", "subcategory": "Gummies"},
-                {"url": "https://onenutrition.cl/tienda/calcio-magnesio-zinc", "subcategory": "Calcio Magnesio Zinc"},
-                {"url": "https://onenutrition.cl/tienda/vinagre-de-manzana", "subcategory": "Vinagre De Manzana"},
-                {"url": "https://onenutrition.cl/tienda/potasio-", "subcategory": "Potasio"},
-                {"url": "https://onenutrition.cl/tienda/astaxantina", "subcategory": "Astaxantina"},
-                {"url": "https://onenutrition.cl/tienda/hierro", "subcategory": "Hierro"},
-                {"url": "https://onenutrition.cl/tienda/prostata", "subcategory": "Prostata"},
-                {"url": "https://onenutrition.cl/tienda/inositol", "subcategory": "Inositol"},
-                {"url": "https://onenutrition.cl/tienda/acido-folico", "subcategory": "Acido Folico"},
-                {"url": "https://onenutrition.cl/tienda/boron", "subcategory": "Boron"},
-                {"url": "https://onenutrition.cl/tienda/silimarina", "subcategory": "Silimarina"},
-                {"url": "https://onenutrition.cl/tienda/selenio", "subcategory": "Selenio"},
-                {"url": "https://onenutrition.cl/tienda/zinc", "subcategory": "Zinc"},
-                {"url": "https://onenutrition.cl/tienda/krill-oil", "subcategory": "Krill Oil"}
+                {"url": "https://onenutrition.cl/tienda/vitaminas-salud", "subcategory": "Vitaminas y Minerales"}
             ],
             "Pre Entrenos": [
-                {"url": "https://onenutrition.cl/tienda/pre-entrenamientos", "subcategory": "Pre Entrenamientos"},
-                {"url": "https://onenutrition.cl/tienda/cafeinas", "subcategory": "Cafeinas"},
-                {"url": "https://onenutrition.cl/tienda/bebidas-energeticas", "subcategory": "Bebidas Energeticas"}
+                {"url": "https://onenutrition.cl/tienda/energia-resistencia", "subcategory": "Pre Entreno"}
             ],
             "Ganadores de Peso": [
-                {"url": "https://onenutrition.cl/tienda/ganadores-de-masa-", "subcategory": "Ganadores De Masa"}
+                {"url": "https://onenutrition.cl/tienda/ganadores-de-masa-", "subcategory": "Ganadores De Peso"}
             ],
             "Aminoacidos y BCAA": [
-                {"url": "https://onenutrition.cl/tienda/citrulina", "subcategory": "Citrulina"},
-                {"url": "https://onenutrition.cl/tienda/aminoacidos", "subcategory": "Aminoacidos"},
-                {"url": "https://onenutrition.cl/tienda/eaa", "subcategory": "Eaa"},
-                {"url": "https://onenutrition.cl/tienda/arginina", "subcategory": "Arginina"},
-                {"url": "https://onenutrition.cl/tienda/bcaa", "subcategory": "Bcaa"},
-                {"url": "https://onenutrition.cl/tienda/glutaminas", "subcategory": "Glutaminas"},
-                {"url": "https://onenutrition.cl/tienda/daa", "subcategory": "Daa"},
-                {"url": "https://onenutrition.cl/tienda/hmb", "subcategory": "Hmb"},
-                {"url": "https://onenutrition.cl/tienda/taurina", "subcategory": "Taurina"}
+                {"url": "https://onenutrition.cl/tienda/aminoacidos", "subcategory": "Otros Aminoacidos y BCAA"},
             ],
             "Perdida de Grasa": [
                 {"url": "https://onenutrition.cl/tienda/dieta-quemadores", "subcategory": "Dieta Quemadores"}
@@ -103,6 +48,184 @@ class OneNutritionScraper(BaseScraper):
         }
         
         super().__init__(base_url, headless, category_urls, selectors, site_name="OneNutrition")
+
+    def _classify_product(self, title, description, main_category, deterministic_subcategory, brand):
+        """
+        Aplica heurísticas para determinar la categoría y subcategoría final.
+        Adapta lógica de StrongestScraper pero focalizada en 'CATEGORIZAR_PROTEINA'.
+        """
+        final_category = main_category
+        final_subcategory = deterministic_subcategory
+        
+        # 1. Packs (Global Check - Good practice to have)
+        title_lower = title.lower()
+
+        if "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower or "+2" in title_lower:
+            final_category = "Packs"
+            final_subcategory = "Packs"
+            return final_category, final_subcategory
+
+        # 2. Heurística para Proteínas
+        if final_category == "Proteinas":
+            # Usamos Título + Descripción
+            text_to_search = (title + " " + (description or "")).lower()
+
+            # Estructura idéntica a StrongestScraper (con soporte para Dymatize y Purity Rule sanitizada)
+            
+            # Logica para productos Dymatize
+            if brand.lower() == "dymatize":
+                if "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
+                    final_subcategory = "Proteína Aislada"
+                elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
+                    final_subcategory = "Proteína Hidrolizada"
+                else:
+                    final_subcategory = "Proteína de Whey"
+
+            # Si la marca no era Dymatize usamos para los genericos
+            else:
+                if "vegan" in text_to_search or "plant" in text_to_search or "vegana" in text_to_search or "vegano" in text_to_search or "plant based" in text_to_search:
+                    final_subcategory = "Proteína Vegana"
+                elif "beef" in text_to_search or "carne" in text_to_search or "vacuno" in text_to_search:
+                    final_subcategory = "Proteína de Carne"
+                elif "casein" in text_to_search or "caseina" in text_to_search or "micelar" in text_to_search or "micellar" in text_to_search:
+                    final_subcategory = "Caseína"
+                
+                else:
+                    # Regla de Pureza: Si tiene concentrado o blend, es Whey Estándar (aunque diga Isolate/Hydro)
+                    # EXCEPCIONES: Limpiamos frases benignas
+                    purity_check_text = text_to_search
+                    benign_phrases = [
+                        "se mezcla", "fácil mezcla", "facil mezcla", "mezclabilidad", "mezcla instantánea", "mezcla instantanea",
+                        "combinación perfecta", "perfecta combinación", "excelente combinación",
+                        "combinacion perfecta", "perfecta combinacion", "excelente combinacion",
+                        "mezclar", "mezclado", "mezclando",
+                        "mezcla 1 scoop", "mezcla un scoop", "mezcla 1 porción", "mezcla una porción", "mezcla 1 serv", "mezcla un serv",
+                        "mezcla el polvo", "mezcla con agua", "mezcla con leche"
+                    ]
+                    for phrase in benign_phrases:
+                        purity_check_text = purity_check_text.replace(phrase, "")
+
+                    if "concentrado" in purity_check_text or "combinación" in purity_check_text or "combinacion" in purity_check_text or "concentrate" in purity_check_text or "blend" in purity_check_text or "mezcla" in purity_check_text:
+                        final_subcategory = "Proteína de Whey"
+                    elif "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
+                        final_subcategory = "Proteína Aislada"
+                    elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
+                        final_subcategory = "Proteína Hidrolizada"
+                    else:
+                        final_subcategory = "Proteína de Whey"
+
+            return final_category, final_subcategory
+            return final_category, final_subcategory
+
+        # 3. Heurística para Creatinas
+        elif final_category == "Creatinas":
+            text_to_search = (title + " " + (description or "")).lower()
+            
+            if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search or "hidrocloruro" in text_to_search:
+                final_subcategory = "Creatina HCL"
+            elif "malato" in text_to_search or "magnesio" in text_to_search or "magnapower" in text_to_search:
+                final_subcategory = "Malato y Magnesio"
+            elif "nitrato" in text_to_search or "nitrate" in text_to_search:
+                final_subcategory = "Nitrato"
+            elif "alkalyn" in text_to_search or "alcalina" in text_to_search:
+                final_subcategory = "Otros Creatinas"
+            elif "creapure" in text_to_search:
+                 final_subcategory = "Sello Creapure"
+            elif "monohidrat" in text_to_search or "monohydrate" in text_to_search:
+                final_subcategory = "Creatina Monohidrato"
+            elif "micronizad" in text_to_search or "micronized" in text_to_search:
+                final_subcategory = "Micronizada"
+            else:
+                final_subcategory = "Otros Creatinas"
+
+            return final_category, final_subcategory
+
+        # 4. Heurística para Vitaminas y Minerales
+        elif final_category == "Vitaminas y Minerales":
+            text_to_search = title.lower()
+
+            # Keywords mapping
+            # Order matters: Specific blends > Major Minerals > Major Vitamins > Formats
+            
+            multi_keywords = ["multivitamin", "multi vitamin", "multivitamínico", "multivitamínicos", "daily pack", "animal pak", "opti-men", "opti-women", "vita stack", "zmar"]
+            magnesio_keywords = ["magne", "magnesio", "magnesium", "magnesio d3"]
+            zinc_keywords = ["zinc"]
+            omega_keywords = ["omega", "fish oil", "krill", "cla", "linoleic", "aceite de"]
+            colageno_keywords = ["colageno", "collagen"]
+            calcio_keywords = ["calcio", "calcium"]
+            probioticos_keywords = ["probiotic", "probiotico", "enzym", "enzim", "digest"]
+            complejob_keywords = ["b-complex", "complejo b", "vitamin b", "vitamina b", "b12", "b6", "biotin", "biotina"]
+            vitc_keywords = ["vitamin c", "vitamina c", "ascorbic", "ascorbico"]
+            vitd_keywords = ["vitamin d", "vitamina d", "d3"]
+            vite_keywords = ["vitamin e", "vitamina e"]
+            antiox_keywords = ["coq10", "q10", "antioxidant", "antioxidante", "resveratrol", "ala ", "alpha lipoic", "turmeric", "curcuma", "astaxanthin"]
+            bienestar_keywords = ["wellness", "bienestar", "sleep", "dormir", "relax", "stress", "liver", "hepato", "joint", "articulacion", "melatonin", "melatonina", "5-htp", "ashwagandha", "maca", "tryptophan"]
+            gummies_keywords = ["gummi", "gummy", "gomita", "gummies"]
+
+            if any(k in text_to_search for k in multi_keywords):
+                 final_subcategory = "Multivitamínicos"
+            elif any(k in text_to_search for k in magnesio_keywords):
+                 final_subcategory = "Magnesio"
+            elif any(k in text_to_search for k in zinc_keywords):
+                 final_subcategory = "Otros Vitaminas y Minerales"
+            elif any(k in text_to_search for k in omega_keywords):
+                 final_subcategory = "Omega 3 y Aceites"
+            elif any(k in text_to_search for k in colageno_keywords):
+                 final_subcategory = "Colágeno"
+            elif any(k in text_to_search for k in calcio_keywords):
+                 final_subcategory = "Calcio"
+            elif any(k in text_to_search for k in probioticos_keywords):
+                 final_subcategory = "Probióticos"
+            elif any(k in text_to_search for k in complejob_keywords):
+                 final_subcategory = "Vitamina B / Complejo B"
+            elif any(k in text_to_search for k in vitc_keywords):
+                 final_subcategory = "Vitamina C"
+            elif any(k in text_to_search for k in vitd_keywords):
+                 final_subcategory = "Vitamina D"
+            elif any(k in text_to_search for k in vite_keywords):
+                 final_subcategory = "Vitamina E"
+            elif any(k in text_to_search for k in antiox_keywords):
+                 final_subcategory = "Antioxidantes"
+            elif any(k in text_to_search for k in bienestar_keywords):
+                 final_subcategory = "Bienestar General"
+            elif any(k in text_to_search for k in gummies_keywords):
+                 final_subcategory = "Gummies"
+            else:
+                 final_subcategory = "Otros Vitaminas y Minerales"
+
+            return final_category, final_subcategory
+
+        # 5. Heurística para Aminoácidos y BCAA
+        elif final_category == "Aminoacidos y BCAA":
+            text_to_search = title.lower() # Solo titulo como en Vitaminas para evitar falsos positivos
+            
+            zma_keywords = ["zma", "zmar"]
+            minerales_keywords = ["magnesio", "zinc", "magne"]
+            eaas_keywords = ["eaa", "essential amino", "esenciales", "neaa", "full spectrum"]
+            bcaa_keywords = ["bcaa", "branched", "ramificados"]
+            glutamina_keywords = ["glutamin"]
+            leucina_keywords = ["leucin", "leucine"]
+            aminos_keywords = ["amino", "arginin", "citrulin", "beta ala", "taurin", "carnitin", "tirosin", "tyrosin", "lisin", "lysin", "triptop", "metionin", "methionin", "histidin", "treonin", "threonin", "fenilalan", "phenylalan"]
+
+            if any(k in text_to_search for k in zma_keywords):
+                 final_category = "Vitaminas y Minerales"
+                 final_subcategory = "Multivitamínicos"
+            elif any(k in text_to_search for k in minerales_keywords):
+                 final_subcategory = "Minerales (Magnesio/ZMA)"
+            elif any(k in text_to_search for k in eaas_keywords):
+                 final_subcategory = "EAAs (Esenciales)"
+            elif any(k in text_to_search for k in bcaa_keywords):
+                 final_subcategory = "BCAAs"
+            elif any(k in text_to_search for k in glutamina_keywords):
+                 final_subcategory = "Glutamina"
+            elif any(k in text_to_search for k in leucina_keywords):
+                 final_subcategory = "Leucina"
+            elif any(k in text_to_search for k in aminos_keywords):
+                 final_subcategory = "Aminoácidos"
+            else:
+                 final_subcategory = "Otros Aminoacidos y BCAA"
+
+            return final_category, final_subcategory
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en OneNutrition...[/green]")
@@ -212,7 +335,16 @@ class OneNutritionScraper(BaseScraper):
                                              sku = sku_el.inner_text().strip()
                                     
                                     # 3. Description
-                                    desc_el = detail_page.locator('#description, .product-description').first
+                                    try:
+                                        detail_page.wait_for_selector('#description', timeout=5000)
+                                    except:
+                                        pass 
+
+                                    # Prioritize specific class strictly inside #description to avoid carousels/reviews
+                                    desc_el = detail_page.locator('#description .product-description').first
+                                    if desc_el.count() == 0:
+                                         desc_el = detail_page.locator('#description').first
+                                         
                                     if desc_el.count() > 0:
                                         description = desc_el.inner_text().strip()
                                         
@@ -224,16 +356,13 @@ class OneNutritionScraper(BaseScraper):
                                     except: pass
 
                             # New Categorization Logic
-                            final_subcategory = deterministic_subcategory
-                            # Optional: Use classifier to refine if needed, or stick to deterministic
-                            # cat_info = self.categorizer.classify_product(title, deterministic_subcategory)
-                            # if cat_info:
-                            #    final_subcategory = cat_info['nombre_subcategoria']
+                            # Use Heuristic specifically for "CATEGORIZAR_PROTEINA" as requested
+                            final_category, final_subcategory = self._classify_product(title, description, main_category, deterministic_subcategory, brand)
 
                             yield {
                                 'date': current_date,
                                 'site_name': self.site_name,
-                                'category': self.clean_text(main_category),
+                                'category': self.clean_text(final_category),
                                 'subcategory': final_subcategory,
                                 'product_name': title,
                                 'brand': self.enrich_brand(self.clean_text(brand), title),

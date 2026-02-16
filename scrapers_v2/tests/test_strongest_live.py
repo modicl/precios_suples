@@ -23,7 +23,7 @@ def test_live_classification():
         
         # We manually iterate over the generator
         count = 0
-        limit = 10 # Check first 10 products
+        limit = 40 # Check first 10 products
         
         print(f"[blue]Scrapeando primeros {limit} productos...[/blue]")
         
