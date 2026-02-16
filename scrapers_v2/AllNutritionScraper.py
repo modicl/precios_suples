@@ -9,59 +9,59 @@ class AllNutritionScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
         
         # Categorias y sus URLs
-        category_urls = {
+        self.category_urls = {
             "Proteinas": [
-                "https://allnutrition.cl/collections/whey-protein",
-                "https://allnutrition.cl/collections/proteinas-isoladas",
-                "https://allnutrition.cl/collections/proteinas-de-carne",
-                "https://allnutrition.cl/collections/proteinas-liquidas",
-                "https://allnutrition.cl/collections/proteinas-veganas",
-                "https://allnutrition.cl/collections/proteinas-vegetarianas",
-                "https://allnutrition.cl/collections/barras-proteicas",
-                "https://allnutrition.cl/collections/snack-proteico"
+                {"url": "https://allnutrition.cl/collections/whey-protein", "subcategory": "Whey Protein"},
+                {"url": "https://allnutrition.cl/collections/proteinas-isoladas", "subcategory": "Proteinas Isoladas"},
+                {"url": "https://allnutrition.cl/collections/proteinas-de-carne", "subcategory": "Proteinas De Carne"},
+                {"url": "https://allnutrition.cl/collections/proteinas-liquidas", "subcategory": "Proteinas Liquidas"},
+                {"url": "https://allnutrition.cl/collections/proteinas-veganas", "subcategory": "Proteinas Veganas"},
+                {"url": "https://allnutrition.cl/collections/proteinas-vegetarianas", "subcategory": "Proteinas Vegetarianas"},
+                {"url": "https://allnutrition.cl/collections/barras-proteicas", "subcategory": "Barras Proteicas"},
+                {"url": "https://allnutrition.cl/collections/snack-proteico", "subcategory": "Snack Proteico"}
             ],
             "Creatinas": [
-                "https://allnutrition.cl/collections/creatinas"
+                {"url": "https://allnutrition.cl/collections/creatinas", "subcategory": "Creatinas"}
             ],
             "Vitaminas y Minerales": [
-                "https://allnutrition.cl/collections/multivitaminicos-y-energia",
-                "https://allnutrition.cl/collections/b-complex",
-                "https://allnutrition.cl/collections/vitamina-c",
-                "https://allnutrition.cl/collections/vitamina-d",
-                "https://allnutrition.cl/collections/vitamina-e",
-                "https://allnutrition.cl/collections/magnesio",
-                "https://allnutrition.cl/collections/acido-folico",
-                "https://allnutrition.cl/collections/coenzima-q10",
-                "https://allnutrition.cl/collections/omega-3",
-                "https://allnutrition.cl/collections/super-alimentos",
-                "https://allnutrition.cl/collections/arginina"
+                {"url": "https://allnutrition.cl/collections/multivitaminicos-y-energia", "subcategory": "Multivitaminicos Y Energia"},
+                {"url": "https://allnutrition.cl/collections/b-complex", "subcategory": "B Complex"},
+                {"url": "https://allnutrition.cl/collections/vitamina-c", "subcategory": "Vitamina C"},
+                {"url": "https://allnutrition.cl/collections/vitamina-d", "subcategory": "Vitamina D"},
+                {"url": "https://allnutrition.cl/collections/vitamina-e", "subcategory": "Vitamina E"},
+                {"url": "https://allnutrition.cl/collections/magnesio", "subcategory": "Magnesio"},
+                {"url": "https://allnutrition.cl/collections/acido-folico", "subcategory": "Acido Folico"},
+                {"url": "https://allnutrition.cl/collections/coenzima-q10", "subcategory": "Coenzima Q10"},
+                {"url": "https://allnutrition.cl/collections/omega-3", "subcategory": "Omega 3"},
+                {"url": "https://allnutrition.cl/collections/super-alimentos", "subcategory": "Super Alimentos"},
+                {"url": "https://allnutrition.cl/collections/arginina", "subcategory": "Arginina"}
             ],
             "Pre Entrenos": [
-                "https://allnutrition.cl/collections/pre-workout",
-                "https://allnutrition.cl/collections/guarana-y-cafeina",
-                "https://allnutrition.cl/collections/carbohidratos"
+                {"url": "https://allnutrition.cl/collections/pre-workout", "subcategory": "Pre Workout"},
+                {"url": "https://allnutrition.cl/collections/guarana-y-cafeina", "subcategory": "Guarana Y Cafeina"},
+                {"url": "https://allnutrition.cl/collections/carbohidratos", "subcategory": "Carbohidratos"}
             ],
             "Ganadores de Peso": [
-                "https://allnutrition.cl/collections/ganadores-de-peso"
+                {"url": "https://allnutrition.cl/collections/ganadores-de-peso", "subcategory": "Ganadores De Peso"}
             ],
             "Aminoacidos y BCAA": [
-                "https://allnutrition.cl/collections/bcaa-1",
-                "https://allnutrition.cl/collections/aminoacidos"
+                {"url": "https://allnutrition.cl/collections/bcaa-1", "subcategory": "Bcaa 1"},
+                {"url": "https://allnutrition.cl/collections/aminoacidos", "subcategory": "Aminoacidos"}
             ],
             "Glutamina": [
-                "https://allnutrition.cl/collections/glutaminas"
+                {"url": "https://allnutrition.cl/collections/glutaminas", "subcategory": "Glutaminas"}
             ],
             "Perdida de Grasa": [
-                "https://allnutrition.cl/collections/quemadores-de-grasa"
+                {"url": "https://allnutrition.cl/collections/quemadores-de-grasa", "subcategory": "Quemadores De Grasa"}
             ],
             "Post Entreno": [
-                "https://allnutrition.cl/collections/carbohidratos"
+                {"url": "https://allnutrition.cl/collections/carbohidratos", "subcategory": "Carbohidratos"}
             ],
             "Snacks y Comida": [
-                "https://allnutrition.cl/collections/barras-proteicas",
-                "https://allnutrition.cl/collections/snack-proteico",
-                "https://allnutrition.cl/collections/snacks-dulces",
-                "https://allnutrition.cl/collections/snacks-salados"
+                {"url": "https://allnutrition.cl/collections/barras-proteicas", "subcategory": "Barras Proteicas"},
+                {"url": "https://allnutrition.cl/collections/snack-proteico", "subcategory": "Snack Proteico"},
+                {"url": "https://allnutrition.cl/collections/snacks-dulces", "subcategory": "Snacks Dulces"},
+                {"url": "https://allnutrition.cl/collections/snacks-salados", "subcategory": "Snacks Salados"}
             ]
         }
 
@@ -87,11 +87,11 @@ class AllNutritionScraper(BaseScraper):
         
         context = page.context
         
-        for main_category, urls in self.category_urls.items():
-            for url in urls:
-                subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
-                subcategory_name = self.clean_text(subcategory_name)
-                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {subcategory_name} ({url})")
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                url = item['url']
+                deterministic_subcategory = item['subcategory']
+                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {deterministic_subcategory} ({url})")
 
                 
                 try:
@@ -206,10 +206,10 @@ class AllNutritionScraper(BaseScraper):
                                     except: pass
                             
                             # New Categorization Logic
-                            final_subcategory = subcategory_name
-                            cat_info = self.categorizer.classify_product(title, subcategory_name)
-                            if cat_info:
-                                final_subcategory = cat_info['nombre_subcategoria']
+                            final_subcategory = deterministic_subcategory
+                            # cat_info = self.categorizer.classify_product(title, deterministic_subcategory)
+                            # if cat_info:
+                            #    final_subcategory = cat_info['nombre_subcategoria']
 
                             yield {
                                 'date': current_date,

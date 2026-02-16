@@ -10,21 +10,26 @@ class ChileSuplementosScraperPart2(BaseScraper):
     def __init__(self, base_url="https://www.chilesuplementos.cl", headless=False):
 
         # Categorias y sus URLs (Parte 2: Resto de categorías)
-        category_urls = {
+        self.category_urls = {
             "Aminoacidos y BCAA": [
-                "https://www.chilesuplementos.cl/categoria/productos/aminoacidos-y-bcaa/"
-            ],
-            "Glutamina": [
-                "https://www.chilesuplementos.cl/categoria/productos/glutamina/"
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/aminoacidos-y-bcaa/", "subcategory": "Aminoacidos Y Bcaa"}
             ],
             "Perdida de Grasa": [
-                "https://www.chilesuplementos.cl/categoria/perdida-de-grasa/"
-            ],
-            "Post Entreno": [
-                "https://www.chilesuplementos.cl/categoria/productos/post-entreno/"
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/quemadores-de-grasa/", "subcategory": "Quemadores De Grasa"}
             ],
             "Snacks y Comida": [
-                "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/"
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/barras-de-proteina/", "subcategory": "Barras De Proteina"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/alimentos-y-snacks/chips-proteicos-y-otros/", "subcategory": "Chips Proteicos Y Otros"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/mantequilla-de-mani/", "subcategory": "Mantequilla De Mani"}
+            ],
+            "Accesorios": [
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/shaker-y-accesorios/", "subcategory": "Shaker Y Accesorios"}
+            ],
+            "Ofertas": [
+                {"url": "https://www.chilesuplementos.cl/categoria/ofertas/", "subcategory": "Ofertas"}
+            ],
+            "Packs": [
+                {"url": "https://www.chilesuplementos.cl/categoria/packs/", "subcategory": "Packs"}
             ]
         }
         
@@ -46,15 +51,15 @@ class ChileSuplementosScraperPart2(BaseScraper):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en ChileSuplementos (Parte 2)...[/green]")
         context = page.context
         
-        for main_category, urls in self.category_urls.items():
-            for url in urls:
-                subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
-                subcategory_name = self.clean_text(subcategory_name)
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                url = item['url']
+                deterministic_subcategory = item['subcategory']
                 
-                if not subcategory_name or not subcategory_name.strip():
-                    subcategory_name = "N/D"
+                if not deterministic_subcategory or not deterministic_subcategory.strip():
+                    deterministic_subcategory = "N/D"
 
-                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {subcategory_name} ({url})")
+                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {deterministic_subcategory} ({url})")
 
                 
                 try:
@@ -271,10 +276,10 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                         image_url = local_img
 
                                 # New Categorization Logic
-                                final_subcategory = subcategory_name
-                                cat_info = self.categorizer.classify_product(title, subcategory_name)
-                                if cat_info:
-                                    final_subcategory = cat_info['nombre_subcategoria']
+                                final_subcategory = deterministic_subcategory
+                                # cat_info = self.categorizer.classify_product(title, deterministic_subcategory)
+                                # if cat_info:
+                                #    final_subcategory = cat_info['nombre_subcategoria']
 
                                 yield {
                                     'date': current_date,

@@ -239,10 +239,8 @@ class SuplementosBullChileScraper(BaseScraper):
 
                             # 2. Heurística para Proteínas (Ya que la categoría es genérica)
                             elif final_category == "Proteinas":
-                                # Usamos SOLO el título para clasificación de proteínas
-                                # Esto evita que palabras en la descripción (ej. "contiene aislado", "libre de carne")
-                                # causen falsos positivos.
-                                text_to_search = title.lower()
+                                # Usamos Título + Descripción para mejor contexto
+                                text_to_search = (title + " " + description).lower()
                                 
                                 # Palabras clave expandidas (Inglés y Español)
                                 if "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:

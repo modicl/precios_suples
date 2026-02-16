@@ -7,20 +7,19 @@ import time
 
 class DecathlonScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
-        category_urls = {
+        self.category_urls = {
             "Proteinas": [
-                "https://www.decathlon.cl/5270-proteinas"
+                {"url": "https://www.decathlon.cl/5270-proteinas", "subcategory": "Proteinas"}
             ],
             "Snacks y Comida": [
-                "https://www.decathlon.cl/5271-barritas-de-proteina",
-                "https://www.decathlon.cl/5339-gel-energetico"
+                {"url": "https://www.decathlon.cl/5271-barritas-de-proteina", "subcategory": "Barritas De Proteina"},
+                {"url": "https://www.decathlon.cl/5339-gel-energetico", "subcategory": "Gel Energetico"}
             ],
             "Creatinas": [
-                "https://www.decathlon.cl/5341-creatina"
+                {"url": "https://www.decathlon.cl/5341-creatina", "subcategory": "Creatina"}
             ],
-
             "Isotonicas": [
-                "https://www.decathlon.cl/5813-bebidas-isotonicas"
+                {"url": "https://www.decathlon.cl/5813-bebidas-isotonicas", "subcategory": "Bebidas Isotonicas"}
             ]
         }
 
@@ -36,9 +35,11 @@ class DecathlonScraper(BaseScraper):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías en Decathlon (Modo JSON)...[/green]")
         context = page.context
 
-        for main_category, urls in self.category_urls.items():
-            for base_category_url in urls:
-                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} ({base_category_url})")
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                base_category_url = item['url']
+                deterministic_subcategory = item['subcategory']
+                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {deterministic_subcategory} ({base_category_url})")
                 
                 try:
                     page_number = 1
@@ -113,10 +114,10 @@ class DecathlonScraper(BaseScraper):
                                     description = item.get('teaser', '')
                                 
                                 # New Categorization Logic
-                                final_subcategory = main_category
-                                cat_info = self.categorizer.classify_product(title, main_category)
-                                if cat_info:
-                                    final_subcategory = cat_info['nombre_subcategoria']
+                                final_subcategory = deterministic_subcategory
+                                # cat_info = self.categorizer.classify_product(title, main_category)
+                                # if cat_info:
+                                #    final_subcategory = cat_info['nombre_subcategoria']
 
                                 yield {
                                     'date': current_date,

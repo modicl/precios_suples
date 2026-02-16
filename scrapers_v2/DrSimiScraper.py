@@ -12,15 +12,16 @@ import os
 class DrSimiScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
         # Specific category URLs provided by the user
-        self.categories_config = {
-            "Pronutrition": "https://www.drsimi.cl/pronutrition",
-            "Colageno": "https://www.drsimi.cl/colageno?map=specificationFilter_41",
-            "Aceites y Omegas": "https://www.drsimi.cl/suplementos-y-alimentos/aceites-y-omegas",
-            "Alimentos": "https://www.drsimi.cl/suplementos-y-alimentos/alimentos",
-            "Superalimento": "https://www.drsimi.cl/suplementos-y-alimentos/superalimento",
-            "Vitaminas y Minerales": "https://www.drsimi.cl/suplementos-y-alimentos/vitaminas-y-minerales",
-            "Bebidas Nutricionales": "https://www.drsimi.cl/suplementos-y-alimentos/bebidas-nutricionales",
-            "Deportistas": "https://www.drsimi.cl/suplementos-y-alimentos/deportistas"
+        # Specific category URLs provided by the user
+        self.category_urls = {
+            "Pronutrition": [{"url": "https://www.drsimi.cl/pronutrition", "subcategory": "Pronutrition"}],
+            "Colageno": [{"url": "https://www.drsimi.cl/colageno?map=specificationFilter_41", "subcategory": "Colageno"}],
+            "Aceites y Omegas": [{"url": "https://www.drsimi.cl/suplementos-y-alimentos/aceites-y-omegas", "subcategory": "Aceites Y Omegas"}],
+            "Alimentos": [{"url": "https://www.drsimi.cl/suplementos-y-alimentos/alimentos", "subcategory": "Alimentos"}],
+            "Superalimento": [{"url": "https://www.drsimi.cl/suplementos-y-alimentos/superalimento", "subcategory": "Superalimento"}],
+            "Vitaminas y Minerales": [{"url": "https://www.drsimi.cl/suplementos-y-alimentos/vitaminas-y-minerales", "subcategory": "Vitaminas Y Minerales"}],
+            "Bebidas Nutricionales": [{"url": "https://www.drsimi.cl/suplementos-y-alimentos/bebidas-nutricionales", "subcategory": "Bebidas Nutricionales"}],
+            "Deportistas": [{"url": "https://www.drsimi.cl/suplementos-y-alimentos/deportistas", "subcategory": "Deportistas"}]
         }
 
         # Selectores VTEX identification
@@ -36,15 +37,18 @@ class DrSimiScraper(BaseScraper):
             "description": ".vtex-store-components-3-x-productDescriptionText"
         }
 
-        super().__init__(base_url, headless, category_urls=list(self.categories_config.values()), selectors=selectors, site_name="Dr Simi")
+        super().__init__(base_url, headless, category_urls=self.category_urls, selectors=selectors, site_name="Dr Simi")
 
     def extract_process(self, page):
-        print(f"[green]Iniciando scraping de {len(self.categories_config)} categorías en Dr. Simi...[/green]")
+        print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías en Dr. Simi...[/green]")
         
         batch_buffer = []
 
-        for category_name, base_category_url in self.categories_config.items():
-            print(f"\n[bold blue]Procesando categoría:[/bold blue] {category_name}")
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                base_category_url = item['url']
+                deterministic_subcategory = item['subcategory']
+                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {deterministic_subcategory}")
             
             page_num = 1
             has_more = True
@@ -110,7 +114,7 @@ class DrSimiScraper(BaseScraper):
                         # - Otherwise, Dr Simi doesn't show brand in list. 
                         # - We could check the name for "Simi" or just "Dr Simi" as default or "N/D"
                         brand = "N/D"
-                        if category_name == "Pronutrition":
+                        if main_category == "Pronutrition":
                             brand = "Pronutrition"
                         elif "simi" in name.lower():
                             brand = "Dr Simi"
@@ -174,15 +178,15 @@ class DrSimiScraper(BaseScraper):
                         current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                         # New Categorization Logic
-                        final_subcategory = category_name
-                        cat_info = self.categorizer.classify_product(name, category_name)
-                        if cat_info:
-                            final_subcategory = cat_info['nombre_subcategoria']
+                        final_subcategory = deterministic_subcategory
+                        # cat_info = self.categorizer.classify_product(name, deterministic_subcategory)
+                        # if cat_info:
+                        #    final_subcategory = cat_info['nombre_subcategoria']
 
                         product_obj = {
                             'date': current_date,
                             'site_name': self.site_name,
-                            'category': self.clean_text(category_name),
+                            'category': self.clean_text(main_category),
                             'subcategory': final_subcategory,
                             'product_name': name,
                             'brand': self.enrich_brand(brand, name), # USE BRAND MATCHER

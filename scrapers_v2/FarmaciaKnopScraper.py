@@ -7,8 +7,9 @@ import time
 class FarmaciaKnopScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
         # Mapeo de URLs
-        self.categories_config = {
-            "Proteinas": "https://www.farmaciasknop.com/types/proteinas"
+        # Mapeo de URLs
+        self.category_urls = {
+            "Proteinas": [{"url": "https://www.farmaciasknop.com/types/proteinas", "subcategory": "Proteinas"}]
         }
 
         # Selectores identificados
@@ -38,13 +39,16 @@ class FarmaciaKnopScraper(BaseScraper):
             "sku": "p:has-text('SKU:')"
         }
 
-        super().__init__(base_url, headless, category_urls=list(self.categories_config.values()), selectors=selectors, site_name="Farmacia Knopp")
+        super().__init__(base_url, headless, category_urls=self.category_urls, selectors=selectors, site_name="Farmacia Knopp")
 
     def extract_process(self, page):
-        print(f"[green]Iniciando scraping de {len(self.categories_config)} categorías en Farmacia Knop...[/green]")
+        print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías en Farmacia Knop...[/green]")
         
-        for category_name, url in self.categories_config.items():
-            print(f"\n[bold blue]Procesando categoría:[/bold blue] {category_name} ({url})")
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                url = item['url']
+                deterministic_subcategory = item['subcategory']
+                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {deterministic_subcategory} ({url})")
             
             try:
                 page.goto(url, wait_until="networkidle", timeout=60000)
@@ -178,15 +182,15 @@ class FarmaciaKnopScraper(BaseScraper):
                     current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                     # New Categorization Logic
-                    final_subcategory = category_name
-                    cat_info = self.categorizer.classify_product(name, category_name)
-                    if cat_info:
-                        final_subcategory = cat_info['nombre_subcategoria']
+                    final_subcategory = deterministic_subcategory
+                    # cat_info = self.categorizer.classify_product(name, deterministic_subcategory)
+                    # if cat_info:
+                    #    final_subcategory = cat_info['nombre_subcategoria']
 
                     yield {
                         'date': current_date,
                         'site_name': self.site_name,
-                        'category': self.clean_text(category_name),
+                        'category': self.clean_text(main_category),
                         'subcategory': final_subcategory,
                         'product_name': name,
                         'brand': self.enrich_brand(brand, name),

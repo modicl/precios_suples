@@ -10,45 +10,45 @@ class ChileSuplementosScraperPart1(BaseScraper):
     def __init__(self, base_url="https://www.chilesuplementos.cl", headless=False):
 
         # Categorias y sus URLs (Parte 1: Proteinas, Creatinas, Vitaminas, Pre Entrenos, Ganadores de Peso)
-        category_urls = {
+        self.category_urls = {
             "Proteinas": [
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/whey-isolate/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/whey-protein/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/hidrolizada/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/caseina/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/clear-protein/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/proteina-de-carne/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/proteina-vegana/",
-                "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/reemplazante-de-comidas/"
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/whey-isolate/", "subcategory": "Whey Isolate"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/whey-protein/", "subcategory": "Whey Protein"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/hidrolizada/", "subcategory": "Hidrolizada"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/caseina/", "subcategory": "Caseina"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/clear-protein/", "subcategory": "Clear Protein"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/proteina-de-carne/", "subcategory": "Proteina De Carne"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/proteina-vegana/", "subcategory": "Proteina Vegana"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/reemplazante-de-comidas/", "subcategory": "Reemplazante De Comidas"}
             ],
             "Creatinas": [
-                "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/monohidratada/",
-                "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/micronizada/",
-                "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/con-sello-creapure/",
-                "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/malato/",
-                "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/creatina-hcl/"
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/monohidratada/", "subcategory": "Monohidratada"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/micronizada/", "subcategory": "Micronizada"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/con-sello-creapure/", "subcategory": "Con Sello Creapure"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/malato/", "subcategory": "Malato"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/creatina-hcl/", "subcategory": "Creatina Hcl"}
             ],
             "Vitaminas y Minerales": [
-                "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-b/",
-                "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-c/",
-                "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-d/",
-                "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-k/",
-                "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/multivitaminicos/"
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-b/", "subcategory": "Vitamina B"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-c/", "subcategory": "Vitamina C"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-d/", "subcategory": "Vitamina D"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-k/", "subcategory": "Vitamina K"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/multivitaminicos/", "subcategory": "Multivitaminicos"}
             ],
             "Pre Entrenos": [
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/cafeina/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/beta-alanina/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/arginina/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/energeticas/",
-                "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/cafe/cafe-en-grano/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/requerimientos-especiales-pre-entrenos/libre-de-estimulantes/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/taurina/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/guarana/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/shots-y-geles/",
-                "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/requerimientos-especiales-pre-entrenos/alto-en-estimulantes/"
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/cafeina/", "subcategory": "Cafeina"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/beta-alanina/", "subcategory": "Beta Alanina"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/arginina/", "subcategory": "Arginina"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/energeticas/", "subcategory": "Energeticas"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/cafe/cafe-en-grano/", "subcategory": "Cafe En Grano"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/requerimientos-especiales-pre-entrenos/libre-de-estimulantes/", "subcategory": "Libre De Estimulantes"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/taurina/", "subcategory": "Taurina"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/guarana/", "subcategory": "Guarana"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/shots-y-geles/", "subcategory": "Shots Y Geles"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/requerimientos-especiales-pre-entrenos/alto-en-estimulantes/", "subcategory": "Alto En Estimulantes"}
             ],
             "Ganadores de Peso": [
-                "https://www.chilesuplementos.cl/categoria/productos/ganadores-de-peso/"
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/ganadores-de-peso/", "subcategory": "Ganadores De Peso"}
             ]
         }
         
@@ -70,15 +70,15 @@ class ChileSuplementosScraperPart1(BaseScraper):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en ChileSuplementos (Parte 1)...[/green]")
         context = page.context
         
-        for main_category, urls in self.category_urls.items():
-            for url in urls:
-                subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
-                subcategory_name = self.clean_text(subcategory_name)
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                url = item['url']
+                deterministic_subcategory = item['subcategory']
                 
-                if not subcategory_name or not subcategory_name.strip():
-                    subcategory_name = "N/D"
+                if not deterministic_subcategory or not deterministic_subcategory.strip():
+                    deterministic_subcategory = "N/D"
 
-                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {subcategory_name} ({url})")
+                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {deterministic_subcategory} ({url})")
 
                 
                 try:
@@ -295,10 +295,10 @@ class ChileSuplementosScraperPart1(BaseScraper):
                                         image_url = local_img
 
                                 # New Categorization Logic
-                                final_subcategory = subcategory_name
-                                cat_info = self.categorizer.classify_product(title, subcategory_name)
-                                if cat_info:
-                                    final_subcategory = cat_info['nombre_subcategoria']
+                                final_subcategory = deterministic_subcategory
+                                # cat_info = self.categorizer.classify_product(title, deterministic_subcategory)
+                                # if cat_info:
+                                #    final_subcategory = cat_info['nombre_subcategoria']
 
                                 yield {
                                     'date': current_date,

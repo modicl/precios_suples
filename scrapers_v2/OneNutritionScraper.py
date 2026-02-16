@@ -9,83 +9,83 @@ class OneNutritionScraper(BaseScraper):
         
         category_urls = {
             "Proteinas": [
-                "https://onenutrition.cl/tienda/whey-protein",
-                "https://onenutrition.cl/tienda/isolate-aislada",
-                "https://onenutrition.cl/tienda/sin-sabor-cocinar",
-                "https://onenutrition.cl/tienda/vegana",
-                "https://onenutrition.cl/tienda/sin-lactosa",
-                "https://onenutrition.cl/tienda/carne",
-                "https://onenutrition.cl/tienda/caseina-",
-                "https://onenutrition.cl/tienda/matriz-de-proteina-",
-                "https://onenutrition.cl/tienda/soya",
-                "https://onenutrition.cl/tienda/liquidas"
+                {"url": "https://onenutrition.cl/tienda/whey-protein", "subcategory": "Whey Protein"},
+                {"url": "https://onenutrition.cl/tienda/isolate-aislada", "subcategory": "Isolate Aislada"},
+                {"url": "https://onenutrition.cl/tienda/sin-sabor-cocinar", "subcategory": "Sin Sabor Cocinar"},
+                {"url": "https://onenutrition.cl/tienda/vegana", "subcategory": "Vegana"},
+                {"url": "https://onenutrition.cl/tienda/sin-lactosa", "subcategory": "Sin Lactosa"},
+                {"url": "https://onenutrition.cl/tienda/carne", "subcategory": "Carne"},
+                {"url": "https://onenutrition.cl/tienda/caseina-", "subcategory": "Caseina"},
+                {"url": "https://onenutrition.cl/tienda/matriz-de-proteina-", "subcategory": "Matriz De Proteina"},
+                {"url": "https://onenutrition.cl/tienda/soya", "subcategory": "Soya"},
+                {"url": "https://onenutrition.cl/tienda/liquidas", "subcategory": "Liquidas"}
             ],
             "Creatinas": [
-                "https://onenutrition.cl/tienda/sello-creapure",
-                "https://onenutrition.cl/tienda/creatinas-"
+                {"url": "https://onenutrition.cl/tienda/sello-creapure", "subcategory": "Sello Creapure"},
+                {"url": "https://onenutrition.cl/tienda/creatinas-", "subcategory": "Creatinas"}
             ],
             "Vitaminas y Minerales": [
-                "https://onenutrition.cl/tienda/vitaminas-a-z",
-                "https://onenutrition.cl/tienda/omega-fish-oil",
-                "https://onenutrition.cl/tienda/ashwagandha",
-                "https://onenutrition.cl/tienda/dhea",
-                "https://onenutrition.cl/tienda/buen-dormir",
-                "https://onenutrition.cl/tienda/magnesio",
-                "https://onenutrition.cl/tienda/enzimas-digestivas",
-                "https://onenutrition.cl/tienda/oregano-oil",
-                "https://onenutrition.cl/tienda/zma-zmb",
-                "https://onenutrition.cl/tienda/salud-articular",
-                "https://onenutrition.cl/tienda/resveratrol-nadh",
-                "https://onenutrition.cl/tienda/pro-hormonales",
-                "https://onenutrition.cl/tienda/probiotico-prebiotico",
-                "https://onenutrition.cl/tienda/gaba-5-htp",
-                "https://onenutrition.cl/tienda/maca-tribulus",
-                "https://onenutrition.cl/tienda/melena-de-leon",
-                "https://onenutrition.cl/tienda/acido-alfa-lipoico",
-                "https://onenutrition.cl/tienda/nac",
-                "https://onenutrition.cl/tienda/mct-oil",
-                "https://onenutrition.cl/tienda/hongos-funcionales",
-                "https://onenutrition.cl/tienda/colageno-biotina",
-                "https://onenutrition.cl/tienda/lisina",
-                "https://onenutrition.cl/tienda/gummies",
-                "https://onenutrition.cl/tienda/calcio-magnesio-zinc",
-                "https://onenutrition.cl/tienda/vinagre-de-manzana",
-                "https://onenutrition.cl/tienda/potasio-",
-                "https://onenutrition.cl/tienda/astaxantina",
-                "https://onenutrition.cl/tienda/hierro",
-                "https://onenutrition.cl/tienda/prostata",
-                "https://onenutrition.cl/tienda/inositol",
-                "https://onenutrition.cl/tienda/acido-folico",
-                "https://onenutrition.cl/tienda/boron",
-                "https://onenutrition.cl/tienda/silimarina",
-                "https://onenutrition.cl/tienda/selenio",
-                "https://onenutrition.cl/tienda/zinc",
-                "https://onenutrition.cl/tienda/krill-oil"
+                {"url": "https://onenutrition.cl/tienda/vitaminas-a-z", "subcategory": "Vitaminas A Z"},
+                {"url": "https://onenutrition.cl/tienda/omega-fish-oil", "subcategory": "Omega Fish Oil"},
+                {"url": "https://onenutrition.cl/tienda/ashwagandha", "subcategory": "Ashwagandha"},
+                {"url": "https://onenutrition.cl/tienda/dhea", "subcategory": "Dhea"},
+                {"url": "https://onenutrition.cl/tienda/buen-dormir", "subcategory": "Buen Dormir"},
+                {"url": "https://onenutrition.cl/tienda/magnesio", "subcategory": "Magnesio"},
+                {"url": "https://onenutrition.cl/tienda/enzimas-digestivas", "subcategory": "Enzimas Digestivas"},
+                {"url": "https://onenutrition.cl/tienda/oregano-oil", "subcategory": "Oregano Oil"},
+                {"url": "https://onenutrition.cl/tienda/zma-zmb", "subcategory": "Zma Zmb"},
+                {"url": "https://onenutrition.cl/tienda/salud-articular", "subcategory": "Salud Articular"},
+                {"url": "https://onenutrition.cl/tienda/resveratrol-nadh", "subcategory": "Resveratrol Nadh"},
+                {"url": "https://onenutrition.cl/tienda/pro-hormonales", "subcategory": "Pro Hormonales"},
+                {"url": "https://onenutrition.cl/tienda/probiotico-prebiotico", "subcategory": "Probiotico Prebiotico"},
+                {"url": "https://onenutrition.cl/tienda/gaba-5-htp", "subcategory": "Gaba 5 Htp"},
+                {"url": "https://onenutrition.cl/tienda/maca-tribulus", "subcategory": "Maca Tribulus"},
+                {"url": "https://onenutrition.cl/tienda/melena-de-leon", "subcategory": "Melena De Leon"},
+                {"url": "https://onenutrition.cl/tienda/acido-alfa-lipoico", "subcategory": "Acido Alfa Lipoico"},
+                {"url": "https://onenutrition.cl/tienda/nac", "subcategory": "Nac"},
+                {"url": "https://onenutrition.cl/tienda/mct-oil", "subcategory": "Mct Oil"},
+                {"url": "https://onenutrition.cl/tienda/hongos-funcionales", "subcategory": "Hongos Funcionales"},
+                {"url": "https://onenutrition.cl/tienda/colageno-biotina", "subcategory": "Colageno Biotina"},
+                {"url": "https://onenutrition.cl/tienda/lisina", "subcategory": "Lisina"},
+                {"url": "https://onenutrition.cl/tienda/gummies", "subcategory": "Gummies"},
+                {"url": "https://onenutrition.cl/tienda/calcio-magnesio-zinc", "subcategory": "Calcio Magnesio Zinc"},
+                {"url": "https://onenutrition.cl/tienda/vinagre-de-manzana", "subcategory": "Vinagre De Manzana"},
+                {"url": "https://onenutrition.cl/tienda/potasio-", "subcategory": "Potasio"},
+                {"url": "https://onenutrition.cl/tienda/astaxantina", "subcategory": "Astaxantina"},
+                {"url": "https://onenutrition.cl/tienda/hierro", "subcategory": "Hierro"},
+                {"url": "https://onenutrition.cl/tienda/prostata", "subcategory": "Prostata"},
+                {"url": "https://onenutrition.cl/tienda/inositol", "subcategory": "Inositol"},
+                {"url": "https://onenutrition.cl/tienda/acido-folico", "subcategory": "Acido Folico"},
+                {"url": "https://onenutrition.cl/tienda/boron", "subcategory": "Boron"},
+                {"url": "https://onenutrition.cl/tienda/silimarina", "subcategory": "Silimarina"},
+                {"url": "https://onenutrition.cl/tienda/selenio", "subcategory": "Selenio"},
+                {"url": "https://onenutrition.cl/tienda/zinc", "subcategory": "Zinc"},
+                {"url": "https://onenutrition.cl/tienda/krill-oil", "subcategory": "Krill Oil"}
             ],
             "Pre Entrenos": [
-                "https://onenutrition.cl/tienda/pre-entrenamientos",
-                "https://onenutrition.cl/tienda/cafeinas",
-                "https://onenutrition.cl/tienda/bebidas-energeticas"
+                {"url": "https://onenutrition.cl/tienda/pre-entrenamientos", "subcategory": "Pre Entrenamientos"},
+                {"url": "https://onenutrition.cl/tienda/cafeinas", "subcategory": "Cafeinas"},
+                {"url": "https://onenutrition.cl/tienda/bebidas-energeticas", "subcategory": "Bebidas Energeticas"}
             ],
             "Ganadores de Peso": [
-                "https://onenutrition.cl/tienda/ganadores-de-masa-"
+                {"url": "https://onenutrition.cl/tienda/ganadores-de-masa-", "subcategory": "Ganadores De Masa"}
             ],
             "Aminoacidos y BCAA": [
-                "https://onenutrition.cl/tienda/citrulina",
-                "https://onenutrition.cl/tienda/aminoacidos",
-                "https://onenutrition.cl/tienda/eaa",
-                "https://onenutrition.cl/tienda/arginina",
-                "https://onenutrition.cl/tienda/bcaa",
-                "https://onenutrition.cl/tienda/glutaminas",
-                "https://onenutrition.cl/tienda/daa",
-                "https://onenutrition.cl/tienda/hmb",
-                "https://onenutrition.cl/tienda/taurina"
+                {"url": "https://onenutrition.cl/tienda/citrulina", "subcategory": "Citrulina"},
+                {"url": "https://onenutrition.cl/tienda/aminoacidos", "subcategory": "Aminoacidos"},
+                {"url": "https://onenutrition.cl/tienda/eaa", "subcategory": "Eaa"},
+                {"url": "https://onenutrition.cl/tienda/arginina", "subcategory": "Arginina"},
+                {"url": "https://onenutrition.cl/tienda/bcaa", "subcategory": "Bcaa"},
+                {"url": "https://onenutrition.cl/tienda/glutaminas", "subcategory": "Glutaminas"},
+                {"url": "https://onenutrition.cl/tienda/daa", "subcategory": "Daa"},
+                {"url": "https://onenutrition.cl/tienda/hmb", "subcategory": "Hmb"},
+                {"url": "https://onenutrition.cl/tienda/taurina", "subcategory": "Taurina"}
             ],
             "Perdida de Grasa": [
-                "https://onenutrition.cl/tienda/dieta-quemadores"
+                {"url": "https://onenutrition.cl/tienda/dieta-quemadores", "subcategory": "Dieta Quemadores"}
             ],
             "Snacks y Comida": [
-                "https://onenutrition.cl/tienda/barras-snack"
+                {"url": "https://onenutrition.cl/tienda/barras-snack", "subcategory": "Barras Snack"}
             ]
         }
         
@@ -109,12 +109,12 @@ class OneNutritionScraper(BaseScraper):
         
         context = page.context
 
-        for main_category, urls in self.category_urls.items():
-            for url in urls:
-                subcategory_name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
-                subcategory_name = self.clean_text(subcategory_name)
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                url = item['url']
+                deterministic_subcategory = item['subcategory']
                 
-                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {subcategory_name} ({url})")
+                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {deterministic_subcategory} ({url})")
 
                 
                 try:
@@ -224,10 +224,11 @@ class OneNutritionScraper(BaseScraper):
                                     except: pass
 
                             # New Categorization Logic
-                            final_subcategory = subcategory_name
-                            cat_info = self.categorizer.classify_product(title, subcategory_name)
-                            if cat_info:
-                                final_subcategory = cat_info['nombre_subcategoria']
+                            final_subcategory = deterministic_subcategory
+                            # Optional: Use classifier to refine if needed, or stick to deterministic
+                            # cat_info = self.categorizer.classify_product(title, deterministic_subcategory)
+                            # if cat_info:
+                            #    final_subcategory = cat_info['nombre_subcategoria']
 
                             yield {
                                 'date': current_date,

@@ -8,25 +8,25 @@ class MuscleFactoryScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
         category_urls = {
             "Proteinas": [
-                "https://www.musclefactory.cl/proteinas"
+                {"url": "https://www.musclefactory.cl/proteinas", "subcategory": "Proteinas"}
             ],
             "Creatinas": [
-                "https://www.musclefactory.cl/productos/creatina"
+                {"url": "https://www.musclefactory.cl/productos/creatina", "subcategory": "Creatina"}
             ],
             "Pre Entrenos": [
-                "https://www.musclefactory.cl/productos/pre-entrenamientos"
+                {"url": "https://www.musclefactory.cl/productos/pre-entrenamientos", "subcategory": "Pre Entrenamientos"}
             ],
             "Vitaminas y Minerales": [
-                "https://www.musclefactory.cl/vitaminas-y-minerales-🌞"
+                {"url": "https://www.musclefactory.cl/vitaminas-y-minerales-🌞", "subcategory": "Vitaminas y Minerales"}
             ],
             "Por Objetivo": [
-                "https://www.musclefactory.cl/por-objetivo-%F0%9F%8E%AF"
+                {"url": "https://www.musclefactory.cl/por-objetivo-%F0%9F%8E%AF", "subcategory": "Por Objetivo"}
             ],
             "Ofertas": [
-                "https://www.musclefactory.cl/ofertas"
+                {"url": "https://www.musclefactory.cl/ofertas", "subcategory": "Ofertas"}
             ],
             "Packs": [
-                "https://www.musclefactory.cl/packs"
+                {"url": "https://www.musclefactory.cl/packs", "subcategory": "Packs"}
             ]
         }
 
@@ -57,9 +57,11 @@ class MuscleFactoryScraper(BaseScraper):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías en MuscleFactory...[/green]")
         context = page.context
 
-        for main_category, urls in self.category_urls.items():
+        for main_category, items in self.category_urls.items():
             batch_buffer = []
-            for url in urls:
+            for item in items:
+                url = item['url']
+                deterministic_subcategory = item['subcategory']
                 print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} ({url})")
                 
                 try:
@@ -218,10 +220,10 @@ class MuscleFactoryScraper(BaseScraper):
                                 if local_img: image_url = local_img
 
                             # New Categorization Logic
-                            final_subcategory = main_category
-                            cat_info = self.categorizer.classify_product(title, main_category)
-                            if cat_info:
-                                final_subcategory = cat_info['nombre_subcategoria']
+                            final_subcategory = deterministic_subcategory
+                            # cat_info = self.categorizer.classify_product(title, main_category)
+                            # if cat_info:
+                            #    final_subcategory = cat_info['nombre_subcategoria']
 
                             product_obj = {
                                 'date': current_date,

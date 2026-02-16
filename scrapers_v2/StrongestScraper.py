@@ -12,18 +12,16 @@ class StrongestScraper(BaseScraper):
             headless=True
         )
         
-        # URLs Cateogorias
+        # URLs Categorias - Subcategorias
         self.category_urls = {
-            "Proteinas": "https://www.strongest.cl/collection/proteinas",
-            "Creatinas": "https://www.strongest.cl/collection/creatinas",
-            "Vitaminas y Minerales": "https://www.strongest.cl/collection/salud-y-bienestar",
-            "Pre Entrenos": "https://www.strongest.cl/collection/pre-entrenos",
-            "Ganadores de Peso": "https://www.strongest.cl/collection/ganadores-de-masa",
-            "Aminoacidos y BCAA": "https://www.strongest.cl/collection/aminoacidos-bcaa",
-            "Perdida de Grasa": "https://www.strongest.cl/collection/termogenicos",
-            "Snacks y Comida": "https://www.strongest.cl/collection/snacks",
-            "Ofertas": "https://www.strongest.cl/collection/ofertas-y-precios-bajos"
-
+            "Proteinas": [{"url": "https://www.strongest.cl/collection/proteinas", "subcategory": "Proteinas"}],
+            "Creatinas": [{"url": "https://www.strongest.cl/collection/creatinas", "subcategory": "Creatinas"}],
+            "Vitaminas y Minerales": [{"url": "https://www.strongest.cl/collection/salud-y-bienestar", "subcategory": "Bienestar General"}],
+            "Pre Entrenos": [{"url": "https://www.strongest.cl/collection/pre-entrenos", "subcategory": "Pre Entrenos"}],
+            "Ganadores de Peso": [{"url": "https://www.strongest.cl/collection/ganadores-de-masa", "subcategory": "Ganadores De Peso"}],
+            "Aminoacidos y BCAA": [{"url": "https://www.strongest.cl/collection/aminoacidos-bcaa", "subcategory": "Otros Aminoacidos y BCAA"}],
+            "Perdida de Grasa": [{"url": "https://www.strongest.cl/collection/termogenicos", "subcategory": "Quemadores Termogenicos"}],
+            "Snacks y Comida": [{"url": "https://www.strongest.cl/collection/snacks", "subcategory": "Otros Snacks y Comida"}]
         }
         
         self.selectors = {
@@ -40,12 +38,12 @@ class StrongestScraper(BaseScraper):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías en Strongest...[/green]")
         context = page.context
 
-        for category, url in self.category_urls.items():
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                url = item['url']
+                deterministic_subcategory = item['subcategory']
             
-            # Subcategory is not really used here, map to empty or same as category
-            subcategory_name = category 
-            
-            print(f"\n[bold blue]Procesando categoría:[/bold blue] {category} ({url})")
+                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {deterministic_subcategory} ({url})")
             
             try:
                 page.goto(url, timeout=60000, wait_until='domcontentloaded')
@@ -168,7 +166,12 @@ class StrongestScraper(BaseScraper):
                                     sku = sku_raw.replace("SKU:", "").strip()
                                 
                                 # 3. Description
-                                desc_el = detail_page.locator('.bs-product__description').first
+                                # Try to wait for description, it might be lazy loaded
+                                try:
+                                    detail_page.wait_for_selector('.bs-product-description, .product-description, #description', timeout=2000)
+                                except: pass
+
+                                desc_el = detail_page.locator('.bs-product-description, .product-description, #description').first
                                 if desc_el.count() > 0:
                                     description = desc_el.inner_text().strip()
                                     
@@ -188,20 +191,16 @@ class StrongestScraper(BaseScraper):
                             local_img = self.download_image(image_url, subfolder=site_folder)
                             if local_img: image_url = local_img
 
-                        # New Categorization Logic
-                        final_subcategory = subcategory_name
-                        cat_info = self.categorizer.classify_product(title, subcategory_name)
-                        if cat_info:
-                            final_subcategory = cat_info['nombre_subcategoria']
+                        # --- HEURÍSTICAS DE CLASIFICACIÓN (Refactored) ---
+                        final_category, final_subcategory = self._classify_product(title, description, main_category, deterministic_subcategory)
 
                         yield {
                             'date': current_date,
                             'site_name': self.site_name,
-                            'category': self.clean_text(category),
+                            'category': self.clean_text(final_category),
                             'subcategory': final_subcategory,
                             'product_name': title,
                             'brand': self.enrich_brand(brand, title),
-
                             'price': price,
                             'link': link,
                             'rating': "0",
@@ -241,7 +240,138 @@ class StrongestScraper(BaseScraper):
                         break
 
             except Exception as e:
-                print(f"[red]Error procesando categoría {category}: {e}[/red]")
+                print(f"[red]Error procesando categoría {main_category}: {e}[/red]")
+            except Exception as e:
+                print(f"[red]Error procesando categoría {main_category}: {e}[/red]")
+
+    def _classify_product(self, title, description, main_category, deterministic_subcategory):
+        """
+        Aplica heurísticas para determinar la categoría y subcategoría final.
+        """
+        final_category = main_category
+        final_subcategory = deterministic_subcategory
+        
+        # 1. Packs (Global)
+        title_lower = title.lower()
+
+        # 0. Llaveros / Accesorios (Filtro Usuario)
+        if "llavero" in title_lower:
+            final_category = "OTROS"
+            final_subcategory = "Otros"
+
+        elif "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower:
+            final_category = "Packs"
+            final_subcategory = "Packs"
+
+        # 1.5 Bebidas / RTD (Global)
+        is_liquid = "ml" in title_lower or "lt" in title_lower or "cc" in title_lower or "botella" in title_lower
+        is_powder_weight = "lb" in title_lower or "kg" in title_lower or "gr" in title_lower or "servicios" in title_lower
+        
+        if ("rtd" in title_lower or "ready to drink" in title_lower):
+            final_category = "Bebidas Nutricionales"
+            final_subcategory = "Batidos de proteína"
+            
+        elif ("shake" in title_lower and "shaker" not in title_lower) or \
+                "batido" in title_lower or \
+                "bebida" in title_lower or \
+                "hydration" in title_lower:
+                
+                # Si es un "Batido/Shake" pero tiene peso de polvo (2lb, 5kg), LO IGNORAMOS (es proteina en polvo)
+                if not is_powder_weight:
+                    final_category = "Bebidas Nutricionales"
+                    final_subcategory = "Batidos de proteína"
+                elif is_liquid:
+                    # Caso raro: Dice 2lb pero tambien 500ml? Priorizamos liquido si tiene ml explícito
+                    final_category = "Bebidas Nutricionales"
+                    final_subcategory = "Batidos de proteína"
+
+        # 2. Heurística para Proteínas
+        elif final_category == "Proteinas":
+            # Usamos Título + Descripción
+            text_to_search = (title + " " + (description or "")).lower()
+            
+            if "vegan" in text_to_search or "plant" in text_to_search or "vegana" in text_to_search or "vegano" in text_to_search or "plant based" in text_to_search:
+                final_subcategory = "Proteína Vegana"
+            elif "beef" in text_to_search or "carne" in text_to_search or "vacuno" in text_to_search:
+                final_subcategory = "Proteína de Carne"
+            elif "casein" in text_to_search or "caseina" in text_to_search or "micelar" in text_to_search or "micellar" in text_to_search:
+                final_subcategory = "Caseína"
+            
+            # Regla de Pureza: Si tiene concentrado o blend, es Whey Estándar (aunque diga Isolate/Hydro)
+            # EXCEPCIONES: Limpiamos frases benignas donde "mezcla" o "combinación" no se refieren a ingredientes
+            purity_check_text = text_to_search
+            benign_phrases = [
+                "se mezcla", "fácil mezcla", "facil mezcla", "mezclabilidad", "mezcla instantánea", "mezcla instantanea",
+                "combinación perfecta", "perfecta combinación", "excelente combinación",
+                "combinacion perfecta", "perfecta combinacion", "excelente combinacion",
+                "mezclar", "mezclado", "mezclando",
+                "mezcla 1 scoop", "mezcla un scoop", "mezcla 1 porción", "mezcla una porción", "mezcla 1 serv", "mezcla un serv",
+                "mezcla el polvo", "mezcla con agua", "mezcla con leche"
+            ]
+            for phrase in benign_phrases:
+                purity_check_text = purity_check_text.replace(phrase, "")
+
+            if "concentrado" in purity_check_text or "combinación" in purity_check_text or "combinacion" in purity_check_text or "concentrate" in purity_check_text or "blend" in purity_check_text or "mezcla" in purity_check_text:
+                final_subcategory = "Proteína de Whey"
+            elif "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
+                final_subcategory = "Proteína Aislada"
+            elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
+                final_subcategory = "Proteína Hidrolizada"
+            else:
+                final_subcategory = "Proteína de Whey"
+
+        # 3. Heurística para Creatinas
+        elif final_category == "Creatinas":
+            text_to_search = (title + " " + (description or "")).lower()
+
+            if "monohidrat" in text_to_search or "monohydrate" in text_to_search or "creapure" in text_to_search:
+                final_subcategory = "Creatina Monohidrato"
+            elif "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search or "hidrocloruro" in text_to_search:
+                final_subcategory = "Clorhidrato"
+            elif "malato" in text_to_search or "magnesio" in text_to_search or "magnapower" in text_to_search:
+                final_subcategory = "Malato y Magnesio"
+            elif "nitrato" in text_to_search or "nitrate" in text_to_search:
+                final_subcategory = "Nitrato"
+            elif "alkalyn" in text_to_search or "alcalina" in text_to_search:
+                final_subcategory = "Otros Creatinas"
+            
+            elif "micronizad" in text_to_search or "micronized" in text_to_search:
+                final_subcategory = "Micronizada"
+            else:
+                final_subcategory = "Otros Creatinas"
+
+        # 4. Heurística para Bienestar General / Vitaminas
+        elif final_category == "Vitaminas y Minerales":
+            text_to_search = (title + " " + (description or "")).lower()
+
+            if "collagen" in text_to_search or "colageno" in text_to_search or "colágeno" in text_to_search: # Es mas probable que colageno este solo que la vitamina c
+                final_subcategory = "Colágeno"
+            elif "vitamin c" in text_to_search or "vitamina c" in text_to_search: 
+                final_subcategory = "Vitamina C"
+            else:
+                final_subcategory = "Bienestar General"
+
+        # 5. Heurística para Aminoacidos y BCAA
+        elif final_category == "Aminoacidos y BCAA":
+            text_to_search = (title + " " + (description or "")).lower()
+            if "bcaa" in text_to_search:
+                final_subcategory = "BCAAs"
+            else:
+                final_subcategory = "Otros Aminoacidos y BCAA"
+
+        # 6. Heurística para Snacks y Comida
+        elif final_category == "Snacks y Comida":
+            text_to_search = (title + " " + (description or "")).lower()
+            if "shark up" in text_to_search or "gel" in text_to_search or "isotonic" in text_to_search:
+                final_subcategory = "Otros Snacks y Comida"
+            elif "bar" in text_to_search or "bites" in text_to_search or "whey bar" in text_to_search or "barra" in text_to_search:
+                final_subcategory = "Barritas Y Snacks Proteicas"
+            elif "alfajor" in text_to_search:
+                final_subcategory = "Snacks Dulces"
+        
+        return final_category, final_subcategory
+
+
 
 if __name__ == "__main__":
     scraper = StrongestScraper()

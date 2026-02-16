@@ -8,11 +8,13 @@ class CruzVerdeScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
         # Configuración de URLs por categoría
         # La clave es el nombre interno/display, el valor es la URL
-        self.categories_config = {
-            "Proteinas": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/proteinas/",
-            "Energia": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/energia-y-resistencia/",
-            "Snacks y Comida": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/barras-proteicas/",
-            "Hidratación": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/hidratacion/"
+        # Configuración de URLs por categoría
+        # La clave es el nombre interno/display, el valor es la URL
+        self.category_urls = {
+            "Proteinas": [{"url": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/proteinas/", "subcategory": "Proteinas"}],
+            "Energia": [{"url": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/energia-y-resistencia/", "subcategory": "Energia"}],
+            "Snacks y Comida": [{"url": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/barras-proteicas/", "subcategory": "Barras Proteicas"}],
+            "Hidratación": [{"url": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/hidratacion/", "subcategory": "Hidratacion"}]
         }
 
 
@@ -38,16 +40,19 @@ class CruzVerdeScraper(BaseScraper):
             "description": "p >> text=Ayuda a la recuperación"
         }
 
-        super().__init__(base_url, headless, category_urls=list(self.categories_config.values()), selectors=selectors, site_name="Cruz Verde")
+        super().__init__(base_url, headless, category_urls=self.category_urls, selectors=selectors, site_name="Cruz Verde")
 
     def extract_process(self, page):
-        print(f"[green]Iniciando scraping de {len(self.categories_config)} categorías en Cruz Verde...[/green]")
+        print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías en Cruz Verde...[/green]")
         
-        for category_internal_name, category_url in self.categories_config.items():
-            print(f"\n[bold blue]Procesando categoría:[/bold blue] {category_internal_name} ({category_url})")
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                category_url = item['url']
+                deterministic_subcategory = item['subcategory']
+                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {deterministic_subcategory} ({category_url})")
             
-            # Navegar a la primera página
-            current_url = category_url
+                # Navegar a la primera página
+                current_url = category_url
             page_num = 1
             has_more_pages = True
             
@@ -165,12 +170,19 @@ class CruzVerdeScraper(BaseScraper):
                                 price = int(clean_price)
 
                         # 4. Lógica de Categoría Especial (Energia -> Creatinas)
-                        final_category = category_internal_name
-                        if category_internal_name == "Energia":
+                        # 4. Lógica de Categoría Especial (Energia -> Creatinas)
+                        final_category = main_category
+                        final_subcategory = deterministic_subcategory
+
+                        if main_category == "Energia":
                             if "creatina" in name.lower():
                                 final_category = "Creatinas"
+                                final_subcategory = "Creatina"
                             else:
                                 final_category = "Vitaminas y Minerales"
+                                # Keep deterministic_subcategory as "Energia" or change?
+                                # Let's keep it consistent with the re-classification
+                                final_subcategory = "Energia"
                         
                         # 5. DETAIL EXTRACTION (NEW TAB)
                         detail_image_url = image_url  # Fallback a thumbnail
@@ -220,16 +232,16 @@ class CruzVerdeScraper(BaseScraper):
                         current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                         # New Categorization Logic
-                        final_subcategory_val = self.clean_text(final_category)
-                        cat_info = self.categorizer.classify_product(name, final_category)
-                        if cat_info:
-                            final_subcategory_val = cat_info['nombre_subcategoria']
+                        # final_subcategory_val = self.clean_text(final_category)
+                        # cat_info = self.categorizer.classify_product(name, final_category)
+                        # if cat_info:
+                        #    final_subcategory_val = cat_info['nombre_subcategoria']
 
                         yield {
                             'date': current_date,
                             'site_name': self.site_name,
                             'category': self.clean_text(final_category),
-                            'subcategory': final_subcategory_val,
+                            'subcategory': final_subcategory,
                             'product_name': name,
                             'brand': self.enrich_brand(brand, name),
                             'price': price,

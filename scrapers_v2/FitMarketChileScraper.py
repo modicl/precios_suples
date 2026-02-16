@@ -7,33 +7,32 @@ class FitMarketChileScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
         category_urls = {
             "Proteinas": [
-                "https://fitmarketchile.cl/categoria-producto/proteinas"
+                {"url": "https://fitmarketchile.cl/categoria-producto/proteinas", "subcategory": "Proteinas"}
             ],
             "Creatinas": [
-                "https://fitmarketchile.cl/categoria-producto/creatina"
+                {"url": "https://fitmarketchile.cl/categoria-producto/creatina", "subcategory": "Creatina"}
             ],
             "Aminoacidos y BCAA": [
-                "https://fitmarketchile.cl/categoria-producto/aminoacidos-bcaa"
+                {"url": "https://fitmarketchile.cl/categoria-producto/aminoacidos-bcaa", "subcategory": "Aminoacidos Bcaa"}
             ],
             "Perdida de Grasa": [
-                "https://fitmarketchile.cl/categoria-producto/quemador-de-grasa"
+                {"url": "https://fitmarketchile.cl/categoria-producto/quemador-de-grasa", "subcategory": "Quemador De Grasa"}
             ],
             "Pre Entrenos": [
-                "https://fitmarketchile.cl/categoria-producto/pre-entrenos"
+                {"url": "https://fitmarketchile.cl/categoria-producto/pre-entrenos", "subcategory": "Pre Entrenos"}
             ],
             "Ganadores de Peso": [
-                "https://fitmarketchile.cl/categoria-producto/ganador-de-masa"
+                {"url": "https://fitmarketchile.cl/categoria-producto/ganador-de-masa", "subcategory": "Ganador De Masa"}
             ],
             "Vitaminas y Minerales": [
-                "https://fitmarketchile.cl/categoria-producto/vitaminas"
+                {"url": "https://fitmarketchile.cl/categoria-producto/vitaminas", "subcategory": "Vitaminas"}
             ],
             "Ofertas": [
-                "https://fitmarketchile.cl/categoria-producto/cuber-day"
+                {"url": "https://fitmarketchile.cl/categoria-producto/cuber-day", "subcategory": "Cuber Day"}
             ],
             "Snacks y Comida": [
-                "https://fitmarketchile.cl/categoria-producto/barras-de-proteina-snack"
+                {"url": "https://fitmarketchile.cl/categoria-producto/barras-de-proteina-snack", "subcategory": "Barras De Proteina Snack"}
             ]
-
         }
 
         # Selectores WooCommerce / WoodMart
@@ -69,9 +68,11 @@ class FitMarketChileScraper(BaseScraper):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías en FitMarketChile...[/green]")
         context = page.context
 
-        for main_category, urls in self.category_urls.items():
-            for url in urls:
-                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} ({url})")
+        for main_category, items in self.category_urls.items():
+            for item in items:
+                url = item['url']
+                deterministic_subcategory = item['subcategory']
+                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {deterministic_subcategory} ({url})")
                 
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=60000)
@@ -188,10 +189,10 @@ class FitMarketChileScraper(BaseScraper):
                                     except: pass
                             
                             # New Categorization Logic
-                            final_subcategory = main_category
-                            cat_info = self.categorizer.classify_product(title, main_category)
-                            if cat_info:
-                                final_subcategory = cat_info['nombre_subcategoria']
+                            final_subcategory = deterministic_subcategory
+                            # cat_info = self.categorizer.classify_product(title, main_category)
+                            # if cat_info:
+                            #    final_subcategory = cat_info['nombre_subcategoria']
 
                             yield {
                                 'date': current_date,
