@@ -92,7 +92,12 @@ class DecathlonScraper(BaseScraper):
                                 
                                 link = item.get('url', 'N/D')
 
-                                
+                                # Deduplication Check
+                                if link != "N/D" and link in self.seen_urls:
+                                    print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
+                                    continue
+                                if link != "N/D":
+                                    self.seen_urls.add(link)
                                 # Price logic
                                 price = item.get('prix', 0)
                                 regular_price = item.get('regular', 0)

@@ -3,6 +3,7 @@ from rich import print
 from datetime import datetime
 import re
 import time
+import unicodedata
 from playwright.sync_api import TimeoutError
 
 class SuplementosMayoristasScraper(BaseScraper):
@@ -124,6 +125,13 @@ class SuplementosMayoristasScraper(BaseScraper):
                         href = card.get_attribute("href")
                         if href:
                             link = self.base_url + href if href.startswith('/') else href
+
+                        # Deduplication Check
+                        if link != "N/D" and link in self.seen_urls:
+                            print(f"[yellow]  >> Producto duplicado omitido.[/yellow]")
+                            continue
+                        if link != "N/D":
+                            self.seen_urls.add(link)
 
                         # Name
                         name = "N/D"
@@ -285,16 +293,20 @@ class SuplementosMayoristasScraper(BaseScraper):
                         final_category = main_category
                         final_sub = deterministic_sub
                         
+                        def _normalize(text):
+                            nfd = unicodedata.normalize('NFD', text)
+                            return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
+
                         # 1. Packs (Global)
-                        title_lower = name.lower()
+                        title_lower = _normalize(name.lower())
                         if "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower:
                             final_category = "Packs"
                             final_sub = "Packs"
 
                         # 2. Heurística para HMB/ZMA (Categoría Aminoacidos)
                         elif final_sub == "DETECTAR_HMB_ZMA":
-                            name_lower = str(name).lower()
-                            desc_lower = str(description).lower()
+                            name_lower = _normalize(str(name).lower())
+                            desc_lower = _normalize(str(description).lower())
                             text_to_search = name_lower + " " + desc_lower
                             
                             # PRIORIDAD A HMB

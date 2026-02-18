@@ -3,6 +3,7 @@ from BaseScraper import BaseScraper
 from rich import print
 from datetime import datetime
 import re
+import unicodedata
 
 class SuplesScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -129,6 +130,13 @@ class SuplesScraper(BaseScraper):
                                 href = producto.locator(self.selectors['link']).first.get_attribute("href")
                                 if href:
                                     link = self.base_url + href if href.startswith('/') else href
+
+                            # Deduplication Check
+                            if link != "N/D" and link in self.seen_urls:
+                                print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
+                                continue
+                            if link != "N/D":
+                                self.seen_urls.add(link)
 
                             # Title
                             title = "N/D"
@@ -283,7 +291,11 @@ class SuplesScraper(BaseScraper):
                             final_category = main_category
                             final_sub = deterministic_sub
                             
-                            title_lower = title.lower()
+                            def _normalize(text):
+                                nfd = unicodedata.normalize('NFD', text)
+                                return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
+
+                            title_lower = _normalize(title.lower())
                             if "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower:
                                 final_category = "Packs"
                                 final_sub = "Packs"
@@ -291,7 +303,7 @@ class SuplesScraper(BaseScraper):
                             # Lógica Heurística Específica para Creatinas
                             if final_category == "Creatinas":
                                 # Texto de búsqueda: Título + Descripción en minúsculas
-                                text_to_search = (title + " " + (description or "")).lower()
+                                text_to_search = _normalize((title + " " + (description or "")).lower())
                                 
                                 # 1. Variantes Químicas Específicas (Alta prioridad)
                                 if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search:

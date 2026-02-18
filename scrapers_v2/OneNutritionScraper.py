@@ -3,6 +3,7 @@ from BaseScraper import BaseScraper
 from rich import print
 from datetime import datetime
 import re
+import unicodedata
 
 class OneNutritionScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -57,8 +58,12 @@ class OneNutritionScraper(BaseScraper):
         final_category = main_category
         final_subcategory = deterministic_subcategory
         
+        def _normalize(text):
+            nfd = unicodedata.normalize('NFD', text)
+            return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
+
         # 1. Packs (Global Check - Good practice to have)
-        title_lower = title.lower()
+        title_lower = _normalize(title.lower())
 
         if "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower or "+2" in title_lower:
             final_category = "Packs"
@@ -68,7 +73,7 @@ class OneNutritionScraper(BaseScraper):
         # 2. Heurística para Proteínas
         if final_category == "Proteinas":
             # Usamos Título + Descripción
-            text_to_search = (title + " " + (description or "")).lower()
+            text_to_search = _normalize((title + " " + (description or "")).lower())
 
             # Estructura idéntica a StrongestScraper (con soporte para Dymatize y Purity Rule sanitizada)
             
@@ -107,7 +112,7 @@ class OneNutritionScraper(BaseScraper):
 
                     if "concentrado" in purity_check_text or "combinación" in purity_check_text or "combinacion" in purity_check_text or "concentrate" in purity_check_text or "blend" in purity_check_text or "mezcla" in purity_check_text:
                         final_subcategory = "Proteína de Whey"
-                    elif "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
+                    elif re.search(r'\biso\b', text_to_search) or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search or "isolatada" in text_to_search:
                         final_subcategory = "Proteína Aislada"
                     elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
                         final_subcategory = "Proteína Hidrolizada"
@@ -115,11 +120,11 @@ class OneNutritionScraper(BaseScraper):
                         final_subcategory = "Proteína de Whey"
 
             return final_category, final_subcategory
-            return final_category, final_subcategory
+
 
         # 3. Heurística para Creatinas
         elif final_category == "Creatinas":
-            text_to_search = (title + " " + (description or "")).lower()
+            text_to_search = _normalize((title + " " + (description or "")).lower())
             
             if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search or "hidrocloruro" in text_to_search:
                 final_subcategory = "Creatina HCL"
@@ -142,15 +147,15 @@ class OneNutritionScraper(BaseScraper):
 
         # 4. Heurística para Vitaminas y Minerales
         elif final_category == "Vitaminas y Minerales":
-            text_to_search = title.lower()
+            text_to_search = _normalize(title.lower())
 
             # Keywords mapping
             # Order matters: Specific blends > Major Minerals > Major Vitamins > Formats
             
-            multi_keywords = ["multivitamin", "multi vitamin", "multivitamínico", "multivitamínicos", "daily pack", "animal pak", "opti-men", "opti-women", "vita stack", "zmar"]
+            multi_keywords = ["multivitamin", "multi vitamin", "multivitaminico", "multivitaminicos", "daily pack", "animal pak", "opti-men", "opti-women", "vita stack", "zmar"]
             magnesio_keywords = ["magne", "magnesio", "magnesium", "magnesio d3"]
             zinc_keywords = ["zinc"]
-            omega_keywords = ["omega", "fish oil", "krill", "cla", "linoleic", "aceite de"]
+            omega_keywords = ["omega", "fish oil", "krill", "cla", "linoleic", "linoleico", "aceite de", "aceite de pescado"]
             colageno_keywords = ["colageno", "collagen"]
             calcio_keywords = ["calcio", "calcium"]
             probioticos_keywords = ["probiotic", "probiotico", "enzym", "enzim", "digest"]
@@ -158,9 +163,9 @@ class OneNutritionScraper(BaseScraper):
             vitc_keywords = ["vitamin c", "vitamina c", "ascorbic", "ascorbico"]
             vitd_keywords = ["vitamin d", "vitamina d", "d3"]
             vite_keywords = ["vitamin e", "vitamina e"]
-            antiox_keywords = ["coq10", "q10", "antioxidant", "antioxidante", "resveratrol", "ala ", "alpha lipoic", "turmeric", "curcuma", "astaxanthin"]
-            bienestar_keywords = ["wellness", "bienestar", "sleep", "dormir", "relax", "stress", "liver", "hepato", "joint", "articulacion", "melatonin", "melatonina", "5-htp", "ashwagandha", "maca", "tryptophan"]
-            gummies_keywords = ["gummi", "gummy", "gomita", "gummies"]
+            antiox_keywords = ["coq10", "q10", "antioxidant", "antioxidante", "resveratrol", "ala ", "acido alfa", "alpha lipoic", "alfa lipoico", "turmeric", "curcuma", "astaxanthin", "astaxantina", "semilla de uva", "grape seed"]
+            bienestar_keywords = ["wellness", "bienestar", "sleep", "dormir", "descanso", "relax", "relajante", "stress", "estres", "liver", "higado", "hepato", "joint", "articulacion", "articulaciones", "soporte", "huesos", "melatonin", "melatonina", "5-htp", "ashwagandha", "maca", "tryptophan", "triptofano"]
+            gummies_keywords = ["gummi", "gummy", "gomita","gomitas","gummies"]
 
             if any(k in text_to_search for k in multi_keywords):
                  final_subcategory = "Multivitamínicos"
@@ -197,15 +202,15 @@ class OneNutritionScraper(BaseScraper):
 
         # 5. Heurística para Aminoácidos y BCAA
         elif final_category == "Aminoacidos y BCAA":
-            text_to_search = title.lower() # Solo titulo como en Vitaminas para evitar falsos positivos
+            text_to_search = _normalize(title.lower())  # Solo titulo, sin tildes
             
             zma_keywords = ["zma", "zmar"]
             minerales_keywords = ["magnesio", "zinc", "magne"]
-            eaas_keywords = ["eaa", "essential amino", "esenciales", "neaa", "full spectrum"]
+            eaas_keywords = ["eaa", "essential amino", "aminoacidos esenciales", "esenciales", "neaa", "full spectrum", "espectro completo"]
             bcaa_keywords = ["bcaa", "branched", "ramificados"]
             glutamina_keywords = ["glutamin"]
             leucina_keywords = ["leucin", "leucine"]
-            aminos_keywords = ["amino", "arginin", "citrulin", "beta ala", "taurin", "carnitin", "tirosin", "tyrosin", "lisin", "lysin", "triptop", "metionin", "methionin", "histidin", "treonin", "threonin", "fenilalan", "phenylalan"]
+            aminos_keywords = ["amino", "arginin", "citrulin", "beta ala", "beta alanina","taurin", "carnitin", "tirosin", "tyrosin", "lisin", "lysin", "triptop", "metionin", "methionin", "histidin", "treonin", "threonin", "fenilalan", "phenylalan"]
 
             if any(k in text_to_search for k in zma_keywords):
                  final_category = "Vitaminas y Minerales"
@@ -270,6 +275,13 @@ class OneNutritionScraper(BaseScraper):
                                     link = href 
                                     if not link.startswith('http'):
                                          link = self.base_url + link
+
+                            # Deduplication Check
+                            if link != "N/D" and link in self.seen_urls:
+                                print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
+                                continue
+                            if link != "N/D":
+                                self.seen_urls.add(link)
 
                             # Title
                             title = "N/D"

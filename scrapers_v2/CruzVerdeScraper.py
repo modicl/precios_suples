@@ -110,6 +110,13 @@ class CruzVerdeScraper(BaseScraper):
                             href = link_el.get_attribute("href")
                             if href:
                                 link = self.base_url + href if href.startswith('/') else href
+
+                        # Deduplication Check
+                        if link != "N/D" and link in self.seen_urls:
+                            print(f"[yellow]  >> Producto duplicado omitido: {name}[/yellow]")
+                            continue
+                        if link != "N/D":
+                            self.seen_urls.add(link)
                         
                         # Imagen
                         image_url = ""

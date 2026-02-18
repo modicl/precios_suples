@@ -137,6 +137,13 @@ class AllNutritionScraper(BaseScraper):
                                 href = producto.locator(self.selectors['link']).first.get_attribute("href")
                                 if href:
                                     link = self.base_url + href if href.startswith('/') else href
+
+                            # Deduplication Check
+                            if link != "N/D" and link in self.seen_urls:
+                                print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
+                                continue
+                            if link != "N/D":
+                                self.seen_urls.add(link)
                             
                             # Thumbnail
                             thumbnail_url = ""

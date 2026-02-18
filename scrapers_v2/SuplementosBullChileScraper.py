@@ -2,6 +2,7 @@ from BaseScraper import BaseScraper
 from rich import print
 from datetime import datetime
 import re
+import unicodedata
 
 class SuplementosBullChileScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -91,6 +92,13 @@ class SuplementosBullChileScraper(BaseScraper):
                                 href = card.locator(self.selectors['link']).first.get_attribute("href")
                                 if href:
                                     link = self.base_url + href if href.startswith('/') else href
+
+                            # Deduplication Check
+                            if link != "N/D" and link in self.seen_urls:
+                                print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
+                                continue
+                            if link != "N/D":
+                                self.seen_urls.add(link)
 
                             # Price extraction
                             price = 0
@@ -195,8 +203,12 @@ class SuplementosBullChileScraper(BaseScraper):
                             final_category = main_category
                             final_sub = deterministic_sub
                             
+                            def _normalize(text):
+                                nfd = unicodedata.normalize('NFD', text)
+                                return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
+
                             # 1. Packs (Global)
-                            title_lower = title.lower()
+                            title_lower = _normalize(title.lower())
 
                             # 0. Llaveros / Accesorios (Filtro Usuario)
                             if "llavero" in title_lower:
@@ -239,10 +251,10 @@ class SuplementosBullChileScraper(BaseScraper):
                             # 2. Heurística para Proteínas (Ya que la categoría es genérica)
                             elif final_category == "Proteinas":
                                 # Usamos Título + Descripción para mejor contexto
-                                text_to_search = (title + " " + description).lower()
+                                text_to_search = _normalize((title + " " + description).lower())
                                 
                                 # Palabras clave expandidas (Inglés y Español)
-                                if "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
+                                if re.search(r'\biso\b', text_to_search) or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search or "isolatada" in text_to_search:
                                     final_sub = "Proteína Aislada"
                                 elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
                                     final_sub = "Proteína Hidrolizada"
@@ -257,7 +269,7 @@ class SuplementosBullChileScraper(BaseScraper):
 
                             # 3. Heurística para Creatinas
                             elif final_category == "Creatinas":
-                                text_to_search = (title + " " + (description or "")).lower()
+                                text_to_search = _normalize((title + " " + (description or "")).lower())
                                 
                                 if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search or "hidrocloruro" in text_to_search:
                                     final_sub = "Clorhidrato"

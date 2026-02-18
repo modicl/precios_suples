@@ -3,6 +3,7 @@ from BaseScraper import BaseScraper
 from rich import print
 from datetime import datetime
 import re
+import unicodedata
 
 class StrongestScraper(BaseScraper):
     def __init__(self):
@@ -86,6 +87,13 @@ class StrongestScraper(BaseScraper):
                             href = card.locator(self.selectors['link']).first.get_attribute("href")
                             if href:
                                 link = href if href.startswith('http') else f"https://www.strongest.cl{href}"
+
+                        # Deduplication Check
+                        if link != "N/D" and link in self.seen_urls:
+                            print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
+                            continue
+                        if link != "N/D":
+                            self.seen_urls.add(link)
                         
                         # Thumbnail
                         thumbnail_url = ""
@@ -251,16 +259,20 @@ class StrongestScraper(BaseScraper):
         """
         final_category = main_category
         final_subcategory = deterministic_subcategory
+
+        def _normalize(text):
+            nfd = unicodedata.normalize('NFD', text)
+            return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
         
         # 1. Packs (Global)
-        title_lower = title.lower()
+        title_lower = _normalize(title.lower())
 
         # 0. Llaveros / Accesorios (Filtro Usuario)
         if "llavero" in title_lower:
             final_category = "OTROS"
             final_subcategory = "Otros"
 
-        elif "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower:
+        elif "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower or " + " in title_lower:
             final_category = "Packs"
             final_subcategory = "Packs"
 
@@ -289,11 +301,11 @@ class StrongestScraper(BaseScraper):
         # 2. Heurística para Proteínas
         elif final_category == "Proteinas":
             # Usamos Título + Descripción
-            text_to_search = (title + " " + (description or "")).lower()
+            text_to_search = _normalize((title + " " + (description or "")).lower())
 
             # Logica para productos Dymatize que estan siendo mal clasificados debido al marketing barato de la pagina
             if brand.lower() == "dymatize":
-                if "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
+                if "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search or "isolatada" in text_to_search:
                     final_subcategory = "Proteína Aislada"
                 elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
                     final_subcategory = "Proteína Hidrolizada"
@@ -326,7 +338,7 @@ class StrongestScraper(BaseScraper):
 
                     if "concentrado" in purity_check_text or "combinación" in purity_check_text or "combinacion" in purity_check_text or "concentrate" in purity_check_text or "blend" in purity_check_text or "mezcla" in purity_check_text:
                         final_subcategory = "Proteína de Whey"
-                    elif "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
+                    elif re.search(r'\biso\b', text_to_search) or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
                         final_subcategory = "Proteína Aislada"
                     elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
                         final_subcategory = "Proteína Hidrolizada"
@@ -335,7 +347,7 @@ class StrongestScraper(BaseScraper):
 
         # 3. Heurística para Creatinas
         elif final_category == "Creatinas":
-            text_to_search = (title + " " + (description or "")).lower()
+            text_to_search = _normalize((title + " " + (description or "")).lower())
 
             if "monohidrat" in text_to_search or "monohydrate" in text_to_search or "creapure" in text_to_search: # Siempre por encima de las demas
                 final_subcategory = "Creatina Monohidrato"
@@ -355,18 +367,18 @@ class StrongestScraper(BaseScraper):
 
         # 4. Heurística para Bienestar General / Vitaminas
         elif final_category == "Vitaminas y Minerales":
-            text_to_search = (title + " " + (description or "")).lower()
+            text_to_search = _normalize((title + " " + (description or "")).lower())
 
-            if "collagen" in text_to_search or "colageno" in text_to_search or "colágeno" in text_to_search: # Es mas probable que colageno este solo que la vitamina c
+            if "collagen" in text_to_search or "colageno" in text_to_search:  # colágeno → colageno tras normalizar
                 final_subcategory = "Colágeno"
-            elif "vitamin c" in text_to_search or "vitamina c" in text_to_search: 
+            elif "vitamin c" in text_to_search or "vitamina c" in text_to_search:
                 final_subcategory = "Vitamina C"
             else:
                 final_subcategory = "Bienestar General"
 
         # 5. Heurística para Aminoacidos y BCAA
         elif final_category == "Aminoacidos y BCAA":
-            text_to_search = (title + " " + (description or "")).lower()
+            text_to_search = _normalize((title + " " + (description or "")).lower())
             if "bcaa" in text_to_search:
                 final_subcategory = "BCAAs"
             else:
@@ -374,10 +386,10 @@ class StrongestScraper(BaseScraper):
 
         # 6. Heurística para Snacks y Comida
         elif final_category == "Snacks y Comida":
-            text_to_search = (title + " " + (description or "")).lower()
+            text_to_search = _normalize((title + " " + (description or "")).lower())
             if "shark up" in text_to_search or "gel" in text_to_search or "isotonic" in text_to_search:
                 final_subcategory = "Otros Snacks y Comida"
-            elif "bar" in text_to_search or "bites" in text_to_search or "whey bar" in text_to_search or "barra" in text_to_search:
+            elif "bar" in text_to_search or "bites" in text_to_search or "whey bar" in text_to_search or "barra" in text_to_search or "barrita" in text_to_search:
                 final_subcategory = "Barritas Y Snacks Proteicas"
             elif "alfajor" in text_to_search:
                 final_subcategory = "Snacks Dulces"

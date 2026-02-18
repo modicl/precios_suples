@@ -3,6 +3,7 @@ from BaseScraper import BaseScraper
 from rich import print
 from datetime import datetime
 import re
+import unicodedata
 
 class SupleStoreScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -92,6 +93,13 @@ class SupleStoreScraper(BaseScraper):
                                 href = producto.locator(self.selectors['link']).first.get_attribute("href")
                                 if href:
                                     link = self.base_url + href if href.startswith('/') else href
+
+                            # Deduplication Check
+                            if link != "N/D" and link in self.seen_urls:
+                                print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
+                                continue
+                            if link != "N/D":
+                                self.seen_urls.add(link)
 
                             # Title
                             title = "N/D"
@@ -215,8 +223,12 @@ class SupleStoreScraper(BaseScraper):
 
                             if final_category == "Creatinas":
                                 # Texto de búsqueda: Título + Descripción en minúsculas
-                                text_to_search = (title + " " + (description or "")).lower()
-                                title_lower = title.lower()
+                                def _normalize(text):
+                                    nfd = unicodedata.normalize('NFD', text)
+                                    return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
+
+                                text_to_search = _normalize((title + " " + (description or "")).lower())
+                                title_lower = _normalize(title.lower())
                                 
                                 # 1. Variantes Químicas Específicas (Alta prioridad)
                                 if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search:
@@ -251,10 +263,10 @@ class SupleStoreScraper(BaseScraper):
 
                             elif final_category == "Proteinas" and (deterministic_sub == "CATEGORIZAR_PROTEINA"):
                                 # Usamos SOLO el título para clasificación de proteínas
-                                text_to_search = title.lower()
+                                text_to_search = _normalize(title.lower())
                                 
                                 # Palabras clave expandidas (Inglés y Español)
-                                if "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
+                                if re.search(r'\biso\b', text_to_search) or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search or "isolatada" in text_to_search:
                                     final_sub = "Proteína Aislada"
                                 elif "cascarafoods proteina lean active" in text_to_search: # Caso extremadamente unico, en ninguna parte dice una de las 20 keywords!
                                     final_sub = "Proteína Aislada"

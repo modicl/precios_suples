@@ -144,6 +144,13 @@ class ChileSuplementosScraper(BaseScraper):
                                     if href:
                                         link = href
 
+                                # Deduplication Check
+                                if link != "N/D" and link in self.seen_urls:
+                                    print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
+                                    continue
+                                if link != "N/D":
+                                    self.seen_urls.add(link)
+
                                 # Thumbnail
                                 thumbnail_url = ""
                                 thumb_elem = producto.locator(self.selectors['thumbnail']).first

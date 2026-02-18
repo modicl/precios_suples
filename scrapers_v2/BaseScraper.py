@@ -41,6 +41,7 @@ class BaseScraper:
         # Inicializar BrandMatcher y ProductCategorizer (Offline Mode)
         self.brand_matcher = BrandMatcher()
         self.categorizer = ProductCategorizer(enable_ai=False)
+        self.seen_urls = set()  # For deduplication across categories
 
         # Configuración S3
         self.bucket_name = os.getenv("AWS_BUCKET_NAME", "suplescrapper-images")
@@ -193,7 +194,7 @@ class BaseScraper:
         if not text:
             return ""
         # Regex para eliminar emojis y símbolos gráficos, preservando acentos y '/'
-        return re.sub(r'[^\w\s\u00C0-\u00FF\u002D\u002E\u002C\u002F]', '', text).strip()
+        return re.sub(r'[^\w\s\u00C0-\u00FF\u002D\u002E\u002C\u002F\u002B\u0025]', '', text).strip()
 
     def _setup_logging(self):
         """Configura el logger específico para el scraper."""

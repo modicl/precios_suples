@@ -4,6 +4,7 @@ from BaseScraper import BaseScraper
 from rich import print
 from datetime import datetime
 import re
+import unicodedata
 
 class SupleTechScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -140,6 +141,13 @@ class SupleTechScraper(BaseScraper):
                                     if href:
                                         link = self.base_url + href if href.startswith('/') else href
 
+                                # Deduplication Check
+                                if link != "N/D" and link in self.seen_urls:
+                                    print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
+                                    continue
+                                if link != "N/D":
+                                    self.seen_urls.add(link)
+
                                 # Thumbnail
                                 thumbnail_url = ""
                                 if producto.locator(self.selectors['thumbnail']).count() > 0:
@@ -227,7 +235,10 @@ class SupleTechScraper(BaseScraper):
 
                                 # Heuristic Logic for HMB and ZMA
                                 if deterministic_sub == "DETECTAR_HMB_ZMA" or deterministic_sub == "Bienestar General" :
-                                    text_to_search = (title + " " + description).lower()
+                                    def _normalize(text):
+                                        nfd = unicodedata.normalize('NFD', text)
+                                        return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
+                                    text_to_search = _normalize((title + " " + description).lower())
                                     
                                     if "zma" in text_to_search or "zmar" in text_to_search:
                                         # ZMA -> Vitaminas y Minerales / Multivitamínicos

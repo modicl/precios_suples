@@ -106,6 +106,13 @@ class FarmaciaKnopScraper(BaseScraper):
                         if href:
                             link = self.base_url + href if href.startswith('/') else href
 
+                    # Deduplication Check
+                    if link != "N/D" and link in self.seen_urls:
+                        print(f"[yellow]  >> Producto duplicado omitido: {name}[/yellow]")
+                        continue
+                    if link != "N/D":
+                        self.seen_urls.add(link)
+
                     image_url = ""
                     img_el = card.locator(self.selectors['image']).first
                     if img_el.count() > 0:

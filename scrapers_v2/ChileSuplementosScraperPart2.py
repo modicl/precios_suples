@@ -5,6 +5,7 @@ from BaseScraper import BaseScraper
 from rich import print
 from datetime import datetime
 import re
+import unicodedata
 
 class ChileSuplementosScraperPart2(BaseScraper):
     def __init__(self, base_url="https://www.chilesuplementos.cl", headless=False):
@@ -109,6 +110,13 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                     href = link_elem.get_attribute("href")
                                     if href:
                                         link = href
+
+                                # Deduplication Check
+                                if link != "N/D" and link in self.seen_urls:
+                                    print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
+                                    continue
+                                if link != "N/D":
+                                    self.seen_urls.add(link)
 
                                 # Thumbnail
                                 thumbnail_url = ""
