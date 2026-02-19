@@ -383,13 +383,54 @@ class BaseScraper:
         Inicia el navegador y el proceso de scraping.
         """
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=self.headless)
+            # Argumentos para reducir la huella de automatización.
+            # --disable-blink-features=AutomationControlled evita que navigator.webdriver=true
+            # sea visible para los scripts anti-bot del sitio.
+            launch_args = [
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+            ]
+            browser = playwright.chromium.launch(
+                headless=self.headless,
+                args=launch_args,
+            )
+
+            # User-Agent de Chrome real en Windows 11.
+            # 1366x768 es la resolución más frecuente en Chile (StatCounter 2024),
+            # evita el perfil "pantalla fullscreen headless" de 1920x1080.
             context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/131.0.0.0 Safari/537.36"
+                ),
                 locale="es-CL",
                 timezone_id="America/Santiago",
-                viewport={"width": 1920, "height": 1080}
+                viewport={"width": 1366, "height": 768},
+                # Headers HTTP que un browser real siempre envía
+                extra_http_headers={
+                    "Accept-Language": "es-CL,es;q=0.9,en;q=0.8",
+                    "Accept": (
+                        "text/html,application/xhtml+xml,application/xml;"
+                        "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
+                    ),
+                },
             )
+
+            # Elimina navigator.webdriver y simula plugins básicos de Chrome real.
+            # Esto se inyecta en cada nueva página antes de que cargue cualquier script.
+            context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5],
+                });
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['es-CL', 'es', 'en-US', 'en'],
+                });
+                window.chrome = { runtime: {} };
+            """)
+
             page = context.new_page()
             
             # Crear directorio raw_data en la raíz del proyecto

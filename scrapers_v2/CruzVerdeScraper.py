@@ -1,4 +1,5 @@
 from BaseScraper import BaseScraper
+from CategoryClassifier import CategoryClassifier
 from rich import print
 from datetime import datetime
 import re
@@ -14,7 +15,7 @@ class CruzVerdeScraper(BaseScraper):
             "Proteinas": [{"url": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/proteinas/", "subcategory": "Proteinas"}],
             "Energia": [{"url": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/energia-y-resistencia/", "subcategory": "Energia"}],
             "Snacks y Comida": [{"url": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/barras-proteicas/", "subcategory": "Barras Proteicas"}],
-            "Hidratación": [{"url": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/hidratacion/", "subcategory": "Hidratacion"}]
+            "Bebidas Nutricionales": [{"url": "https://www.cruzverde.cl/vitaminas-y-suplementos/nutricion-deportiva/hidratacion/", "subcategory": "Isotónicas"}]
         }
 
 
@@ -41,6 +42,89 @@ class CruzVerdeScraper(BaseScraper):
         }
 
         super().__init__(base_url, headless, category_urls=self.category_urls, selectors=selectors, site_name="Cruz Verde")
+        self.classifier = CategoryClassifier()
+
+    def _classify_product(self, title: str, description: str, main_category: str,
+                          deterministic_subcategory: str, brand: str):
+        """
+        Clasifica un producto usando el CategoryClassifier centralizado.
+
+        Para main_category == "Energia" (categoría genérica de Cruz Verde que
+        mezcla creatinas, pre-entrenos, aminoácidos, geles, etc.) infiere la
+        categoría real desde el título antes de llamar al classifier, siguiendo
+        el mismo patrón de DrSimiScraper.
+
+        Retorna: (final_category, final_subcategory)
+        """
+        if main_category == "Energia":
+            title_lower = title.lower()
+
+            # ── Geles energéticos → Pre Entrenos ────────────────────────────
+            if any(k in title_lower for k in ["gel energizante", "gel energético",
+                                              "gel energetico", "energy gel",
+                                              "power honey"]):
+                inferred_cat = "Pre Entrenos"
+
+            # ── Isotónicos / hidratación → Bebidas Nutricionales ─────────────
+            elif any(k in title_lower for k in ["isoton", "electrolit", "hidratacion",
+                                                "hidratante", "ampollas bebibles"]):
+                inferred_cat = "Bebidas Nutricionales"
+
+            # ── Creatinas ────────────────────────────────────────────────────
+            elif any(k in title_lower for k in ["creatina", "creatine", "monohidrato",
+                                                "creapure", "kre-alkalyn"]):
+                inferred_cat = "Creatinas"
+
+            # ── Pre-entrenos ─────────────────────────────────────────────────
+            elif any(k in title_lower for k in ["pre workout", "pre-workout", "preworkout",
+                                                "pre entreno", "pre-entreno",
+                                                "beta alanin", "beta-alanin",
+                                                "cafeina", "caffeine",
+                                                "energy booster"]):
+                inferred_cat = "Pre Entrenos"
+
+            # ── Pérdida de grasa ─────────────────────────────────────────────
+            elif any(k in title_lower for k in ["carnitina", "carnitine", "l-carnitin",
+                                                "quemador", "termogenico",
+                                                "fat burner", "ultra ripped",
+                                                "cla ", "garcinia"]):
+                inferred_cat = "Perdida de Grasa"
+
+            # ── Aminoácidos y BCAA ───────────────────────────────────────────
+            elif any(k in title_lower for k in ["bcaa", "aminoacido", "glutamina",
+                                                "leucina", "eaa", "hmb",
+                                                "citrulina", "arginina", "arginine",
+                                                "taurina", "lisina"]):
+                inferred_cat = "Aminoacidos y BCAA"
+
+            # ── Proteínas ────────────────────────────────────────────────────
+            elif any(k in title_lower for k in ["proteina", "whey", "protein",
+                                                "caseina", "casein", "albumina",
+                                                "isolate"]):
+                inferred_cat = "Proteinas"
+
+            # ── Vitaminas y Minerales ────────────────────────────────────────
+            elif any(k in title_lower for k in ["vitamina", "mineral", "magnesio",
+                                                "zinc", "calcio", "hierro", "potasio",
+                                                "curcuma", "curcumin", "melatonin",
+                                                "multivitamin", "complejo b",
+                                                "acido folico", "probiotico"]):
+                inferred_cat = "Vitaminas y Minerales"
+
+            # ── Ganadores ───────────────────────────────────────────────────
+            elif any(k in title_lower for k in ["gainer", "mass gainer",
+                                                "hipercalorico", "voluminizador"]):
+                inferred_cat = "Ganadores de Peso"
+
+            else:
+                # No se puede determinar → no inventar categoría
+                return "OTROS", "Otros"
+
+            return self.classifier.classify(title, description, inferred_cat, inferred_cat, brand)
+
+        # ── Todas las demás categorías: delegar directamente ─────────────────
+        return self.classifier.classify(title, description, main_category,
+                                        deterministic_subcategory, brand)
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías en Cruz Verde...[/green]")
@@ -50,274 +134,287 @@ class CruzVerdeScraper(BaseScraper):
                 category_url = item['url']
                 deterministic_subcategory = item['subcategory']
                 print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {deterministic_subcategory} ({category_url})")
-            
+
                 # Navegar a la primera página
                 current_url = category_url
-            page_num = 1
-            has_more_pages = True
-            
-            try:
-                page.goto(current_url, wait_until="networkidle", timeout=60000)
-            except Exception as e:
-                print(f"[red]Error cargando {current_url}: {e}[/red]")
-                continue
+                page_num = 1
+                has_more_pages = True
 
-            while has_more_pages:
-                print(f"--- Página {page_num} ---")
-                
-                # Esperar a que carguen las cards
                 try:
-                    page.wait_for_selector("ml-new-card-product", timeout=10000)
-                except:
-                    print(f"[yellow]No se encontraron productos en la página {page_num}.[/yellow]")
-                    break
+                    page.goto(current_url, wait_until="networkidle", timeout=60000)
+                except Exception as e:
+                    print(f"[red]Error cargando {current_url}: {e}[/red]")
+                    continue
 
-                # Scroll para asegurar carga de imágenes (lazy load)
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                time.sleep(1) # Pequeña pausa
-
-                cards = page.locator("ml-new-card-product")
-                count = cards.count()
-                print(f"  > Encontrados {count} productos.")
-                
-                if count == 0:
-                    break
-
-                for i in range(count):
+                while has_more_pages:
+                    print(f"--- Página {page_num} ---")
+                    
+                    # Esperar a que carguen las cards
                     try:
-                        card = cards.nth(i)
-                        
-                        # 1. Extracción de datos básicos
-                        # Nombre
-                        name = "N/D"
-                        name_el = card.locator(self.selectors['name']).first
-                        if name_el.count() > 0:
-                            raw_name = name_el.inner_text()
-                            name = self.clean_text(raw_name)
-                        
-                        # Marca
-                        brand = "N/D"
-                        brand_el = card.locator(self.selectors['brand']).first
-                        if brand_el.count() > 0:
-                            raw_brand = brand_el.inner_text()
-                            brand = self.clean_text(raw_brand)
+                        page.wait_for_selector("ml-new-card-product", timeout=10000)
+                    except:
+                        print(f"[yellow]No se encontraron productos en la página {page_num}.[/yellow]")
+                        break
 
-                        
-                        # Link
-                        link = "N/D"
-                        link_el = card.locator(self.selectors['link']).first
-                        if link_el.count() > 0:
-                            href = link_el.get_attribute("href")
-                            if href:
-                                link = self.base_url + href if href.startswith('/') else href
+                    # Scroll para asegurar carga de imágenes (lazy load)
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    time.sleep(1) # Pequeña pausa
 
-                        # Deduplication Check
-                        if link != "N/D" and link in self.seen_urls:
-                            print(f"[yellow]  >> Producto duplicado omitido: {name}[/yellow]")
-                            continue
-                        if link != "N/D":
-                            self.seen_urls.add(link)
-                        
-                        # Imagen
-                        image_url = ""
-                        img_el = card.locator(self.selectors['image']).first
-                        if img_el.count() > 0:
-                            src = img_el.get_attribute("src")
-                            if src:
-                                image_url = src
-
-                        # 2. Lógica de Stock
-                        # Si aparece "Sin stock online", precio es 0
-                        is_out_of_stock = False
-                        # Buscamos texto específico dentro del card
-                        if card.get_by_text("Sin stock online").count() > 0:
-                            is_out_of_stock = True
-
-                        # 3. Lógica de Precios
-                        price = 0
-                        active_discount = False
-                        
-                        if is_out_of_stock:
-                            price = 0
-                            price_text = "0"
-                        else:
-                            # Intentar buscar precio oferta
-                            offer_el = card.locator("p.text-green-turquoise").first
-                            normal_el = card.locator("p.line-through").first
-                            
-                            if offer_el.count() > 0:
-                                # Hay oferta
-                                price_text = offer_el.inner_text()
-                                active_discount = True
-                            elif normal_el.count() > 0:
-                                # A veces solo sale el precio normal tachado si es oferta pero no cargó la otra clase?
-                                # No, usualmente si hay tachado hay oferta.
-                                # Busquemos cualquier precio semibold/bold si no hay oferta explicita
-                                any_price = card.locator("p.font-bold").first
-                                if any_price.count() > 0:
-                                    price_text = any_price.inner_text()
-                                else:
-                                    price_text = "0"
-                            else:
-                                # Precio normal sin oferta
-                                # Clases observadas para precio normal simple: font-bold text-gray-dark
-                                normal_price_simple = card.locator("p.text-gray-dark.font-bold, p.text-green-turquoise").first 
-                                if normal_price_simple.count() > 0:
-                                    price_text = normal_price_simple.inner_text()
-                                else:
-                                    # Fallback genérico: busca cualquier texto con $
-                                    all_texts = card.inner_text()
-                                    # Regex simple para encontrar precio
-                                    match = re.search(r'\$[\d.]+', all_texts)
-                                    price_text = match.group(0) if match else "0"
-
-                            # Limpieza precio
-                            clean_price = re.sub(r'[^\d]', '', price_text)
-                            if clean_price:
-                                price = int(clean_price)
-
-                        # 4. Lógica de Categoría Especial (Energia -> Creatinas)
-                        # 4. Lógica de Categoría Especial (Energia -> Creatinas)
-                        final_category = main_category
-                        final_subcategory = deterministic_subcategory
-
-                        if main_category == "Energia":
-                            if "creatina" in name.lower():
-                                final_category = "Creatinas"
-                                final_subcategory = "Creatina"
-                            else:
-                                final_category = "Vitaminas y Minerales"
-                                # Keep deterministic_subcategory as "Energia" or change?
-                                # Let's keep it consistent with the re-classification
-                                final_subcategory = "Energia"
-                        
-                        # 5. DETAIL EXTRACTION (NEW TAB)
-                        detail_image_url = image_url  # Fallback a thumbnail
-                        sku = "N/D"
-                        description = "N/D"
-                        
-                        if link != "N/D":
-                            context = page.context
-                            detail_page = None
-                            try:
-                                detail_page = context.new_page()
-                                detail_page.goto(link, wait_until="domcontentloaded", timeout=30000)
-                                
-                                # Esperar a que la página cargue completamente
-                                detail_page.wait_for_load_state("networkidle", timeout=10000)
-                                
-                                # Extraer imagen full
-                                if detail_page.locator(self.selectors['detail_image']).count() > 0:
-                                    img_elem = detail_page.locator(self.selectors['detail_image']).first
-                                    img_src = img_elem.get_attribute('src')
-                                    if img_src and not ('disclaimer' in img_src or 'logo' in img_src):
-                                        detail_image_url = img_src
-                                
-                                # Extraer descripción - usar evaluate para buscar el párrafo
-                                try:
-                                    description_js = detail_page.evaluate('''() => {
-                                        const allP = Array.from(document.querySelectorAll('p'));
-                                        const p = allP.find(p => p.textContent.includes('Ayuda a la recuperación'));
-                                        return p ? p.textContent.trim() : null;
-                                    }''')
-                                    if description_js:
-                                        description = description_js
-                                except:
-                                    pass
-                                
-                                # Extraer SKU de la URL
-                                url_match = re.search(r'/(\d+)\.html', link)
-                                if url_match:
-                                    sku = url_match.group(1)
-                                
-                                detail_page.close()
-                            except Exception as e:
-                                print(f"[red]Error extrayendo detalle de {link}: {e}[/red]")
-                                if detail_page:
-                                    detail_page.close()
-                        
-                        current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-                        # New Categorization Logic
-                        # final_subcategory_val = self.clean_text(final_category)
-                        # cat_info = self.categorizer.classify_product(name, final_category)
-                        # if cat_info:
-                        #    final_subcategory_val = cat_info['nombre_subcategoria']
-
-                        yield {
-                            'date': current_date,
-                            'site_name': self.site_name,
-                            'category': self.clean_text(final_category),
-                            'subcategory': final_subcategory,
-                            'product_name': name,
-                            'brand': self.enrich_brand(brand, name),
-                            'price': price,
-                            'link': link,
-                            'rating': "0",
-                            'reviews': "0",
-                            'active_discount': active_discount,
-                            'thumbnail_image_url': image_url,
-                            'image_url': detail_image_url,
-                            'sku': sku,
-                            'description': description
-                        }
-
-                    except Exception as e:
-                        print(f"[red]Error extrayendo producto: {e}[/red]")
-                        continue
-
-                # Paginación
-                # Buscamos el botón de siguiente página
-                # El sitio usa parámetros ?start=12&sz=12 usualmente, o paginación por JS
-                # En la investigación vimos botones numéricos.
-                
-                # Intentamos buscar el botón "Siguiente" o un número mayor al actual
-                # Un selector robusto para "Siguiente" suele ser un icono de flecha o un aria-label
-                
-                # Check if there is a 'next' button enabled
-                # Cruz Verde usa a veces una flecha >
-                next_btn = page.locator("a[aria-label='Ir a la siguiente página'], a.page-next, li.page-item.next a")
-                
-                # Si no existe aria-label estándar, intentamos buscar por URL parameters
-                # Si la URL no cambia, es JS.
-                
-                # Estrategia alternativa: Buscar el botón de la página actual (clase activa) y el siguiente hermano
-                # .pagination .bg-main es la pagina activa
-                
-                current_page_btn = page.locator(".pagination .bg-main, .pagination .active").first
-                if current_page_btn.count() > 0:
-                    # Buscar el elemento padre (li o div) y su siguiente hermano
-                    # Esto es difícil en playwright directo sin selectores claros.
+                    cards = page.locator("ml-new-card-product")
+                    count = cards.count()
+                    print(f"  > Encontrados {count} productos.")
                     
-                    # Vamos a intentar buscar por texto de número
-                    next_page_num = page_num + 1
-                    next_page_link = page.locator(f".pagination a:has-text('{next_page_num}')")
-                    
-                    if next_page_link.count() > 0:
-                        print(f"Navegando a página {next_page_num}...")
-                        next_page_link.first.click()
-                        # Esperar carga
-                        time.sleep(3)
-                        page_num += 1
-                        
+                    if count == 0:
+                        break
+
+                    for i in range(count):
                         try:
-                             page.wait_for_load_state("networkidle")
-                        except:
-                            pass
+                            card = cards.nth(i)
+                            
+                            # 1. Extracción de datos básicos
+                            # Nombre
+                            name = "N/D"
+                            name_el = card.locator(self.selectors['name']).first
+                            if name_el.count() > 0:
+                                raw_name = name_el.inner_text()
+                                name = self.clean_text(raw_name)
+                            
+                            # Marca
+                            brand = "N/D"
+                            brand_el = card.locator(self.selectors['brand']).first
+                            if brand_el.count() > 0:
+                                raw_brand = brand_el.inner_text()
+                                brand = self.clean_text(raw_brand)
+
+                            
+                            # Link
+                            link = "N/D"
+                            link_el = card.locator(self.selectors['link']).first
+                            if link_el.count() > 0:
+                                href = link_el.get_attribute("href")
+                                if href:
+                                    link = self.base_url + href if href.startswith('/') else href
+
+                            # Deduplication Check
+                            if link != "N/D" and link in self.seen_urls:
+                                print(f"[yellow]  >> Producto duplicado omitido: {name}[/yellow]")
+                                continue
+                            if link != "N/D":
+                                self.seen_urls.add(link)
+                            
+                            # Imagen
+                            image_url = ""
+                            img_el = card.locator(self.selectors['image']).first
+                            if img_el.count() > 0:
+                                src = img_el.get_attribute("src")
+                                if src:
+                                    image_url = src
+
+                            # 2. Lógica de Stock
+                            # Si aparece "Sin stock online", precio es 0
+                            is_out_of_stock = False
+                            # Buscamos texto específico dentro del card
+                            if card.get_by_text("Sin stock online").count() > 0:
+                                is_out_of_stock = True
+
+                            # 3. Lógica de Precios
+                            price = 0
+                            active_discount = False
+                            
+                            if is_out_of_stock:
+                                price = 0
+                                price_text = "0"
+                            else:
+                                # Intentar buscar precio oferta
+                                offer_el = card.locator("p.text-green-turquoise").first
+                                normal_el = card.locator("p.line-through").first
+                                
+                                if offer_el.count() > 0:
+                                    # Hay oferta
+                                    price_text = offer_el.inner_text()
+                                    active_discount = True
+                                elif normal_el.count() > 0:
+                                    # A veces solo sale el precio normal tachado si es oferta pero no cargó la otra clase?
+                                    # No, usualmente si hay tachado hay oferta.
+                                    # Busquemos cualquier precio semibold/bold si no hay oferta explicita
+                                    any_price = card.locator("p.font-bold").first
+                                    if any_price.count() > 0:
+                                        price_text = any_price.inner_text()
+                                    else:
+                                        price_text = "0"
+                                else:
+                                    # Precio normal sin oferta
+                                    # Clases observadas para precio normal simple: font-bold text-gray-dark
+                                    normal_price_simple = card.locator("p.text-gray-dark.font-bold, p.text-green-turquoise").first 
+                                    if normal_price_simple.count() > 0:
+                                        price_text = normal_price_simple.inner_text()
+                                    else:
+                                        # Fallback genérico: busca cualquier texto con $
+                                        all_texts = card.inner_text()
+                                        # Regex simple para encontrar precio
+                                        match = re.search(r'\$[\d.]+', all_texts)
+                                        price_text = match.group(0) if match else "0"
+
+                                # Limpieza precio
+                                clean_price = re.sub(r'[^\d]', '', price_text)
+                                if clean_price:
+                                    price = int(clean_price)
+
+                            # 4. DETAIL EXTRACTION (NEW TAB)
+                            # Se hace antes de la clasificación para poder pasar
+                            # la descripción al CategoryClassifier.
+                            detail_image_url = image_url  # Fallback a thumbnail
+                            sku = "N/D"
+                            description = "N/D"
+                            
+                            if link != "N/D":
+                                context = page.context
+                                detail_page = None
+                                try:
+                                    detail_page = context.new_page()
+                                    detail_page.goto(link, wait_until="domcontentloaded", timeout=30000)
+                                    
+                                    # Esperar a que la página cargue completamente
+                                    detail_page.wait_for_load_state("networkidle", timeout=10000)
+                                    
+                                    # Extraer imagen full
+                                    if detail_page.locator(self.selectors['detail_image']).count() > 0:
+                                        img_elem = detail_page.locator(self.selectors['detail_image']).first
+                                        img_src = img_elem.get_attribute('src')
+                                        if img_src and not ('disclaimer' in img_src or 'logo' in img_src):
+                                            detail_image_url = img_src
+                                    
+                                    # Extraer descripción desde los accordions mobile del producto.
+                                    # Cruz Verde renderiza cada pestaña como un ml-accordion dentro
+                                    # de "section.bg-gray-lightest or-menu section.flex.flex-col".
+                                    # Todo el contenido está en el DOM simultáneamente sin necesidad
+                                    # de hacer click. Solo se extraen "Beneficios y Usos" y
+                                    # "Ficha técnica"; "Aviso Legal" se ignora completamente.
+                                    try:
+                                        description_js = detail_page.evaluate('''(productName) => {
+                                            const TABS_TO_SCRAPE = ['Beneficios y Usos', 'Ficha técnica'];
+
+                                            const accordions = document.querySelectorAll(
+                                                'section.bg-gray-lightest or-menu section.flex.flex-col ml-accordion'
+                                            );
+
+                                            const parts = [];
+                                            const seen = new Set();
+
+                                            accordions.forEach(acc => {
+                                                const tabLabel = acc.querySelector('span.pointer-events-none')?.innerText?.trim();
+                                                if (!tabLabel || !TABS_TO_SCRAPE.includes(tabLabel)) return;
+
+                                                acc.querySelectorAll('p').forEach(p => {
+                                                    const t = p.innerText?.trim();
+                                                    if (!t || t.length < 4) return;
+                                                    if (t === productName) return;
+                                                    if (t === tabLabel) return;
+                                                    if (seen.has(t)) return;
+                                                    seen.add(t);
+                                                    parts.push(t);
+                                                });
+                                            });
+
+                                            return parts.length ? parts.join(' | ') : null;
+                                        }''', name)
+                                        if description_js:
+                                            description = description_js
+                                    except:
+                                        pass
+                                    
+                                    # Extraer SKU de la URL
+                                    url_match = re.search(r'/(\d+)\.html', link)
+                                    if url_match:
+                                        sku = url_match.group(1)
+                                    
+                                    detail_page.close()
+                                except Exception as e:
+                                    print(f"[red]Error extrayendo detalle de {link}: {e}[/red]")
+                                    if detail_page:
+                                        detail_page.close()
+                            
+                            current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                            # 5. Clasificación heurística via CategoryClassifier
+                            final_category, final_subcategory = self._classify_product(
+                                name, description, main_category, deterministic_subcategory, brand
+                            )
+
+                            yield {
+                                'date': current_date,
+                                'site_name': self.site_name,
+                                'category': self.clean_text(final_category),
+                                'subcategory': final_subcategory,
+                                'product_name': name,
+                                'brand': self.enrich_brand(brand, name),
+                                'price': price,
+                                'link': link,
+                                'rating': "0",
+                                'reviews': "0",
+                                'active_discount': active_discount,
+                                'thumbnail_image_url': image_url,
+                                'image_url': detail_image_url,
+                                'sku': sku,
+                                'description': description
+                            }
+
+                        except Exception as e:
+                            print(f"[red]Error extrayendo producto: {e}[/red]")
+                            continue
+
+                    # Paginación
+                    # Buscamos el botón de siguiente página
+                    # El sitio usa parámetros ?start=12&sz=12 usualmente, o paginación por JS
+                    # En la investigación vimos botones numéricos.
+                    
+                    # Intentamos buscar el botón "Siguiente" o un número mayor al actual
+                    # Un selector robusto para "Siguiente" suele ser un icono de flecha o un aria-label
+                    
+                    # Check if there is a 'next' button enabled
+                    # Cruz Verde usa a veces una flecha >
+                    next_btn = page.locator("a[aria-label='Ir a la siguiente página'], a.page-next, li.page-item.next a")
+                    
+                    # Si no existe aria-label estándar, intentamos buscar por URL parameters
+                    # Si la URL no cambia, es JS.
+                    
+                    # Estrategia alternativa: Buscar el botón de la página actual (clase activa) y el siguiente hermano
+                    # .pagination .bg-main es la pagina activa
+                    
+                    current_page_btn = page.locator(".pagination .bg-main, .pagination .active").first
+                    if current_page_btn.count() > 0:
+                        # Buscar el elemento padre (li o div) y su siguiente hermano
+                        # Esto es difícil en playwright directo sin selectores claros.
+                        
+                        # Vamos a intentar buscar por texto de número
+                        next_page_num = page_num + 1
+                        next_page_link = page.locator(f".pagination a:has-text('{next_page_num}')")
+                        
+                        if next_page_link.count() > 0:
+                            print(f"Navegando a página {next_page_num}...")
+                            next_page_link.first.click()
+                            # Esperar carga
+                            time.sleep(3)
+                            page_num += 1
+                            
+                            try:
+                                page.wait_for_load_state("networkidle")
+                            except:
+                                pass
+                        else:
+                            print("No se encontró enlace a la siguiente página. Terminando categoría.")
+                            has_more_pages = False
                     else:
-                         print("No se encontró enlace a la siguiente página. Terminando categoría.")
-                         has_more_pages = False
-                else:
-                    # Fallback: intentar ver si hay un botón "Cargar más"
-                    load_more = page.locator("button.load-more, .btn-load-more")
-                    if load_more.count() > 0 and load_more.is_visible():
-                        print("Clic en Cargar Más...")
-                        load_more.click()
-                        time.sleep(3)
-                        page_num += 1 # Es un scroll infinito simulado
-                    else:
-                        print("No se detectó paginación estándar. Terminando.")
-                        has_more_pages = False
+                        # Fallback: intentar ver si hay un botón "Cargar más"
+                        load_more = page.locator("button.load-more, .btn-load-more")
+                        if load_more.count() > 0 and load_more.is_visible():
+                            print("Clic en Cargar Más...")
+                            load_more.click()
+                            time.sleep(3)
+                            page_num += 1 # Es un scroll infinito simulado
+                        else:
+                            print("No se detectó paginación estándar. Terminando.")
+                            has_more_pages = False
                         
 if __name__ == "__main__":
     scraper = CruzVerdeScraper("https://www.cruzverde.cl", headless=True)

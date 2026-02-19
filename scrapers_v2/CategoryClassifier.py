@@ -221,6 +221,8 @@ class CategoryClassifier:
     def _classify_pre_entrenos(self, text):
         """Clasifica subcategoría dentro de Pre Entrenos."""
         kw = self._pre_entrenos
+        if self._any(text, kw["geles_energia"]):
+            return "Energía (Geles/Café)"
         if self._any(text, kw["cafeina"]):
             return "Cafeína"
         if self._any(text, kw["beta_alanina"]):
@@ -331,8 +333,14 @@ class CategoryClassifier:
         # ---------------------------------------------------------------
         # 2. Packs (global, alta prioridad)
         # ---------------------------------------------------------------
-        is_pack = (self._any(title_norm, gkw["packs"]) or
-                   any(sep in title_norm for sep in gkw["pack_plus_separator"]))
+        # "pack" se verifica con word boundary para evitar falsos positivos
+        # con palabras como "Doypack", "Backpack", etc.
+        _pack_kw_no_pack = [k for k in gkw["packs"] if k != "pack"]
+        is_pack = (
+            bool(re.search(r'\bpack\b', title_norm)) or
+            self._any(title_norm, _pack_kw_no_pack) or
+            any(sep in title_norm for sep in gkw["pack_plus_separator"])
+        )
         if is_pack:
             return "Packs", "Packs"
 
@@ -342,12 +350,17 @@ class CategoryClassifier:
         is_liquid = self._any(title_norm, gkw["liquid_volume_markers"])
         is_powder = self._any(title_norm, gkw["powder_weight_markers"])
 
-        if self._any(title_norm, gkw["rtd_explicit"]):
+        # Un producto es isotónico si su título contiene keywords de isotónicos.
+        # En ese caso NO aplicamos el fallback RTD (que fuerza "Batidos de proteína")
+        # y dejamos que el paso 4 lo clasifique correctamente como "Isotónicos".
+        is_isotonic = self._any(title_norm, self._bebidas["isotonicos"])
+
+        if self._any(title_norm, gkw["rtd_explicit"]) and not is_isotonic:
             return "Bebidas Nutricionales", "Batidos de proteína"
 
         rtd_words = [w for w in gkw["rtd_liquid_indicators"]
                      if w not in gkw.get("rtd_exclusion", [])]
-        if self._any(title_norm, rtd_words):
+        if self._any(title_norm, rtd_words) and not is_isotonic:
             # Solo es bebida si tiene indicador de volumen o no tiene peso de polvo
             if is_liquid or not is_powder:
                 return "Bebidas Nutricionales", "Batidos de proteína"
