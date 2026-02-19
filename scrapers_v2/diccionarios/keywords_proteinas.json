@@ -1,0 +1,27 @@
+{
+  "snacks_redirect": ["barra", "barrita", "alfajor", "cookie", "brownie", "bite", "snack"],
+  "vegana": ["vegan", "plant", "vegana", "vegano", "plant based", "vegetal"],
+  "carne": ["beef", "carne", "vacuno"],
+  "caseina": ["casein", "caseina", "micelar", "micellar"],
+  "aislada": ["iso", "isolate", "aislada", "isolated", "isofit", "isolatada","izolate"],
+  "aislada_word_boundary": ["iso"],
+  "hidrolizada": ["hydro", "hidrolizada", "hydrolized", "hydrolyzed", "hidrolizado"],
+  "whey_concentrado": ["concentrado", "concentrate", "blend"],
+  "whey_combinacion": ["combinacion", "combinación"],
+  "whey_mezcla": ["mezcla"],
+  "benign_phrases": [
+    "se mezcla", "facil mezcla", "fácil mezcla", "mezclabilidad",
+    "mezcla instantanea", "mezcla instantánea",
+    "combinacion perfecta", "perfecta combinacion", "excelente combinacion",
+    "combinación perfecta", "perfecta combinación", "excelente combinación",
+    "mezclar", "mezclado", "mezclando",
+    "mezcla 1 scoop", "mezcla un scoop",
+    "mezcla 1 porcion", "mezcla una porcion",
+    "mezcla 1 porción", "mezcla una porción",
+    "mezcla 1 serv", "mezcla un serv",
+    "mezcla el polvo", "mezcla con agua", "mezcla con leche"
+  ],
+  "dymatize_aislada": ["iso", "isolate", "aislada", "isolated", "isofit", "isolatada"],
+  "dymatize_hidrolizada": ["hydro", "hidrolizada", "hydrolized", "hydrolyzed", "hidrolizado"],
+  "fallback": "Otros Proteinas"
+}

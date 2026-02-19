@@ -1,0 +1,28 @@
+{
+  "batidos_proteina": [
+    "batido de proteina", "batidos de proteina", "protein shake", "protein-shake",
+    "shake proteico", "shakes proteicos", "ready to drink", "rtd"
+  ],
+  "bebidas_energeticas": [
+    "bebida energetica", "bebidas energeticas", "energy drink", "energy-drink"
+  ],
+  "isotonicos": [
+    "isotonico", "isotonicos", "isotonic", "bebida deportiva", "sports drink",
+    "electrolitos", "electrolytes", "hidratacion deportiva", "sport hydration",
+    "hidratante", "suerox", "electrolit", "hidratacion", "boost hidratacion",
+    "sales minerales", "rehidratacion","gatorade"
+  ],
+  "geles": [
+    "gel energetico", "geles energeticos", "energy gel", "gel de carbohidratos",
+    "gel deportivo"
+  ],
+  "aloe_vera": [
+    "aloe vera", "aloe-vera", "jugo de aloe", "bebida de aloe", "aloe drink",
+    "aloe juice", "aloe gel drink", "de aloe vera"
+  ],
+  "otras_bebidas": [
+    "bebida de coco", "agua de coco", "coconut water", "jugo de fruta",
+    "jugo natural", "bebida natural", "kombucha", "kefir"
+  ],
+  "fallback": "Otros Bebidas Nutricionales"
+}

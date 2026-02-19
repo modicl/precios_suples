@@ -1,0 +1,10 @@
+{
+  "ganadores": [
+    "ganador de peso", "ganador de masa", "ganadores de peso", "ganadores de masa",
+    "mass gainer", "weight gainer", "mass-gainer", "weight-gainer",
+    "gainer", "hipercalorico", "hipercalorica", "hypercaloric",
+    "voluminizador", "voluminizadora", "bulk", "bulking",
+    "aumento de masa", "aumento de peso"
+  ],
+  "fallback": "Ganadores De Peso"
+}

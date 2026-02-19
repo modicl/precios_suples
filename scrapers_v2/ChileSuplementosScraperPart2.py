@@ -2,7 +2,7 @@
 # Contiene Infinite Scroll y a veces un boton "Cargar más"
 
 from BaseScraper import BaseScraper, SharedSeenUrls
-from CategoryClassifier import CategoryClassifier
+from CategoryClassifier import CategoryClassifier, normalize
 from rich import print
 from datetime import datetime
 import re
@@ -299,6 +299,36 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                 final_category, final_subcategory = self.classifier.classify(
                                     title, description, main_category, deterministic_subcategory, brand
                                 )
+
+                                # ── Overrides específicos ChileSuplementos Part2 ─────────────────
+                                title_lower_cs = title.lower()
+                                title_norm_cs = normalize(title_lower_cs)
+
+                                # 1. "+Shaker" pegado: typo del sitio, el shaker va incluido en el
+                                #    envase. Reclasificamos según el contenido real del título limpio.
+                                if re.search(r'\+shaker', title_lower_cs):
+                                    clean_title = re.sub(r'\+shaker\b', '', title, flags=re.IGNORECASE).strip()
+                                    clean_norm = normalize(clean_title.lower())
+                                    inferred_main = main_category
+                                    if "creatina" in clean_norm or "creatine" in clean_norm or "creapure" in clean_norm:
+                                        inferred_main = "Creatinas"
+                                    elif "proteina" in clean_norm or "protein" in clean_norm or "whey" in clean_norm:
+                                        inferred_main = "Proteinas"
+                                    inferred_cat, inferred_sub = self.classifier.classify(
+                                        clean_title, description, inferred_main, inferred_main, brand
+                                    )
+                                    if inferred_cat != "Packs":
+                                        final_category, final_subcategory = inferred_cat, inferred_sub
+
+                                # 2. Bebidas energéticas en Ofertas: el sitio las mezcla con
+                                #    cualquier categoría; el classifier no puede redirigirlas
+                                #    porque "Ofertas" no tiene rama en el paso 4.
+                                elif self.classifier._any(title_norm_cs, self.classifier._bebidas["bebidas_energeticas"]):
+                                    final_category, final_subcategory = "Bebidas Nutricionales", "Bebidas Energéticas"
+
+                                # 3. Gainers publicados en Snacks por error del sitio.
+                                elif self.classifier._any(title_norm_cs, self.classifier._ganadores["ganadores"]):
+                                    final_category, final_subcategory = "Ganadores de Peso", "Ganadores De Peso"
 
                                 yield {
                                     'date': current_date,

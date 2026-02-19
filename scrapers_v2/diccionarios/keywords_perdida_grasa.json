@@ -1,0 +1,34 @@
+{
+  "cafeina": [
+    "cafeina", "caffeine", "cafeine", "cafe puro", "pure caffeine"
+  ],
+  "termogenicos": [
+    "termogenico", "termogenicos", "thermogenic", "thermogenics",
+    "quemador termogenico", "fat burner", "fat-burner", "fatburner",
+    "quemador de grasa", "quemador grasa"
+  ],
+  "carnitina": [
+    "carnitina", "carnitine", "l-carnitina", "l-carnitine", "lcarnitina", "lcarnitine",
+    "acetil carnitina", "acetyl carnitine", "alcar"
+  ],
+  "quemadores_liquidos": [
+    "quemador liquido", "quemadores liquidos", "liquid burner", "fat burner liquid"
+  ],
+  "quemadores_naturales": [
+    "quemador natural", "quemadores naturales", "natural fat burner",
+    "te verde", "green tea", "garcinia", "cla", "linoleico", "linoleic",
+    "extracto de", "extract of"
+  ],
+  "eliminadores_retencion": [
+    "eliminador de retencion", "eliminador retencion", "retencion de liquidos",
+    "diuretico", "diuretic", "water retention", "retencion hidrica"
+  ],
+  "cremas_reductoras": [
+    "crema reductora", "cremas reductoras", "gel reductor", "reducing cream",
+    "crema anticelulitis", "anticelulitis"
+  ],
+  "quemadores_localizados": [
+    "quemador localizado", "quemadores localizados", "localized fat burner"
+  ],
+  "fallback": "Otros Perdida de Grasa"
+}

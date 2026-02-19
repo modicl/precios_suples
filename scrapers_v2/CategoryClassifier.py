@@ -138,9 +138,9 @@ class CategoryClassifier:
         if self._any(text, kw["alkalyn"]):
             return "Otros Creatinas"
 
-        # Creapure es sello de monohidrato premium
+        # Creapure es sello de monohidrato premium → se mapea a la subcategoría estándar
         if self._any(text, kw["creapure_sello"]):
-            return "Sello Creapure"
+            return "Creatina Monohidrato"
 
         if self._any(text, kw["monohidrato"]):
             return "Creatina Monohidrato"
@@ -367,12 +367,16 @@ class CategoryClassifier:
             self._any(title_norm, self._bebidas["otras_bebidas"])
         )
 
-        if self._any(title_norm, gkw["rtd_explicit"]) and not is_isotonic and not is_aloe_or_coco:
+        # Bebidas energéticas tampoco son batidos de proteína: se excluyen del RTD
+        # global para que lleguen al paso 4 y se clasifiquen como "Bebidas Energéticas".
+        is_energy_drink = self._any(title_norm, self._bebidas["bebidas_energeticas"])
+
+        if self._any(title_norm, gkw["rtd_explicit"]) and not is_isotonic and not is_aloe_or_coco and not is_energy_drink:
             return "Bebidas Nutricionales", "Batidos de proteína"
 
         rtd_words = [w for w in gkw["rtd_liquid_indicators"]
                      if w not in gkw.get("rtd_exclusion", [])]
-        if self._any(title_norm, rtd_words) and not is_isotonic and not is_aloe_or_coco:
+        if self._any(title_norm, rtd_words) and not is_isotonic and not is_aloe_or_coco and not is_energy_drink:
             # Solo es bebida si tiene indicador de volumen o no tiene peso de polvo
             if is_liquid or not is_powder:
                 return "Bebidas Nutricionales", "Batidos de proteína"

@@ -1,6 +1,5 @@
 # Datos
 *.csv
-*.json
 
 # Python
 __pycache__/

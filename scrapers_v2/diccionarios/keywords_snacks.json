@@ -1,0 +1,30 @@
+{
+  "barritas_proteicas": [
+    "barra proteica", "barrita proteica", "barritas proteicas", "barras proteicas",
+    "protein bar", "protein-bar", "proteinbar",
+    "barra de proteina", "barras de proteina",
+    "barra proteina", "barras proteina",
+    "bites", "bite", "protein bites", "barra space protein"
+  ],
+  "snacks_dulces": [
+    "cookie", "galleta", "brownie", "muffin", "waffle", "wafer",
+    "alfajor", "donut", "donas", "churro",
+    "snack dulce", "snacks dulces", "sweet snack"
+  ],
+  "snacks_salados": [
+    "chips", "chip proteico", "chips proteicos", "palomitas", "popcorn",
+    "snack salado", "snacks salados", "savory snack", "crackers"
+  ],
+  "cereales": [
+    "granola", "cereal", "avena", "oatmeal", "oats", "muesli",
+    "porridge", "overnight oats"
+  ],
+  "mantequilla_mani": [
+    "mantequilla de mani", "mantequilla de mani", "peanut butter",
+    "crema de mani", "crema de cacahuate", "almond butter", "mantequilla de almendra"
+  ],
+  "otros_snacks": [
+    "snack", "snacks", "comida saludable", "healthy food", "alimento"
+  ],
+  "fallback": "Otros Snacks y Comida"
+}

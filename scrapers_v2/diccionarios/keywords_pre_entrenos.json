@@ -1,0 +1,25 @@
+{
+  "geles_energia": [
+    "gel energizante", "gel energetico", "geles energizantes", "geles energeticos",
+    "energy gel", "gel de carbohidratos", "gel deportivo", "power honey",
+    "gel gu", "gu gel"
+  ],
+  "pre_entreno": [
+    "pre entreno", "pre-entreno", "pre workout", "pre-workout", "preworkout",
+    "pre training", "pre-training", "pre entrena", "pre-entrena",
+    "energia y resistencia", "energia resistencia", "energy", "energia"
+  ],
+  "cafeina": [
+    "cafeina", "caffeine", "cafeine", "cafe puro", "pure caffeine"
+  ],
+  "beta_alanina": [
+    "beta alanina", "beta-alanina", "beta alanine", "beta-alanine"
+  ],
+  "oxido_nitrico": [
+    "oxido nitrico", "nitric oxide", "no2", "n.o.", "pump", "vasodilatador", "vasodilator"
+  ],
+  "otros_pre_entrenos": [
+    "booster", "estimulante", "stimulant", "focus", "concentracion", "concentration"
+  ],
+  "fallback": "Pre Entreno"
+}

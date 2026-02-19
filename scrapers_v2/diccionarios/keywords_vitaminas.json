@@ -1,0 +1,17 @@
+{
+  "multivitaminicos": ["multivitamin", "multi vitamin", "multivitaminico", "multivitaminicos", "daily pack", "animal pak", "opti-men", "opti-women", "vita stack", "zmar"],
+  "magnesio": ["magne", "magnesio", "magnesium", "magnesio d3"],
+  "zinc": ["zinc"],
+  "omega": ["omega", "fish oil", "krill", "cla", "linoleic", "linoleico", "aceite de", "aceite de pescado"],
+  "colageno": ["colageno", "collagen"],
+  "calcio": ["calcio", "calcium"],
+  "probioticos": ["probiotic", "probiotico", "enzym", "enzim", "digest"],
+  "vitamina_b": ["b-complex", "complejo b", "vitamin b", "vitamina b", "b12", "b6", "biotin", "biotina"],
+  "vitamina_c": ["vitamin c", "vitamina c", "ascorbic", "ascorbico"],
+  "vitamina_d": ["vitamin d", "vitamina d", "d3"],
+  "vitamina_e": ["vitamin e", "vitamina e"],
+  "antioxidantes": ["coq10", "q10", "antioxidant", "antioxidante", "resveratrol", "ala ", "acido alfa", "alpha lipoic", "alfa lipoico", "turmeric", "curcuma", "astaxanthin", "astaxantina", "semilla de uva", "grape seed"],
+  "bienestar": ["wellness", "bienestar", "sleep", "dormir", "descanso", "relax", "relajante", "stress", "estres", "liver", "higado", "hepato", "joint", "articulacion", "articulaciones", "soporte", "huesos", "melatonin", "melatonina", "5-htp", "ashwagandha", "maca", "tryptophan", "triptofano"],
+  "gummies": ["gummi", "gummy", "gomita", "gomitas", "gummies"],
+  "fallback": "Otros Vitaminas y Minerales"
+}

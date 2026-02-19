@@ -1,0 +1,11 @@
+{
+  "zma": ["zma", "zmar"],
+  "minerales": ["magnesio", "zinc", "magne"],
+  "hmb": ["hmb"],
+  "eaas": ["eaa", "essential amino", "aminoacidos esenciales", "esenciales", "neaa", "full spectrum", "espectro completo"],
+  "bcaa": ["bcaa", "branched", "ramificados"],
+  "glutamina": ["glutamin"],
+  "leucina": ["leucin", "leucine"],
+  "aminoacidos_especificos": ["amino", "arginin", "citrulin", "beta ala", "beta alanina", "taurin", "carnitin", "tirosin", "tyrosin", "lisin", "lysin", "triptop", "metionin", "methionin", "histidin", "treonin", "threonin", "fenilalan", "phenylalan"],
+  "fallback": "Otros Aminoacidos y BCAA"
+}

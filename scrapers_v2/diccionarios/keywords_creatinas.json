@@ -1,0 +1,10 @@
+{
+  "hcl": ["hcl", "clorhidrato", "hydrochloride", "hidrocloruro"],
+  "malato_magnesio": ["malato", "magnesio", "magnapower"],
+  "nitrato": ["nitrato", "nitrate"],
+  "alkalyn": ["alkalyn", "alcalina"],
+  "creapure_sello": ["creapure"],
+  "monohidrato": ["monohidrat", "monohydrate", "monohidrato", "monohidratada"],
+  "micronizada": ["micronizad", "micronized", "micronizada", "micronizado"],
+  "fallback": "Creatina Monohidrato"
+}

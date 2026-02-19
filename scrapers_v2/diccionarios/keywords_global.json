@@ -1,0 +1,10 @@
+{
+  "packs": ["pack", "paquete", "combo", "+2"],
+  "pack_plus_separator": [" + "],
+  "accesorios": ["llavero"],
+  "rtd_explicit": ["rtd", "ready to drink"],
+  "rtd_liquid_indicators": ["shake", "batido", "bebida"],
+  "liquid_volume_markers": ["ml", "lt", "cc", "botella"],
+  "powder_weight_markers": ["lb", "kg", "gr", "servicios"],
+  "rtd_exclusion": ["shaker"]
+}
