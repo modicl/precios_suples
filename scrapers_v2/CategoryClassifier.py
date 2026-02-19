@@ -285,6 +285,10 @@ class CategoryClassifier:
             return "Geles Energéticos"
         if self._any(text, kw["batidos_proteina"]):
             return "Batidos de proteína"
+        if self._any(text, kw["aloe_vera"]):
+            return "Otros Bebidas Nutricionales"
+        if self._any(text, kw["otras_bebidas"]):
+            return "Otros Bebidas Nutricionales"
         return kw["fallback"]
 
     # ------------------------------------------------------------------
@@ -355,12 +359,20 @@ class CategoryClassifier:
         # y dejamos que el paso 4 lo clasifique correctamente como "Isotónicos".
         is_isotonic = self._any(title_norm, self._bebidas["isotonicos"])
 
-        if self._any(title_norm, gkw["rtd_explicit"]) and not is_isotonic:
+        # Bebidas de aloe vera o coco no son batidos de proteína: se excluyen
+        # del RTD global para que lleguen al paso 4 y se clasifiquen correctamente
+        # como "Otros Bebidas Nutricionales".
+        is_aloe_or_coco = (
+            self._any(title_norm, self._bebidas["aloe_vera"]) or
+            self._any(title_norm, self._bebidas["otras_bebidas"])
+        )
+
+        if self._any(title_norm, gkw["rtd_explicit"]) and not is_isotonic and not is_aloe_or_coco:
             return "Bebidas Nutricionales", "Batidos de proteína"
 
         rtd_words = [w for w in gkw["rtd_liquid_indicators"]
                      if w not in gkw.get("rtd_exclusion", [])]
-        if self._any(title_norm, rtd_words) and not is_isotonic:
+        if self._any(title_norm, rtd_words) and not is_isotonic and not is_aloe_or_coco:
             # Solo es bebida si tiene indicador de volumen o no tiene peso de polvo
             if is_liquid or not is_powder:
                 return "Bebidas Nutricionales", "Batidos de proteína"

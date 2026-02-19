@@ -1,7 +1,7 @@
 # Scraper para la pagina web ChileSuplementos.cl (Parte 1)
 # Contiene Infinite Scroll y a veces un boton "Cargar más"
 
-from BaseScraper import BaseScraper
+from BaseScraper import BaseScraper, SharedSeenUrls
 from rich import print
 from datetime import datetime
 import re
@@ -65,7 +65,10 @@ class ChileSuplementosScraperPart1(BaseScraper):
             'thumbnail': '.porto-tb-featured-image img, .porto-tb-woo-link img' # Better grid selectors
         }
         
-        super().__init__(base_url, headless, category_urls, selectors, site_name="ChileSuplementos", output_suffix="_part1")
+        super().__init__(base_url, headless, self.category_urls, selectors, site_name="ChileSuplementos", output_suffix="_part1")
+        # Registro compartido con Part2: cualquier URL scrapeada por Part1
+        # queda registrada para que Part2 la omita en la categoría Ofertas
+        self.shared_ofertas = SharedSeenUrls("chilesuplementos_ofertas")
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en ChileSuplementos (Parte 1)...[/green]")
@@ -130,12 +133,16 @@ class ChileSuplementosScraperPart1(BaseScraper):
                                     if href:
                                         link = href
 
-                                # Deduplication Check
+                                # Deduplication Check (intra-proceso)
                                 if link != "N/D" and link in self.seen_urls:
                                     print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
                                     continue
                                 if link != "N/D":
                                     self.seen_urls.add(link)
+                                    # Registrar en el store compartido para que Part2
+                                    # omita este producto en la categoría Ofertas.
+                                    # register() es atómico: check + insert bajo lock.
+                                    self.shared_ofertas.register(link)
 
                                 # Thumbnail
                                 thumbnail_url = ""

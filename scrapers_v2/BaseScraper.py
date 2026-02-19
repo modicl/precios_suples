@@ -9,6 +9,7 @@ import logging
 import sys
 import os
 import json
+import time
 import ollama
 from datetime import datetime
 from playwright.sync_api import sync_playwright, Page, Playwright
@@ -27,6 +28,126 @@ from data_processing.brand_matcher import BrandMatcher
 from tools.categorizer import ProductCategorizer
 
 load_dotenv()
+
+
+class SharedSeenUrls:
+    """
+    Registro compartido de URLs ya scrapeadas, seguro para uso concurrente entre procesos.
+    Utiliza un archivo JSON como almacén y un archivo .lock para exclusión mutua.
+    Diseñado para deduplicar categorías que aparecen en múltiples scrapers (ej: Ofertas en Part1 y Part2).
+
+    La operación clave es `register(url)`, que hace check + insert de forma atómica bajo lock,
+    eliminando la race condition de hacer contains() y add() en dos pasos separados.
+
+    Uso:
+        shared = SharedSeenUrls("chilesuplementos_ofertas")
+        if not shared.register(url):
+            continue  # ya fue registrado por el otro proceso, omitir
+    """
+
+    LOCK_TIMEOUT = 10   # segundos máximos esperando el lock
+    LOCK_RETRY   = 0.05 # segundos entre reintentos
+
+    def __init__(self, name: str, base_dir: str = None):
+        """
+        Args:
+            name:     Nombre único del registro (sin extensión), ej: "chilesuplementos_ofertas"
+            base_dir: Directorio donde guardar los archivos. Por defecto, raw_data/ en la raíz del proyecto.
+        """
+        if base_dir is None:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.abspath(os.path.join(current_dir, '..'))
+            base_dir = os.path.join(project_root, "raw_data")
+
+        os.makedirs(base_dir, exist_ok=True)
+        self._json_path = os.path.join(base_dir, f"{name}.json")
+        self._lock_path = os.path.join(base_dir, f"{name}.lock")
+
+    # ------------------------------------------------------------------
+    # Primitivas de lock (cross-process, sin dependencias externas)
+    # ------------------------------------------------------------------
+
+    def _acquire_lock(self):
+        """Crea el archivo .lock con O_CREAT|O_EXCL (operación atómica en todos los OS soportados)."""
+        deadline = time.monotonic() + self.LOCK_TIMEOUT
+        while True:
+            try:
+                fd = os.open(self._lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.close(fd)
+                return  # lock adquirido
+            except FileExistsError:
+                if time.monotonic() >= deadline:
+                    # El proceso dueño pudo haber muerto — limpiamos el lock stale y reintentamos
+                    try:
+                        os.remove(self._lock_path)
+                    except FileNotFoundError:
+                        pass
+                    raise TimeoutError(f"SharedSeenUrls: no se pudo adquirir lock en {self._lock_path}")
+                time.sleep(self.LOCK_RETRY)
+
+    def _release_lock(self):
+        try:
+            os.remove(self._lock_path)
+        except FileNotFoundError:
+            pass
+
+    # ------------------------------------------------------------------
+    # I/O interno
+    # ------------------------------------------------------------------
+
+    def _load(self) -> dict:
+        """Lee el JSON. Retorna estructura vacía si no existe, está corrupto, o es de otro día."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        if not os.path.exists(self._json_path):
+            return {"date": today, "urls": []}
+        try:
+            with open(self._json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if data.get("date") != today:
+                return {"date": today, "urls": []}
+            return data
+        except (json.JSONDecodeError, KeyError):
+            return {"date": today, "urls": []}
+
+    def _save(self, data: dict):
+        with open(self._json_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+
+    # ------------------------------------------------------------------
+    # API pública
+    # ------------------------------------------------------------------
+
+    def register(self, url: str) -> bool:
+        """
+        Operación atómica: verifica si la URL existe y la inserta si no.
+        Retorna True si fue insertada (este proceso es el primero en verla),
+                False si ya existía (otro proceso la registró antes).
+
+        Usar SIEMPRE este método en lugar de contains() + add() por separado.
+        """
+        self._acquire_lock()
+        try:
+            data = self._load()
+            if url in data["urls"]:
+                return False  # ya existía
+            data["urls"].append(url)
+            self._save(data)
+            return True  # insertada por este proceso
+        finally:
+            self._release_lock()
+
+    def clear(self):
+        """Elimina el archivo JSON (usado por el orquestador al finalizar la sesión)."""
+        self._acquire_lock()
+        try:
+            if os.path.exists(self._json_path):
+                os.remove(self._json_path)
+        finally:
+            self._release_lock()
+
+    def count(self) -> int:
+        return len(self._load()["urls"])
+
 
 class BaseScraper:
     # Constructor que recibe la URL base, el modo headless, urls de categorías y selectores

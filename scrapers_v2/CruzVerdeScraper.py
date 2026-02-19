@@ -141,7 +141,7 @@ class CruzVerdeScraper(BaseScraper):
                 has_more_pages = True
 
                 try:
-                    page.goto(current_url, wait_until="networkidle", timeout=60000)
+                    page.goto(current_url, wait_until="domcontentloaded", timeout=60000)
                 except Exception as e:
                     print(f"[red]Error cargando {current_url}: {e}[/red]")
                     continue
@@ -273,10 +273,13 @@ class CruzVerdeScraper(BaseScraper):
                                 try:
                                     detail_page = context.new_page()
                                     detail_page.goto(link, wait_until="domcontentloaded", timeout=30000)
-                                    
-                                    # Esperar a que la página cargue completamente
-                                    detail_page.wait_for_load_state("networkidle", timeout=10000)
-                                    
+                                    # Esperar a que Angular monte ml-accordion antes de extraer descripción.
+                                    # domcontentloaded llega antes de que los custom elements estén listos.
+                                    try:
+                                        detail_page.wait_for_selector("ml-accordion", timeout=8000)
+                                    except:
+                                        pass
+
                                     # Extraer imagen full
                                     if detail_page.locator(self.selectors['detail_image']).count() > 0:
                                         img_elem = detail_page.locator(self.selectors['detail_image']).first
@@ -364,57 +367,34 @@ class CruzVerdeScraper(BaseScraper):
                             continue
 
                     # Paginación
-                    # Buscamos el botón de siguiente página
-                    # El sitio usa parámetros ?start=12&sz=12 usualmente, o paginación por JS
-                    # En la investigación vimos botones numéricos.
-                    
-                    # Intentamos buscar el botón "Siguiente" o un número mayor al actual
-                    # Un selector robusto para "Siguiente" suele ser un icono de flecha o un aria-label
-                    
-                    # Check if there is a 'next' button enabled
-                    # Cruz Verde usa a veces una flecha >
-                    next_btn = page.locator("a[aria-label='Ir a la siguiente página'], a.page-next, li.page-item.next a")
-                    
-                    # Si no existe aria-label estándar, intentamos buscar por URL parameters
-                    # Si la URL no cambia, es JS.
-                    
-                    # Estrategia alternativa: Buscar el botón de la página actual (clase activa) y el siguiente hermano
-                    # .pagination .bg-main es la pagina activa
-                    
-                    current_page_btn = page.locator(".pagination .bg-main, .pagination .active").first
-                    if current_page_btn.count() > 0:
-                        # Buscar el elemento padre (li o div) y su siguiente hermano
-                        # Esto es difícil en playwright directo sin selectores claros.
-                        
-                        # Vamos a intentar buscar por texto de número
-                        next_page_num = page_num + 1
-                        next_page_link = page.locator(f".pagination a:has-text('{next_page_num}')")
-                        
-                        if next_page_link.count() > 0:
-                            print(f"Navegando a página {next_page_num}...")
-                            next_page_link.first.click()
-                            # Esperar carga
+                    # Cruz Verde usa ml-pagination con div.rounded-full como botones.
+                    # La página activa tiene clase "bg-main!" (Tailwind con !important).
+                    # No hay <a> tags — son divs con click handler de Angular.
+                    next_page_num = page_num + 1
+                    next_page_btn = page.locator(
+                        f"ml-pagination div.rounded-full:has-text('{next_page_num}')"
+                    )
+
+                    if next_page_btn.count() > 0:
+                        print(f"Navegando a página {next_page_num}...")
+                        # Usar JS click para evitar que el header sticky (z-50) o cualquier
+                        # overlay intercepte el evento de Playwright antes de que llegue al botón.
+                        page.evaluate(
+                            """(num) => {
+                                const btns = Array.from(document.querySelectorAll('ml-pagination div.rounded-full'));
+                                const btn = btns.find(b => b.innerText.trim() === String(num));
+                                if (btn) btn.click();
+                            }""",
+                            next_page_num
+                        )
+                        page_num += 1
+                        try:
+                            page.wait_for_selector("ml-new-card-product", timeout=10000)
+                        except:
                             time.sleep(3)
-                            page_num += 1
-                            
-                            try:
-                                page.wait_for_load_state("networkidle")
-                            except:
-                                pass
-                        else:
-                            print("No se encontró enlace a la siguiente página. Terminando categoría.")
-                            has_more_pages = False
                     else:
-                        # Fallback: intentar ver si hay un botón "Cargar más"
-                        load_more = page.locator("button.load-more, .btn-load-more")
-                        if load_more.count() > 0 and load_more.is_visible():
-                            print("Clic en Cargar Más...")
-                            load_more.click()
-                            time.sleep(3)
-                            page_num += 1 # Es un scroll infinito simulado
-                        else:
-                            print("No se detectó paginación estándar. Terminando.")
-                            has_more_pages = False
+                        print("No hay más páginas. Terminando categoría.")
+                        has_more_pages = False
                         
 if __name__ == "__main__":
     scraper = CruzVerdeScraper("https://www.cruzverde.cl", headless=True)

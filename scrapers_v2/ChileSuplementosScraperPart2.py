@@ -1,7 +1,8 @@
 # Scraper para la pagina web ChileSuplementos.cl (Parte 2)
 # Contiene Infinite Scroll y a veces un boton "Cargar más"
 
-from BaseScraper import BaseScraper
+from BaseScraper import BaseScraper, SharedSeenUrls
+from CategoryClassifier import CategoryClassifier
 from rich import print
 from datetime import datetime
 import re
@@ -19,12 +20,9 @@ class ChileSuplementosScraperPart2(BaseScraper):
                 {"url": "https://www.chilesuplementos.cl/categoria/productos/quemadores-de-grasa/", "subcategory": "Quemadores De Grasa"}
             ],
             "Snacks y Comida": [
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/barras-de-proteina/", "subcategory": "Barras De Proteina"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/barras-de-proteina/", "subcategory": "Barritas Y Snacks Proteicas"},
                 {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/alimentos-y-snacks/chips-proteicos-y-otros/", "subcategory": "Chips Proteicos Y Otros"},
                 {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/mantequilla-de-mani/", "subcategory": "Mantequilla De Mani"}
-            ],
-            "Accesorios": [
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/shaker-y-accesorios/", "subcategory": "Shaker Y Accesorios"}
             ],
             "Ofertas": [
                 {"url": "https://www.chilesuplementos.cl/categoria/ofertas/", "subcategory": "Ofertas"}
@@ -46,7 +44,10 @@ class ChileSuplementosScraperPart2(BaseScraper):
             'thumbnail': '.porto-tb-featured-image img, .porto-tb-woo-link img' # Better grid selectors
         }
         
-        super().__init__(base_url, headless, category_urls, selectors, site_name="ChileSuplementos", output_suffix="_part2")
+        super().__init__(base_url, headless, self.category_urls, selectors, site_name="ChileSuplementos", output_suffix="_part2")
+        self.classifier = CategoryClassifier()
+        # Registro compartido con Part1: mismo archivo JSON en disco
+        self.shared_ofertas = SharedSeenUrls("chilesuplementos_ofertas")
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en ChileSuplementos (Parte 2)...[/green]")
@@ -111,12 +112,23 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                     if href:
                                         link = href
 
-                                # Deduplication Check
+                                # Deduplication Check (intra-proceso)
                                 if link != "N/D" and link in self.seen_urls:
                                     print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
                                     continue
-                                if link != "N/D":
+                                # Para la categoría Ofertas, register() hace check + insert
+                                # de forma atómica. Si retorna False, Part1 ya lo scrapeó.
+                                if link != "N/D" and main_category == "Ofertas":
+                                    if not self.shared_ofertas.register(link):
+                                        print(f"[yellow]  >> Oferta ya scrapeada por Part1, omitida: {title}[/yellow]")
+                                        continue
+                                    # register() ya lo insertó, solo queda el seen_urls local
                                     self.seen_urls.add(link)
+                                elif link != "N/D":
+                                    self.seen_urls.add(link)
+                                    # También registrar en shared para que Ofertas no vea
+                                    # duplicados de las propias categorías de Part2
+                                    self.shared_ofertas.register(link)
 
                                 # Thumbnail
                                 thumbnail_url = ""
@@ -283,16 +295,15 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                     if local_img:
                                         image_url = local_img
 
-                                # New Categorization Logic
-                                final_subcategory = deterministic_subcategory
-                                # cat_info = self.categorizer.classify_product(title, deterministic_subcategory)
-                                # if cat_info:
-                                #    final_subcategory = cat_info['nombre_subcategoria']
+                                # Clasificación heurística via CategoryClassifier
+                                final_category, final_subcategory = self.classifier.classify(
+                                    title, description, main_category, deterministic_subcategory, brand
+                                )
 
                                 yield {
                                     'date': current_date,
                                     'site_name': self.site_name,
-                                    'category': self.clean_text(main_category),
+                                    'category': self.clean_text(final_category),
                                     'subcategory': final_subcategory,
                                     'product_name': title,
                                     'brand': self.enrich_brand(brand, title),
