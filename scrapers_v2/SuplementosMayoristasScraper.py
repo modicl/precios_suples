@@ -1,9 +1,9 @@
 from BaseScraper import BaseScraper
+from CategoryClassifier import CategoryClassifier
 from rich import print
 from datetime import datetime
 import re
 import time
-import unicodedata
 from playwright.sync_api import TimeoutError
 
 class SuplementosMayoristasScraper(BaseScraper):
@@ -62,6 +62,7 @@ class SuplementosMayoristasScraper(BaseScraper):
         }
 
         super().__init__(base_url, headless, category_urls=self.categories_config, selectors=selectors, site_name="SuplementosMayoristas")
+        self.classifier = CategoryClassifier()
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping Determinista (V2) de Suplementos Mayoristas...[/green]")
@@ -292,39 +293,11 @@ class SuplementosMayoristasScraper(BaseScraper):
                         # Usar variables temporales para no contaminar el loop
                         final_category = main_category
                         final_sub = deterministic_sub
-                        
-                        def _normalize(text):
-                            nfd = unicodedata.normalize('NFD', text)
-                            return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
 
-                        # 1. Packs (Global)
-                        title_lower = _normalize(name.lower())
-                        if "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower:
-                            final_category = "Packs"
-                            final_sub = "Packs"
-
-                        # 2. Heurística para HMB/ZMA (Categoría Aminoacidos)
-                        elif final_sub == "DETECTAR_HMB_ZMA":
-                            name_lower = _normalize(str(name).lower())
-                            desc_lower = _normalize(str(description).lower())
-                            text_to_search = name_lower + " " + desc_lower
-                            
-                            # PRIORIDAD A HMB
-                            if "hmb" in text_to_search:
-                                final_category = "Aminoacidos y BCAA"
-                                final_sub = "Otros Aminoacidos y BCAA"
-                            # ZMA explicito (en nombre o descripcion)
-                            elif "zma" in text_to_search or "zmar" in text_to_search:
-                                final_category = "Vitaminas y Minerales"
-                                final_sub = "Multivitamínicos"
-                            # Magnesio o Zinc SOLO si estan en el nombre (para evitar falsos positivos por descripcion)
-                            elif "magnesio" in name_lower or "zinc" in name_lower:
-                                final_category = "Vitaminas y Minerales"
-                                final_sub = "Multivitamínicos"
-                            else:
-                                # Fallback seguro: Si no es HMB ni ZMA, sigue siendo Aminoacido (probablemente del grupo Especificos)
-                                final_category = "Aminoacidos y BCAA"
-                                final_sub = "Otros Aminoacidos y BCAA"
+                        # Clasificar usando CategoryClassifier (maneja Packs, DETECTAR_HMB_ZMA, etc.)
+                        final_category, final_sub = self.classifier.classify(
+                            name, description, main_category, deterministic_sub, brand
+                        )
 
                         yield {
                             'date': current_date,

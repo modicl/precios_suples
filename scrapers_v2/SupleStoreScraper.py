@@ -1,9 +1,9 @@
 # Scraper para la pagina web SupleStore.cl
 from BaseScraper import BaseScraper
+from CategoryClassifier import CategoryClassifier
 from rich import print
 from datetime import datetime
 import re
-import unicodedata
 
 class SupleStoreScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -51,6 +51,7 @@ class SupleStoreScraper(BaseScraper):
         }
         
         super().__init__(base_url, headless, category_urls, selectors, site_name="SupleStore")
+        self.classifier = CategoryClassifier()
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping Determinista (V2) de SupleStore...[/green]")
@@ -216,70 +217,23 @@ class SupleStoreScraper(BaseScraper):
                                 local_img = self.download_image(image_url, subfolder=site_folder)
                                 if local_img: image_url = local_img
 
-                            # Lógica Heurística Específica para Creatinas
-                            # Temp vars to avoid polluting the loop state
+                            # Clasificación usando CategoryClassifier
                             final_category = main_category
                             final_sub = deterministic_sub
 
-                            if final_category == "Creatinas":
-                                # Texto de búsqueda: Título + Descripción en minúsculas
-                                def _normalize(text):
-                                    nfd = unicodedata.normalize('NFD', text)
-                                    return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
-
-                                text_to_search = _normalize((title + " " + (description or "")).lower())
-                                title_lower = _normalize(title.lower())
-                                
-                                # 1. Variantes Químicas Específicas (Alta prioridad)
-                                if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search:
-                                    # Si tiene monohidrato en el titulo, es Creatina Monohidrato y el Clorhidrato es un ingrediente "menor"
-                                    if "monohidrat" in title_lower or "monohydrate" in title_lower or "creapure" in title_lower or "monohidrato" in title_lower or "monohidratada" in title_lower:
-                                        final_sub = "Creatina Monohidrato"
-                                    else:
-                                        final_sub = "Clorhidrato"
-                                    
-                                elif "malato" in text_to_search or "magnesio" in text_to_search or "magnapower" in text_to_search:
-                                    final_sub = "Malato y Magnesio"
-                                    
-                                elif "nitrato" in text_to_search or "nitrate" in text_to_search:
-                                    final_sub = "Nitrato"
-
-                                # Check for buffered/alkaline creatine
-                                elif "alkalyn" in text_to_search or "alcalina" in text_to_search:
-                                    final_sub = "Otros Creatinas"
-
-                                # 2. Monohidrato (Prioridad sobre Micronizada)
-                                # Incluye "Creapure" que es sello de Monohidrato de alta calidad
-                                elif "monohidrat" in text_to_search or "monohydrate" in text_to_search or "creapure" in text_to_search or "monohidrato" in text_to_search or "monohidratada" in text_to_search:
-                                    final_sub = "Creatina Monohidrato"
-
-                                # 3. Micronizada (Solo si NO fue detectada como Monohidrato antes)
-                                elif "micronizad" in text_to_search or "micronized" in text_to_search or "micronizada" in text_to_search or "micronizado" in text_to_search:
-                                    final_sub = "Micronizada"
-
-                                # 4. Fallback por defecto (Asumiremos que la creatina es monohidrato por la popularidad)
-                                else:
-                                    final_sub = "Creatina Monohidrato"
-
-                            elif final_category == "Proteinas" and (deterministic_sub == "CATEGORIZAR_PROTEINA"):
-                                # Usamos SOLO el título para clasificación de proteínas
-                                text_to_search = _normalize(title.lower())
-                                
-                                # Palabras clave expandidas (Inglés y Español)
-                                if re.search(r'\biso\b', text_to_search) or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search or "isolatada" in text_to_search:
-                                    final_sub = "Proteína Aislada"
-                                elif "cascarafoods proteina lean active" in text_to_search: # Caso extremadamente unico, en ninguna parte dice una de las 20 keywords!
-                                    final_sub = "Proteína Aislada"
-                                elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
-                                    final_sub = "Proteína Hidrolizada"
-                                elif "vegan" in text_to_search or "plant" in text_to_search or "vegetal" in text_to_search or "vegana" in text_to_search or "vegano" in text_to_search or "plant based" in text_to_search:
-                                    final_sub = "Proteína Vegana"
-                                elif "beef" in text_to_search or "carne" in text_to_search or "vacuno" in text_to_search:
-                                    final_sub = "Proteína de Carne"
-                                elif "casein" in text_to_search or "caseina" in text_to_search or "micelar" in text_to_search or "micellar" in text_to_search:
-                                    final_sub = "Caseína"
-                                else:
-                                    final_sub = "Proteína de Whey"
+                            # SupleStore usa CATEGORIZAR_PROTEINA y subcategorías genéricas que el clasificador puede refinar
+                            needs_classification = (
+                                deterministic_sub in ("CATEGORIZAR_PROTEINA", "Creatinas", "Vitaminas y Minerales",
+                                                      "Aminoácidos", "Quemadores", "Otros Aminoacidos y BCAA")
+                            )
+                            if needs_classification:
+                                final_category, final_sub = self.classifier.classify(
+                                    title, description, main_category, deterministic_sub, brand
+                                )
+                            
+                            # Override especial: cascarafoods proteina lean active -> Aislada
+                            if main_category == "Proteinas" and "cascarafoods proteina lean active" in title.lower():
+                                final_sub = "Proteína Aislada"
 
                             yield {
                                 'date': current_date,

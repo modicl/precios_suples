@@ -1,9 +1,9 @@
 # Scraper para la pagina web OneNutrition.cl
 from BaseScraper import BaseScraper
+from CategoryClassifier import CategoryClassifier
 from rich import print
 from datetime import datetime
 import re
-import unicodedata
 
 class OneNutritionScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -49,188 +49,14 @@ class OneNutritionScraper(BaseScraper):
         }
         
         super().__init__(base_url, headless, category_urls, selectors, site_name="OneNutrition")
+        self.classifier = CategoryClassifier()
 
     def _classify_product(self, title, description, main_category, deterministic_subcategory, brand):
         """
-        Aplica heurísticas para determinar la categoría y subcategoría final.
-        Adapta lógica de StrongestScraper pero focalizada en 'CATEGORIZAR_PROTEINA'.
+        Clasificación de productos para OneNutrition.
+        Delega completamente en CategoryClassifier (sin lógica extra específica).
         """
-        final_category = main_category
-        final_subcategory = deterministic_subcategory
-        
-        def _normalize(text):
-            nfd = unicodedata.normalize('NFD', text)
-            return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
-
-        # 1. Packs (Global Check - Good practice to have)
-        title_lower = _normalize(title.lower())
-
-        if "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower or "+2" in title_lower:
-            final_category = "Packs"
-            final_subcategory = "Packs"
-            return final_category, final_subcategory
-
-        # 2. Heurística para Proteínas
-        if final_category == "Proteinas":
-            # Usamos Título + Descripción
-            text_to_search = _normalize((title + " " + (description or "")).lower())
-
-            # Estructura idéntica a StrongestScraper (con soporte para Dymatize y Purity Rule sanitizada)
-            
-            # Logica para productos Dymatize
-            if brand.lower() == "dymatize":
-                if "iso" in text_to_search or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
-                    final_subcategory = "Proteína Aislada"
-                elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
-                    final_subcategory = "Proteína Hidrolizada"
-                else:
-                    final_subcategory = "Proteína de Whey"
-
-            # Si la marca no era Dymatize usamos para los genericos
-            else:
-                if "vegan" in text_to_search or "plant" in text_to_search or "vegana" in text_to_search or "vegano" in text_to_search or "plant based" in text_to_search:
-                    final_subcategory = "Proteína Vegana"
-                elif "beef" in text_to_search or "carne" in text_to_search or "vacuno" in text_to_search:
-                    final_subcategory = "Proteína de Carne"
-                elif "casein" in text_to_search or "caseina" in text_to_search or "micelar" in text_to_search or "micellar" in text_to_search:
-                    final_subcategory = "Caseína"
-                
-                else:
-                    # Regla de Pureza: Si tiene concentrado o blend, es Whey Estándar (aunque diga Isolate/Hydro)
-                    # EXCEPCIONES: Limpiamos frases benignas
-                    purity_check_text = text_to_search
-                    benign_phrases = [
-                        "se mezcla", "fácil mezcla", "facil mezcla", "mezclabilidad", "mezcla instantánea", "mezcla instantanea",
-                        "combinación perfecta", "perfecta combinación", "excelente combinación",
-                        "combinacion perfecta", "perfecta combinacion", "excelente combinacion",
-                        "mezclar", "mezclado", "mezclando",
-                        "mezcla 1 scoop", "mezcla un scoop", "mezcla 1 porción", "mezcla una porción", "mezcla 1 serv", "mezcla un serv",
-                        "mezcla el polvo", "mezcla con agua", "mezcla con leche"
-                    ]
-                    for phrase in benign_phrases:
-                        purity_check_text = purity_check_text.replace(phrase, "")
-
-                    if "concentrado" in purity_check_text or "combinación" in purity_check_text or "combinacion" in purity_check_text or "concentrate" in purity_check_text or "blend" in purity_check_text or "mezcla" in purity_check_text:
-                        final_subcategory = "Proteína de Whey"
-                    elif re.search(r'\biso\b', text_to_search) or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search or "isolatada" in text_to_search:
-                        final_subcategory = "Proteína Aislada"
-                    elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
-                        final_subcategory = "Proteína Hidrolizada"
-                    else:
-                        final_subcategory = "Proteína de Whey"
-
-            return final_category, final_subcategory
-
-
-        # 3. Heurística para Creatinas
-        elif final_category == "Creatinas":
-            text_to_search = _normalize((title + " " + (description or "")).lower())
-            
-            if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search or "hidrocloruro" in text_to_search:
-                final_subcategory = "Creatina HCL"
-            elif "malato" in text_to_search or "magnesio" in text_to_search or "magnapower" in text_to_search:
-                final_subcategory = "Malato y Magnesio"
-            elif "nitrato" in text_to_search or "nitrate" in text_to_search:
-                final_subcategory = "Nitrato"
-            elif "alkalyn" in text_to_search or "alcalina" in text_to_search:
-                final_subcategory = "Otros Creatinas"
-            elif "creapure" in text_to_search:
-                 final_subcategory = "Sello Creapure"
-            elif "monohidrat" in text_to_search or "monohydrate" in text_to_search:
-                final_subcategory = "Creatina Monohidrato"
-            elif "micronizad" in text_to_search or "micronized" in text_to_search:
-                final_subcategory = "Micronizada"
-            else:
-                final_subcategory = "Otros Creatinas"
-
-            return final_category, final_subcategory
-
-        # 4. Heurística para Vitaminas y Minerales
-        elif final_category == "Vitaminas y Minerales":
-            text_to_search = _normalize(title.lower())
-
-            # Keywords mapping
-            # Order matters: Specific blends > Major Minerals > Major Vitamins > Formats
-            
-            multi_keywords = ["multivitamin", "multi vitamin", "multivitaminico", "multivitaminicos", "daily pack", "animal pak", "opti-men", "opti-women", "vita stack", "zmar"]
-            magnesio_keywords = ["magne", "magnesio", "magnesium", "magnesio d3"]
-            zinc_keywords = ["zinc"]
-            omega_keywords = ["omega", "fish oil", "krill", "cla", "linoleic", "linoleico", "aceite de", "aceite de pescado"]
-            colageno_keywords = ["colageno", "collagen"]
-            calcio_keywords = ["calcio", "calcium"]
-            probioticos_keywords = ["probiotic", "probiotico", "enzym", "enzim", "digest"]
-            complejob_keywords = ["b-complex", "complejo b", "vitamin b", "vitamina b", "b12", "b6", "biotin", "biotina"]
-            vitc_keywords = ["vitamin c", "vitamina c", "ascorbic", "ascorbico"]
-            vitd_keywords = ["vitamin d", "vitamina d", "d3"]
-            vite_keywords = ["vitamin e", "vitamina e"]
-            antiox_keywords = ["coq10", "q10", "antioxidant", "antioxidante", "resveratrol", "ala ", "acido alfa", "alpha lipoic", "alfa lipoico", "turmeric", "curcuma", "astaxanthin", "astaxantina", "semilla de uva", "grape seed"]
-            bienestar_keywords = ["wellness", "bienestar", "sleep", "dormir", "descanso", "relax", "relajante", "stress", "estres", "liver", "higado", "hepato", "joint", "articulacion", "articulaciones", "soporte", "huesos", "melatonin", "melatonina", "5-htp", "ashwagandha", "maca", "tryptophan", "triptofano"]
-            gummies_keywords = ["gummi", "gummy", "gomita","gomitas","gummies"]
-
-            if any(k in text_to_search for k in multi_keywords):
-                 final_subcategory = "Multivitamínicos"
-            elif any(k in text_to_search for k in magnesio_keywords):
-                 final_subcategory = "Magnesio"
-            elif any(k in text_to_search for k in zinc_keywords):
-                 final_subcategory = "Otros Vitaminas y Minerales"
-            elif any(k in text_to_search for k in omega_keywords):
-                 final_subcategory = "Omega 3 y Aceites"
-            elif any(k in text_to_search for k in colageno_keywords):
-                 final_subcategory = "Colágeno"
-            elif any(k in text_to_search for k in calcio_keywords):
-                 final_subcategory = "Calcio"
-            elif any(k in text_to_search for k in probioticos_keywords):
-                 final_subcategory = "Probióticos"
-            elif any(k in text_to_search for k in complejob_keywords):
-                 final_subcategory = "Vitamina B / Complejo B"
-            elif any(k in text_to_search for k in vitc_keywords):
-                 final_subcategory = "Vitamina C"
-            elif any(k in text_to_search for k in vitd_keywords):
-                 final_subcategory = "Vitamina D"
-            elif any(k in text_to_search for k in vite_keywords):
-                 final_subcategory = "Vitamina E"
-            elif any(k in text_to_search for k in antiox_keywords):
-                 final_subcategory = "Antioxidantes"
-            elif any(k in text_to_search for k in bienestar_keywords):
-                 final_subcategory = "Bienestar General"
-            elif any(k in text_to_search for k in gummies_keywords):
-                 final_subcategory = "Gummies"
-            else:
-                 final_subcategory = "Otros Vitaminas y Minerales"
-
-            return final_category, final_subcategory
-
-        # 5. Heurística para Aminoácidos y BCAA
-        elif final_category == "Aminoacidos y BCAA":
-            text_to_search = _normalize(title.lower())  # Solo titulo, sin tildes
-            
-            zma_keywords = ["zma", "zmar"]
-            minerales_keywords = ["magnesio", "zinc", "magne"]
-            eaas_keywords = ["eaa", "essential amino", "aminoacidos esenciales", "esenciales", "neaa", "full spectrum", "espectro completo"]
-            bcaa_keywords = ["bcaa", "branched", "ramificados"]
-            glutamina_keywords = ["glutamin"]
-            leucina_keywords = ["leucin", "leucine"]
-            aminos_keywords = ["amino", "arginin", "citrulin", "beta ala", "beta alanina","taurin", "carnitin", "tirosin", "tyrosin", "lisin", "lysin", "triptop", "metionin", "methionin", "histidin", "treonin", "threonin", "fenilalan", "phenylalan"]
-
-            if any(k in text_to_search for k in zma_keywords):
-                 final_category = "Vitaminas y Minerales"
-                 final_subcategory = "Multivitamínicos"
-            elif any(k in text_to_search for k in minerales_keywords):
-                 final_subcategory = "Minerales (Magnesio/ZMA)"
-            elif any(k in text_to_search for k in eaas_keywords):
-                 final_subcategory = "EAAs (Esenciales)"
-            elif any(k in text_to_search for k in bcaa_keywords):
-                 final_subcategory = "BCAAs"
-            elif any(k in text_to_search for k in glutamina_keywords):
-                 final_subcategory = "Glutamina"
-            elif any(k in text_to_search for k in leucina_keywords):
-                 final_subcategory = "Leucina"
-            elif any(k in text_to_search for k in aminos_keywords):
-                 final_subcategory = "Aminoácidos"
-            else:
-                 final_subcategory = "Otros Aminoacidos y BCAA"
-
-            return final_category, final_subcategory
+        return self.classifier.classify(title, description, main_category, deterministic_subcategory, brand)
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en OneNutrition...[/green]")

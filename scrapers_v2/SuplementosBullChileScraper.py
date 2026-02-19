@@ -1,8 +1,8 @@
 from BaseScraper import BaseScraper
+from CategoryClassifier import CategoryClassifier
 from rich import print
 from datetime import datetime
 import re
-import unicodedata
 
 class SuplementosBullChileScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -48,6 +48,7 @@ class SuplementosBullChileScraper(BaseScraper):
         }
 
         super().__init__(base_url, headless, category_urls=self.category_urls, selectors=selectors, site_name="SuplementosBullChile")
+        self.classifier = CategoryClassifier()
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping Determinista (V2) de SuplementosBullChile...[/green]")
@@ -202,89 +203,39 @@ class SuplementosBullChileScraper(BaseScraper):
                             # --- HEURÍSTICAS DE CLASIFICACIÓN ---
                             final_category = main_category
                             final_sub = deterministic_sub
-                            
-                            def _normalize(text):
-                                nfd = unicodedata.normalize('NFD', text)
-                                return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
 
-                            # 1. Packs (Global)
-                            title_lower = _normalize(title.lower())
+                            title_lower = title.lower()
 
-                            # 0. Llaveros / Accesorios (Filtro Usuario)
+                            # 0. Llaveros / Accesorios (Filtro específico de BullChile)
                             if "llavero" in title_lower:
                                 final_category = "OTROS"
                                 final_sub = "Otros"
 
-                            elif "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower:
-                                final_category = "Packs"
-                                final_sub = "Packs"
-
-                            # 1.5 Bebidas / RTD (Global)
-                            # Detecta bebidas listas para tomar, shakes, etc.
-                            # REGLA MEJORADA: 
-                            # - Si dice explícitamente "RTD" o "Ready to Drink", es bebida.
-                            # - Si dice "Batido" o "Shake" o "Bebida", DEBE tener indicador de volumen (ml, lt) O decir "Ready".
-                            # - EXCLUSIÓN: Si tiene peso en LIBRAS (lb) o KILOS (kg) o GRAMOS (gr/g), ASUMIMOS POLVO y NO lo marcamos como bebida, 
-                            #   a menos que diga explícitamente RTD.
-                            
-                            is_liquid = "ml" in title_lower or "lt" in title_lower or "cc" in title_lower or "botella" in title_lower
-                            is_powder_weight = "lb" in title_lower or "kg" in title_lower or "gr" in title_lower or "servicios" in title_lower
-                            
-                            if ("rtd" in title_lower or "ready to drink" in title_lower):
+                            # 1. RTD / Bebidas (Lógica específica de BullChile)
+                            elif "rtd" in title_lower or "ready to drink" in title_lower:
                                 final_category = "Bebidas Nutricionales"
                                 final_sub = "Batidos de proteína"
-                                
-                            elif ("shake" in title_lower and "shaker" not in title_lower) or \
-                                 "batido" in title_lower or \
-                                 "bebida" in title_lower or \
-                                 "hydration" in title_lower:
-                                 
-                                 # Si es un "Batido/Shake" pero tiene peso de polvo (2lb, 5kg), LO IGNORAMOS (es proteina en polvo)
-                                 if not is_powder_weight:
-                                     final_category = "Bebidas Nutricionales"
-                                     final_sub = "Batidos de proteína"
-                                 elif is_liquid:
-                                     # Caso raro: Dice 2lb pero tambien 500ml? Priorizamos liquido si tiene ml explícito
-                                     final_category = "Bebidas Nutricionales"
-                                     final_sub = "Batidos de proteína"
 
-                            # 2. Heurística para Proteínas (Ya que la categoría es genérica)
-                            elif final_category == "Proteinas":
-                                # Usamos Título + Descripción para mejor contexto
-                                text_to_search = _normalize((title + " " + description).lower())
-                                
-                                # Palabras clave expandidas (Inglés y Español)
-                                if re.search(r'\biso\b', text_to_search) or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search or "isolatada" in text_to_search:
-                                    final_sub = "Proteína Aislada"
-                                elif "hydro" in text_to_search or "hidrolizada" in text_to_search or "hydrolized" in text_to_search or "hydrolyzed" in text_to_search or "hidrolizado" in text_to_search:
-                                    final_sub = "Proteína Hidrolizada"
-                                elif "vegan" in text_to_search or "plant" in text_to_search or "vegetal" in text_to_search or "vegana" in text_to_search or "vegano" in text_to_search or "plant based" in text_to_search:
-                                    final_sub = "Proteína Vegana"
-                                elif "beef" in text_to_search or "carne" in text_to_search or "vacuno" in text_to_search:
-                                    final_sub = "Proteína de Carne"
-                                elif "casein" in text_to_search or "caseina" in text_to_search or "micelar" in text_to_search or "micellar" in text_to_search:
-                                    final_sub = "Caseína"
+                            elif (("shake" in title_lower and "shaker" not in title_lower) or
+                                  "batido" in title_lower or
+                                  "bebida" in title_lower or
+                                  "hydration" in title_lower):
+                                is_powder_weight = "lb" in title_lower or "kg" in title_lower or "gr" in title_lower or "servicios" in title_lower
+                                is_liquid = "ml" in title_lower or "lt" in title_lower or "cc" in title_lower or "botella" in title_lower
+                                if not is_powder_weight or is_liquid:
+                                    final_category = "Bebidas Nutricionales"
+                                    final_sub = "Batidos de proteína"
                                 else:
-                                    final_sub = "Proteína de Whey"
+                                    # Delegar al clasificador para el resto
+                                    final_category, final_sub = self.classifier.classify(
+                                        title, description, main_category, deterministic_sub, brand
+                                    )
 
-                            # 3. Heurística para Creatinas
-                            elif final_category == "Creatinas":
-                                text_to_search = _normalize((title + " " + (description or "")).lower())
-                                
-                                if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search or "hidrocloruro" in text_to_search:
-                                    final_sub = "Clorhidrato"
-                                elif "malato" in text_to_search or "magnesio" in text_to_search or "magnapower" in text_to_search:
-                                    final_sub = "Malato y Magnesio"
-                                elif "nitrato" in text_to_search or "nitrate" in text_to_search:
-                                    final_sub = "Nitrato"
-                                elif "alkalyn" in text_to_search or "alcalina" in text_to_search:
-                                    final_sub = "Otros Creatinas"
-                                elif "monohidrat" in text_to_search or "monohydrate" in text_to_search or "creapure" in text_to_search:
-                                    final_sub = "Creatina Monohidrato"
-                                elif "micronizad" in text_to_search or "micronized" in text_to_search:
-                                    final_sub = "Micronizada"
-                                else:
-                                    final_sub = "Creatina Monohidrato"
+                            else:
+                                # Delegar al clasificador para Proteinas, Creatinas, Packs, etc.
+                                final_category, final_sub = self.classifier.classify(
+                                    title, description, main_category, deterministic_sub, brand
+                                )
 
                             yield {
                                 'date': current_date,

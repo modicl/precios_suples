@@ -1,10 +1,10 @@
 # Scraper para la pagina web SupleTech.cl
 
 from BaseScraper import BaseScraper
+from CategoryClassifier import CategoryClassifier
 from rich import print
 from datetime import datetime
 import re
-import unicodedata
 
 class SupleTechScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -74,6 +74,7 @@ class SupleTechScraper(BaseScraper):
         }
         
         super().__init__(base_url, headless, category_urls, selectors, site_name="SupleTech")
+        self.classifier = CategoryClassifier()
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping Determinista (V2) de SupleTech...[/green]")
@@ -233,42 +234,10 @@ class SupleTechScraper(BaseScraper):
                                 final_category = main_category
                                 final_sub = deterministic_sub
 
-                                # Heuristic Logic for HMB and ZMA
-                                if deterministic_sub == "DETECTAR_HMB_ZMA" or deterministic_sub == "Bienestar General" :
-                                    def _normalize(text):
-                                        nfd = unicodedata.normalize('NFD', text)
-                                        return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
-                                    text_to_search = _normalize((title + " " + description).lower())
-                                    
-                                    if "zma" in text_to_search or "zmar" in text_to_search:
-                                        # ZMA -> Vitaminas y Minerales / Multivitamínicos
-                                        final_category = "Vitaminas y Minerales"
-                                        final_sub = "Multivitamínicos"
-                                    elif "hmb" in text_to_search:
-                                        # HMB -> Aminoacidos y BCAA / Otros Aminoacidos y BCAA
-                                        final_sub = "Otros Aminoacidos y BCAA"
-                                        final_category = "Aminoacidos y BCAA"
-                                    elif "gummies" in text_to_search:
-                                        # Gummies -> Vitaminas y Minerales / Gummies
-                                        final_category = "Vitaminas y Minerales"
-                                        final_sub = "Gummies"
-                                    elif "magnesium" in text_to_search or "magnesio" in text_to_search or "bisglycinate" in text_to_search or "bisglicinato" in text_to_search:
-                                        # Magnesium -> Vitaminas y Minerales / Multivitamínicos
-                                        final_category = "Vitaminas y Minerales"
-                                        final_sub = "Magnesio"
-                                    else:
-                                        if deterministic_sub == "DETECTAR_HMB_ZMA":
-                                            # Fallback (aplica para DETECTAR_HMB_ZMA , Bienestar General tiene su forma deterministica)
-                                            final_category = "Aminoacidos y BCAA" 
-                                            final_sub = "Otros Aminoacidos y BCAA"
-                                        elif deterministic_sub == "Bienestar General":
-                                            # Fallback (aplica para DETECTAR_HMB_ZMA , Bienestar General tiene su forma deterministica , pero como sub no debe existir)
-                                            final_category = "Vitaminas y Minerales" 
-                                            final_sub = "Vitaminas y Minerales" 
-                                        else:
-                                            # Caso que no debe ocurrir sin embargo se deja por si acaso
-                                            final_category = "ERROR" 
-                                            final_sub = "ERROR"
+                                # Clasificación usando CategoryClassifier para DETECTAR_HMB_ZMA y Bienestar General
+                                final_category, final_sub = self.classifier.classify(
+                                    title, description, main_category, deterministic_sub, brand
+                                )
 
                                 yield {
                                     'date': current_date,

@@ -384,7 +384,12 @@ class BaseScraper:
         """
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=self.headless)
-            context = browser.new_context()
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                locale="es-CL",
+                timezone_id="America/Santiago",
+                viewport={"width": 1920, "height": 1080}
+            )
             page = context.new_page()
             
             # Crear directorio raw_data en la raíz del proyecto

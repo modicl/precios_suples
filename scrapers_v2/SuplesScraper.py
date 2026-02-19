@@ -1,9 +1,9 @@
 # Scraper para la pagina web Suples.cl
 from BaseScraper import BaseScraper
+from CategoryClassifier import CategoryClassifier
 from rich import print
 from datetime import datetime
 import re
-import unicodedata
 
 class SuplesScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -88,6 +88,7 @@ class SuplesScraper(BaseScraper):
         }
         
         super().__init__(base_url, headless, category_urls, selectors, site_name="Suples.cl")
+        self.classifier = CategoryClassifier()
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping Determinista (V2) de Suples.cl...[/green]")
@@ -287,55 +288,12 @@ class SuplesScraper(BaseScraper):
 
                             # Lógica Heurística para Packs (Global)
                             # Detecta palabras clave como "Pack", "Paquete", "Combo" o la presencia de "+"
-                            # Temp vars to avoid polluting the loop state
-                            final_category = main_category
-                            final_sub = deterministic_sub
-                            
-                            def _normalize(text):
-                                nfd = unicodedata.normalize('NFD', text)
-                                return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
+                            # Clasificación usando CategoryClassifier
+                            # Maneja Packs, Creatinas y cualquier otra categoría que necesite heurística
+                            final_category, final_sub = self.classifier.classify(
+                                title, description, main_category, deterministic_sub, brand
+                            )
 
-                            title_lower = _normalize(title.lower())
-                            if "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower:
-                                final_category = "Packs"
-                                final_sub = "Packs"
- 
-                            # Lógica Heurística Específica para Creatinas
-                            if final_category == "Creatinas":
-                                # Texto de búsqueda: Título + Descripción en minúsculas
-                                text_to_search = _normalize((title + " " + (description or "")).lower())
-                                
-                                # 1. Variantes Químicas Específicas (Alta prioridad)
-                                if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search:
-                                    # Si tiene monohidrato en el titulo, es Creatina Monohidrato y el Clorhidrato es un ingrediente "menor"
-                                    if "monohidrat" in title_lower or "monohydrate" in title_lower or "creapure" in title_lower or "monohidrato" in title_lower or "monohidratada" in title_lower:
-                                        final_sub = "Creatina Monohidrato"
-                                    else:
-                                        final_sub = "Clorhidrato"
-                                    
-                                elif "malato" in text_to_search or "magnesio" in text_to_search or "magnapower" in text_to_search:
-                                    final_sub = "Malato y Magnesio"
-                                    
-                                elif "nitrato" in text_to_search or "nitrate" in text_to_search:
-                                    final_sub = "Nitrato"
- 
-                                # Check for buffered/alkaline creatine
-                                elif "alkalyn" in text_to_search or "alcalina" in text_to_search:
-                                    final_sub = "Otros Creatinas"
- 
-                                # 2. Monohidrato (Prioridad sobre Micronizada)
-                                # Incluye "Creapure" que es sello de Monohidrato de alta calidad
-                                elif "monohidrat" in text_to_search or "monohydrate" in text_to_search or "creapure" in text_to_search or "monohidrato" in text_to_search or "monohidratada" in text_to_search:
-                                    final_sub = "Creatina Monohidrato"
- 
-                                # 3. Micronizada (Solo si NO fue detectada como Monohidrato antes)
-                                elif "micronizad" in text_to_search or "micronized" in text_to_search or "micronizada" in text_to_search or "micronizado" in text_to_search:
-                                    final_sub = "Micronizada"
- 
-                                # 4. Fallback por defecto (Asumiremos que la creatina es monohidrato por la popularidad)
-                                else:
-                                    final_sub = "Creatina Monohidrato"
- 
                             product_obj = {
                                 'date': current_date,
                                 'site_name': self.site_name,

@@ -1,4 +1,5 @@
 from BaseScraper import BaseScraper
+from CategoryClassifier import CategoryClassifier, normalize
 from rich import print
 from datetime import datetime
 import re
@@ -66,6 +67,7 @@ class FitMarketChileScraper(BaseScraper):
         super().__init__(base_url, headless, category_urls, selectors, site_name="FitMarketChile")
         self.known_brands = self._load_brands()
         self.seen_urls = set()
+        self.classifier = CategoryClassifier()
 
     def _load_brands(self):
         """Carga el diccionario de marcas desde el CSV en la raíz del proyecto."""
@@ -95,286 +97,100 @@ class FitMarketChileScraper(BaseScraper):
 
     def _classify_product(self, title, description, main_category, deterministic_subcategory, brand):
         """
-        Aplica heurísticas para determinar la categoría y subcategoría final.
-        Lógica portada desde MuscleFactoryScraper.
+        Clasificación de productos para FitMarketChile.
+        Usa CategoryClassifier como base y aplica lógica extra específica de FitMarket.
         """
-        final_category = main_category
-        final_subcategory = deterministic_subcategory
+        title_lower = normalize(title.lower())
+        text = title_lower + " " + normalize((description or "").lower())
 
-        # 1. Packs (Global Check)
-        title_lower = title.lower()
-        # Para Aminoácidos y BCAA, el " + " NO indica un pack (ej: "BCAA + Glutamina")
-        # EXCEPCIÓN: si empieza con un número, SÍ es un pack (ej: "2 BCAA + Glutamina")
+        # ── Lógica extra FitMarket: Pack con " + " en Aminoácidos ─────────────
+        # Para Aminoácidos, " + " NO indica pack salvo que empiece con número
         is_amino_category = main_category == "Aminoacidos y BCAA"
         starts_with_number = bool(re.match(r'^\d', title_lower.strip()))
-        
         plus_is_pack = (" + " in title_lower) and (not is_amino_category or starts_with_number)
-        
-        if "pack" in title_lower or "paquete" in title_lower or "combo" in title_lower or "+2" in title_lower or plus_is_pack:
-            final_category = "Packs"
-            final_subcategory = "Packs"
-            return final_category, final_subcategory
+        if plus_is_pack:
+            return "Packs", "Packs"
 
-        # 2. Heurística para Proteínas
-        if final_category == "Proteinas":
-            text_to_search = (title + " " + (description or "")).lower()
-
-            # Snacks dentro de Proteínas (word boundaries para evitar falsos positivos)
-            if "shark up" in text_to_search or "gel" in text_to_search or "isotonic" in text_to_search:
-                final_category = "Snacks y Comida"
-                final_subcategory = "Otros Snacks y Comida"
-                return final_category, final_subcategory
+        # ── Lógica extra FitMarket: Snacks especiales en Proteínas ───────────
+        if main_category == "Proteinas":
+            if "shark up" in text or "gel" in text or "isotonic" in text:
+                return "Snacks y Comida", "Otros Snacks y Comida"
             elif "bariatrix" in title_lower:
                 pass  # Excepción: Bariatrix no es barra
-            elif re.search(r'\bbar\b', text_to_search) or re.search(r'\bbarra\b', text_to_search) or "bites" in text_to_search or "whey bar" in text_to_search or "barrita" in text_to_search:
-                final_category = "Snacks y Comida"
-                final_subcategory = "Barritas Y Snacks Proteicas"
-                return final_category, final_subcategory
-            elif "alfajor" in text_to_search:
-                final_category = "Snacks y Comida"
-                final_subcategory = "Snacks Dulces"
-                return final_category, final_subcategory
+            elif re.search(r'\bbar\b', text) or re.search(r'\bbarra\b', text) or "bites" in text or "whey bar" in text or "barrita" in text:
+                return "Snacks y Comida", "Barritas Y Snacks Proteicas"
+            elif "alfajor" in text:
+                return "Snacks y Comida", "Snacks Dulces"
 
-            # Dymatize logic
-            if brand.lower() == "dymatize":
-                if re.search(r'\biso\b', text_to_search) or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search:
-                    final_subcategory = "Proteína Aislada"
-                elif "hydro" in title_lower or "hidrolizada" in title_lower or "hydrolized" in title_lower or "hydrolyzed" in title_lower or "hidrolizado" in title_lower:
-                    final_subcategory = "Proteína Hidrolizada"
-                else:
-                    final_subcategory = "Proteína de Whey"
+        # ── Lógica extra FitMarket: Perdida de Grasa (no cubierta por CategoryClassifier) ──
+        if main_category == "Perdida de Grasa":
+            cafeina_kw = ["cafeina", "caffeine", "cafein"]
+            crema_kw = ["crema", "cream", "gel reductor", "gel reduct"]
+            retencion_kw = ["retencion", "retencion", "diuretic", "diuretico", "drenante", "drain"]
+            liquido_kw = ["liquid", "liquido", "liquido", "shot", "ampolla"]
+            localizado_kw = ["localizado", "localizada", "abdomin", "belly", "zona"]
+            natural_kw = ["natural", "verde", "green tea", "te verde", "garcinia", "raspberry", "frambuesa", "cla", "linoleic", "linoleico", "l-carnitin", "carnitina", "carnitine"]
+            termogenico_kw = ["termogen", "thermogen", "thermo", "termo"]
+            quemador_kw = ["quemador", "fat burn", "fat burner", "burner", "quemagras", "fat loss"]
+            if any(k in text for k in cafeina_kw) and not any(k in text for k in quemador_kw + termogenico_kw):
+                return "Perdida de Grasa", "Cafeína"
+            elif any(k in text for k in crema_kw):
+                return "Perdida de Grasa", "Cremas Reductoras"
+            elif any(k in text for k in retencion_kw):
+                return "Perdida de Grasa", "Eliminadores De Retencion"
+            elif any(k in text for k in liquido_kw):
+                return "Perdida de Grasa", "Quemadores Liquidos"
+            elif any(k in text for k in localizado_kw):
+                return "Perdida de Grasa", "Quemadores Localizados"
+            elif any(k in text for k in natural_kw):
+                return "Perdida de Grasa", "Quemadores Naturales"
+            elif any(k in text for k in termogenico_kw):
+                return "Perdida de Grasa", "Quemadores Termogenicos"
+            elif any(k in text for k in quemador_kw):
+                return "Perdida de Grasa", "Quemadores De Grasa"
             else:
-                # Casos extremadamente específicos
-                if "revitta" in brand.lower() and "femme" in text_to_search:
-                    final_subcategory = "Proteína Aislada"
-                elif "cooking" in text_to_search and "winkler" in text_to_search:
-                    final_subcategory = "Proteína de Whey"
-                elif "vegan" in text_to_search or "plant" in text_to_search or "vegana" in text_to_search or "vegano" in text_to_search or "plant based" in text_to_search:
-                    final_subcategory = "Proteína Vegana"
-                elif "beef" in text_to_search or "carne" in text_to_search or "vacuno" in text_to_search:
-                    final_subcategory = "Proteína de Carne"
-                elif "casein" in text_to_search or "caseina" in text_to_search or "micelar" in text_to_search or "micellar" in text_to_search:
-                    final_subcategory = "Caseína"
-                else:
-                    # Purity Rule
-                    purity_check_text = text_to_search
-                    benign_phrases = [
-                        "se mezcla", "fácil mezcla", "facil mezcla", "mezclabilidad", "mezcla instantánea", "mezcla instantanea",
-                        "combinación perfecta", "perfecta combinación", "excelente combinación",
-                        "combinacion perfecta", "perfecta combinacion", "excelente combinacion",
-                        "mezclar", "mezclado", "mezclando",
-                        "mezcla 1 scoop", "mezcla un scoop", "mezcla 1 porción", "mezcla una porción", "mezcla 1 serv", "mezcla un serv",
-                        "mezcla el polvo", "mezcla con agua", "mezcla con leche"
-                    ]
-                    for phrase in benign_phrases:
-                        purity_check_text = purity_check_text.replace(phrase, "")
+                return "Perdida de Grasa", "Quemadores"
 
-                    if "concentrado" in purity_check_text or "combinación" in purity_check_text or "combinacion" in purity_check_text or "concentrate" in purity_check_text or "blend" in purity_check_text or "mezcla" in purity_check_text or "wpc" in text_to_search:
-                        final_subcategory = "Proteína de Whey"
-                    elif re.search(r'\biso\b', text_to_search) or "isolate" in text_to_search or "aislada" in text_to_search or "isolated" in text_to_search or "isofit" in text_to_search or "isolatada" in text_to_search:
-                        final_subcategory = "Proteína Aislada"
-                    elif "hydro" in title_lower or "hidrolizada" in title_lower or "hydrolized" in title_lower or "hydrolyzed" in title_lower or "hidrolizado" in title_lower:
-                        final_subcategory = "Proteína Hidrolizada"
-                    else:
-                        final_subcategory = "Proteína de Whey"
-
-            return final_category, final_subcategory
-
-        # 3. Heurística para Creatinas
-        elif final_category == "Creatinas":
-            text_to_search = (title + " " + (description or "")).lower()
-
-            # Caso específico: Greatlhete Crea Pro -> Monohidrato
-            if "greatlhete" in text_to_search and "crea pro" in text_to_search:
-                final_subcategory = "Creatina Monohidrato"
-                return final_category, final_subcategory
-
-            if "hcl" in text_to_search or "clorhidrato" in text_to_search or "hydrochloride" in text_to_search or "hidrocloruro" in text_to_search:
-                final_subcategory = "Clorhidrato"
-            elif "malato" in text_to_search or "magnesio" in text_to_search or "magnapower" in text_to_search:
-                final_subcategory = "Malato y Magnesio"
-            elif "nitrato" in text_to_search or "nitrate" in text_to_search:
-                final_subcategory = "Nitrato"
-            elif "alkalyn" in text_to_search or "alcalina" in text_to_search:
-                final_subcategory = "Otros Creatinas"
-            elif "monohidrat" in text_to_search or "monohydrate" in text_to_search or "creapure" in text_to_search:
-                final_subcategory = "Creatina Monohidrato"
-            elif "micronizad" in text_to_search or "micronized" in text_to_search:
-                final_subcategory = "Micronizada"
+        # ── Lógica extra FitMarket: Pre Entrenos (no cubierta por CategoryClassifier) ───
+        if main_category == "Pre Entrenos":
+            sin_estim_kw = ["sin estimulante", "sin cafeina", "caffeine free", "stimulant free", "no stimulant", "pump", "non-stim"]
+            guarana_kw = ["guarana", "guarana"]
+            cafeina_kw = ["cafeina", "caffeine", "cafein"]
+            beta_ala_kw = ["beta ala", "beta-ala", "beta alanina", "beta-alanina"]
+            arginina_kw = ["arginin", "arginina"]
+            bcaa_kw = ["bcaa", "branched", "ramificados"]
+            energia_kw = ["gel", "gel energetico", "gel energetico", "energy gel", "cafe", "cafe", "coffee", "energy drink", "bebida energetica"]
+            estimulantes_kw = ["estimulante", "stimulant", "pre-workout", "preworkout", "pre workout", "energia", "energia", "energy"]
+            if any(k in text for k in sin_estim_kw):
+                return "Pre Entrenos", "Pre-Entreno Sin Estimulantes"
+            elif any(k in text for k in guarana_kw):
+                return "Pre Entrenos", "Guarana"
+            elif any(k in text for k in energia_kw):
+                return "Pre Entrenos", "Energía (Geles/Café)"
+            elif any(k in text for k in beta_ala_kw):
+                return "Pre Entrenos", "Beta Alanina"
+            elif any(k in text for k in arginina_kw):
+                return "Pre Entrenos", "Arginina"
+            elif any(k in text for k in bcaa_kw):
+                return "Pre Entrenos", "BCAAs"
+            elif any(k in text for k in cafeina_kw):
+                return "Pre Entrenos", "Cafeína"
+            elif any(k in text for k in estimulantes_kw):
+                return "Pre Entrenos", "Pre-Entreno con Estimulantes"
             else:
-                final_subcategory = "Otros Creatinas"
+                return "Pre Entrenos", "Pre Entreno"
 
-            return final_category, final_subcategory
+        # ── Base: CategoryClassifier ─────────────────────────────────────────
+        final_category, final_subcategory = self.classifier.classify(
+            title, description, main_category, deterministic_subcategory, brand
+        )
 
-        # 4. Heurística para Aminoácidos y BCAA
-        elif final_category == "Aminoacidos y BCAA":
-            text_to_search = title_lower  # Solo título para evitar falsos positivos
-
-            zma_keywords = ["zma", "zmar"]
-            minerales_keywords = ["magnesio", "zinc", "magne"]
-            eaas_keywords = ["eaa", "essential amino", "aminoacidos esenciales", "esenciales", "neaa", "full spectrum", "espectro completo"]
-            bcaa_keywords = ["bcaa", "branched", "ramificados"]
-            glutamina_keywords = ["glutamin"]
-            leucina_keywords = ["leucin", "leucine"]
-            aminos_keywords = ["amino", "arginin", "citrulin", "beta ala", "beta alanina", "taurin", "carnitin", "tirosin", "tyrosin", "lisin", "lysin", "triptop", "metionin", "methionin", "histidin", "treonin", "threonin", "fenilalan", "phenylalan"]
-
-            if any(k in text_to_search for k in zma_keywords):
-                final_category = "Vitaminas y Minerales"
-                final_subcategory = "Multivitamínicos"
-            elif any(k in text_to_search for k in minerales_keywords):
-                final_subcategory = "Minerales (Magnesio/ZMA)"
-            elif any(k in text_to_search for k in eaas_keywords):
-                final_subcategory = "EAAs (Esenciales)"
-            elif any(k in text_to_search for k in bcaa_keywords):
-                final_subcategory = "BCAAs"
-            elif any(k in text_to_search for k in glutamina_keywords):
-                final_subcategory = "Glutamina"
-            elif any(k in text_to_search for k in leucina_keywords):
-                final_subcategory = "Leucina"
-            elif any(k in text_to_search for k in aminos_keywords):
-                final_subcategory = "Aminoácidos"
-            else:
-                final_subcategory = "Aminoácidos"
-
-            return final_category, final_subcategory
-
-        # 5. Heurística para Pérdida de Grasa
-        elif final_category == "Perdida de Grasa":
-            text_to_search = (title + " " + (description or "")).lower()
-
-            cafeina_keywords = ["cafeina", "caffeine", "cafein"]
-            crema_keywords = ["crema", "cream", "gel reductor", "gel reduct"]
-            retencion_keywords = ["retencion", "retención", "diuretic", "diuretico", "drenante", "drain"]
-            liquido_keywords = ["liquid", "liquido", "líquido", "shot", "ampolla"]
-            localizado_keywords = ["localizado", "localizada", "abdomin", "belly", "zona"]
-            natural_keywords = ["natural", "verde", "green tea", "te verde", "garcinia", "raspberry", "frambuesa", "cla", "linoleic", "linoleico", "l-carnitin", "carnitina", "carnitine", "cla"]
-            termogenico_keywords = ["termogen", "thermogen", "thermo", "termo"]
-            quemador_keywords = ["quemador", "fat burn", "fat burner", "burner", "quemagras", "fat loss"]
-
-            if any(k in text_to_search for k in cafeina_keywords) and not any(k in text_to_search for k in quemador_keywords + termogenico_keywords):
-                final_subcategory = "Cafeína"
-            elif any(k in text_to_search for k in crema_keywords):
-                final_subcategory = "Cremas Reductoras"
-            elif any(k in text_to_search for k in retencion_keywords):
-                final_subcategory = "Eliminadores De Retencion"
-            elif any(k in text_to_search for k in liquido_keywords):
-                final_subcategory = "Quemadores Liquidos"
-            elif any(k in text_to_search for k in localizado_keywords):
-                final_subcategory = "Quemadores Localizados"
-            elif any(k in text_to_search for k in natural_keywords):
-                final_subcategory = "Quemadores Naturales"
-            elif any(k in text_to_search for k in termogenico_keywords):
-                final_subcategory = "Quemadores Termogenicos"
-            elif any(k in text_to_search for k in quemador_keywords):
-                final_subcategory = "Quemadores De Grasa"
-            else:
-                final_subcategory = "Quemadores"
-
-            return final_category, final_subcategory
-
-        # 6. Heurística para Pre Entrenos
-        elif final_category == "Pre Entrenos":
-            text_to_search = (title + " " + (description or "")).lower()
-
-            sin_estimulantes_keywords = ["sin estimulante", "sin cafeina", "caffeine free", "stimulant free", "no stimulant", "pump", "non-stim"]
-            guarana_keywords = ["guarana", "guaraná"]
-            cafeina_keywords = ["cafeina", "caffeine", "cafein"]
-            beta_alanina_keywords = ["beta ala", "beta-ala", "beta alanina", "beta-alanina"]
-            arginina_keywords = ["arginin", "arginina"]
-            bcaa_keywords = ["bcaa", "branched", "ramificados"]
-            energia_keywords = ["gel", "gel energetico", "gel energético", "energy gel", "cafe", "café", "coffee", "energy drink", "bebida energetica"]
-            estimulantes_keywords = ["estimulante", "stimulant", "pre-workout", "preworkout", "pre workout", "energia", "energía", "energy"]
-
-            if any(k in text_to_search for k in sin_estimulantes_keywords):
-                final_subcategory = "Pre-Entreno Sin Estimulantes"
-            elif any(k in text_to_search for k in guarana_keywords):
-                final_subcategory = "Guarana"
-            elif any(k in text_to_search for k in energia_keywords):
-                final_subcategory = "Energía (Geles/Café)"
-            elif any(k in text_to_search for k in beta_alanina_keywords):
-                final_subcategory = "Beta Alanina"
-            elif any(k in text_to_search for k in arginina_keywords):
-                final_subcategory = "Arginina"
-            elif any(k in text_to_search for k in bcaa_keywords):
-                final_subcategory = "BCAAs"
-            elif any(k in text_to_search for k in cafeina_keywords):
-                final_subcategory = "Cafeína"
-            elif any(k in text_to_search for k in estimulantes_keywords):
-                final_subcategory = "Pre-Entreno con Estimulantes"
-            else:
-                final_subcategory = "Pre Entreno"
-
-            return final_category, final_subcategory
-
-        # 7. Heurística para Vitaminas y Minerales
-        elif final_category == "Vitaminas y Minerales":
-            raw_text = (title + " " + (description or "")).lower()
-            # Normalizar: quitar tildes para que 'colágeno' == 'colageno', etc.
-            text_to_search = unicodedata.normalize('NFD', raw_text)
-            text_to_search = ''.join(c for c in text_to_search if unicodedata.category(c) != 'Mn')
-
-            multi_keywords = ["multivitamin", "multi vitamin", "multivitaminico", "multivitaminicos", "daily pack", "animal pak", "opti-men", "opti-women", "vita stack", "zmar"]
-            magnesio_keywords = ["magne", "magnesio", "magnesium", "magnesio d3"]
-            zinc_keywords = ["zinc"]
-            omega_keywords = ["omega", "fish oil", "krill", "cla", "linoleic", "linoleico", "aceite de", "aceite de pescado"]
-            colageno_keywords = ["colageno", "collagen"]
-            calcio_keywords = ["calcio", "calcium"]
-            probioticos_keywords = ["probiotic", "probiotico", "enzym", "enzim", "digest"]
-            complejob_keywords = ["b-complex", "complejo b", "vitamin b", "vitamina b", "b12", "b6", "biotin", "biotina", "vitb", "vitta-b"]
-            vitc_keywords = ["vitamin c", "vitamina c", "ascorbic", "ascorbico", "vitc", "vitta-c"]
-            vitd_keywords = ["vitamin d", "vitamina d", "d3", "vitd", "vitta-d"]
-            vite_keywords = ["vitamin e", "vitamina e", "vite", "vitta-e"]
-            antiox_keywords = ["coq10", "q10", "antioxidant", "antioxidante", "resveratrol", "ala ", "acido alfa", "alpha lipoic", "alfa lipoico", "turmeric", "curcuma", "astaxanthin", "astaxantina", "semilla de uva", "grape seed"]
-            bienestar_keywords = ["wellness", "bienestar", "sleep", "dormir", "descanso", "relax", "relajante", "stress", "estres", "liver", "higado", "hepato", "joint", "articulacion", "articulaciones", "soporte", "huesos", "melatonin", "melatonina", "5-htp", "ashwagandha", "maca", "tryptophan", "triptofano"]
-            gummies_keywords = ["gummi", "gummy", "gomita", "gomitas", "gummies"]
-
-            if any(k in text_to_search for k in multi_keywords):
-                final_subcategory = "Multivitamínicos"
-            elif any(k in text_to_search for k in magnesio_keywords):
-                final_subcategory = "Magnesio"
-            elif any(k in text_to_search for k in zinc_keywords):
-                final_subcategory = "Otros Vitaminas y Minerales"
-            elif any(k in text_to_search for k in omega_keywords):
-                final_subcategory = "Omega 3 y Aceites"
-            elif any(k in text_to_search for k in colageno_keywords):
-                final_subcategory = "Colágeno"
-            elif any(k in text_to_search for k in calcio_keywords):
-                final_subcategory = "Calcio"
-            elif any(k in text_to_search for k in probioticos_keywords):
-                final_subcategory = "Probióticos"
-            elif any(k in text_to_search for k in complejob_keywords):
-                final_subcategory = "Vitamina B / Complejo B"
-            elif any(k in text_to_search for k in vitc_keywords):
-                final_subcategory = "Vitamina C"
-            elif any(k in text_to_search for k in vitd_keywords):
-                final_subcategory = "Vitamina D"
-            elif any(k in text_to_search for k in vite_keywords):
-                final_subcategory = "Vitamina E"
-            elif any(k in text_to_search for k in antiox_keywords):
-                final_subcategory = "Antioxidantes"
-            elif any(k in text_to_search for k in bienestar_keywords):
-                final_subcategory = "Bienestar General"
-            elif any(k in text_to_search for k in gummies_keywords):
-                final_subcategory = "Gummies"
-            else:
-                final_subcategory = "Otros Vitaminas y Minerales"
-
-            return final_category, final_subcategory
-
-        # 8. Heurística para Snacks y Comida
-        elif final_category == "Snacks y Comida":
-            text_to_search = (title + " " + (description or "")).lower()
-
-            if "shark up" in text_to_search or "gel" in text_to_search or "isotonic" in text_to_search:
-                final_subcategory = "Otros Snacks y Comida"
-            elif re.search(r'\bbar\b', text_to_search) or "bites" in text_to_search or "whey bar" in text_to_search or re.search(r'\bbarra\b', text_to_search) or "barrita" in text_to_search:
-                final_subcategory = "Barritas Y Snacks Proteicas"
-            elif "alfajor" in text_to_search:
-                final_subcategory = "Snacks Dulces"
-            else:
-                final_subcategory = "Otros Snacks y Comida"
-
-            return final_category, final_subcategory
+        # ── Post-clasificación FitMarket: overrides específicos de proteínas ───────
+        if main_category == "Proteinas" and final_category == "Proteinas":
+            if "revitta" in brand.lower() and "femme" in text:
+                final_subcategory = "Proteína Aislada"
+            elif "cooking" in text and "winkler" in text:
+                final_subcategory = "Proteína de Whey"
 
         return final_category, final_subcategory
 
