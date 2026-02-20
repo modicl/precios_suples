@@ -2,6 +2,7 @@
 # Contiene Infinite Scroll y a veces un boton "Cargar más"
 
 from BaseScraper import BaseScraper, SharedSeenUrls
+from CategoryClassifier import CategoryClassifier, normalize
 from rich import print
 from datetime import datetime
 import re
@@ -56,7 +57,6 @@ class ChileSuplementosScraperPart1(BaseScraper):
         selectors = {
             'product_card': '.archive-products .porto-tb-item', 
             'product_name': '.post-title',
-            'brand': '.tb-meta-pwb-brand',
             'price': '.price',
             'link': '.post-title a',
             'rating': '.star-rating',
@@ -66,6 +66,7 @@ class ChileSuplementosScraperPart1(BaseScraper):
         }
         
         super().__init__(base_url, headless, self.category_urls, selectors, site_name="ChileSuplementos", output_suffix="_part1")
+        self.classifier = CategoryClassifier()
         # Registro compartido con Part2: cualquier URL scrapeada por Part1
         # queda registrada para que Part2 la omita en la categoría Ofertas
         self.shared_ofertas = SharedSeenUrls("chilesuplementos_ofertas")
@@ -117,12 +118,19 @@ class ChileSuplementosScraperPart1(BaseScraper):
                                     raw_title = title_elem.first.inner_text()
                                     title = self.clean_text(raw_title)
                                 
-                                # Brand
+                                # Brand — extraída de las clases CSS del card (pwb-brand-<slug>)
+                                # El sitio no renderiza un elemento dedicado visible con el
+                                # selector '.tb-meta-pwb-brand'; la única fuente confiable
+                                # en la grilla es la clase del propio <div> del producto.
                                 brand = "N/D"
-                                brand_elem = producto.locator(self.selectors['brand'])
-                                if brand_elem.count() > 0:
-                                    raw_brand = brand_elem.first.inner_text()
-                                    brand = self.clean_text(raw_brand)
+                                card_classes = producto.get_attribute("class") or ""
+                                brand_slugs = [
+                                    cls.replace("pwb-brand-", "").replace("-", " ").title()
+                                    for cls in card_classes.split()
+                                    if cls.startswith("pwb-brand-")
+                                ]
+                                if brand_slugs:
+                                    brand = " / ".join(brand_slugs)
 
                                     
                                 # Link
@@ -278,14 +286,33 @@ class ChileSuplementosScraperPart1(BaseScraper):
                                             sku = sku_el.inner_text().strip()
                                         
                                         # 3. Description
-                                        desc_el = detail_page.locator('.woocommerce-product-details__short-description').first
-                                        if desc_el.count() > 0:
-                                            description = desc_el.inner_text().strip()
-                                        else:
-                                            # Fallback to description tab
-                                            desc_el = detail_page.locator('#tab-description, .description').first
-                                        if desc_el.count() > 0:
-                                            description = desc_el.inner_text().strip()
+                                        # Prioridad: short-description (resumen) → tab-description (contenido completo)
+                                        short_desc_el = detail_page.locator('.woocommerce-product-details__short-description').first
+                                        if short_desc_el.count() > 0:
+                                            description = short_desc_el.inner_text().strip()
+                                        
+                                        # Si short-description está vacío, intentar con el tab completo
+                                        if not description:
+                                            tab_desc_el = detail_page.locator('#tab-description').first
+                                            if tab_desc_el.count() > 0:
+                                                description = tab_desc_el.inner_text().strip()
+                                        
+                                        # Último recurso: JSON-LD description
+                                        if not description:
+                                            try:
+                                                jsonld_desc = detail_page.evaluate('''() => {
+                                                    const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                                                    for (const s of scripts) {
+                                                        try {
+                                                            const d = JSON.parse(s.innerText);
+                                                            if (d["@type"] === "Product" && d.description) return d.description;
+                                                        } catch(e) {}
+                                                    }
+                                                    return null;
+                                                }''')
+                                                if jsonld_desc:
+                                                    description = jsonld_desc.strip()
+                                            except: pass
 
                                         detail_page.close()
                                     except Exception as e:
@@ -309,16 +336,43 @@ class ChileSuplementosScraperPart1(BaseScraper):
                                     if local_img:
                                         image_url = local_img
 
-                                # New Categorization Logic
-                                final_subcategory = deterministic_subcategory
-                                # cat_info = self.categorizer.classify_product(title, deterministic_subcategory)
-                                # if cat_info:
-                                #    final_subcategory = cat_info['nombre_subcategoria']
+                                # Clasificación heurística via CategoryClassifier
+                                final_category, final_subcategory = self.classifier.classify(
+                                    title, description, main_category, deterministic_subcategory, brand
+                                )
+
+                                # ── Overrides específicos ChileSuplementos Part1 ─────────────────
+                                title_lower_cs = title.lower()
+                                title_norm_cs = normalize(title_lower_cs)
+
+                                # 1. "+Shaker" pegado: typo del sitio, el shaker va incluido
+                                #    en el envase. Reclasificamos según el contenido real.
+                                if re.search(r'\+shaker', title_lower_cs):
+                                    clean_title = re.sub(r'\+shaker\b', '', title, flags=re.IGNORECASE).strip()
+                                    clean_norm = normalize(clean_title.lower())
+                                    inferred_main = main_category
+                                    if "creatina" in clean_norm or "creatine" in clean_norm or "creapure" in clean_norm:
+                                        inferred_main = "Creatinas"
+                                    elif "proteina" in clean_norm or "protein" in clean_norm or "whey" in clean_norm:
+                                        inferred_main = "Proteinas"
+                                    inferred_cat, inferred_sub = self.classifier.classify(
+                                        clean_title, description, inferred_main, inferred_main, brand
+                                    )
+                                    if inferred_cat != "Packs":
+                                        final_category, final_subcategory = inferred_cat, inferred_sub
+
+                                # 2. Bebidas energéticas mezcladas en otras categorías
+                                elif self.classifier._any(title_norm_cs, self.classifier._bebidas["bebidas_energeticas"]):
+                                    final_category, final_subcategory = "Bebidas Nutricionales", "Bebidas Energéticas"
+
+                                # 3. Gainers publicados en categorías incorrectas
+                                elif self.classifier._any(title_norm_cs, self.classifier._ganadores["ganadores"]):
+                                    final_category, final_subcategory = "Ganadores de Peso", "Ganadores De Peso"
 
                                 yield {
                                     'date': current_date,
                                     'site_name': self.site_name,
-                                    'category': self.clean_text(main_category),
+                                    'category': self.clean_text(final_category),
                                     'subcategory': final_subcategory,
                                     'product_name': title,
                                     'brand': self.enrich_brand(brand, title),

@@ -1,9 +1,12 @@
 # Scapper para la pagina web AllNutrition.cl
 from BaseScraper import BaseScraper
+from CategoryClassifier import CategoryClassifier
 from rich import print
 from datetime import datetime
 import csv
 import re
+import random
+import time
 
 class AllNutritionScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -80,7 +83,33 @@ class AllNutritionScraper(BaseScraper):
             'next_button': 'a[aria-label="Página siguiente"]'
         }
         
-        super().__init__(base_url, headless, category_urls, selectors, site_name="AllNutrition")
+        super().__init__(base_url, headless, self.category_urls, selectors, site_name="AllNutrition")
+        self.classifier = CategoryClassifier()
+
+    def _goto_with_retry(self, page, url, wait_until="domcontentloaded", timeout=60000, max_retries=3):
+        """
+        Navega a una URL con reintentos y backoff exponencial.
+        Útil cuando el servidor cierra la conexión por rate-limiting.
+        """
+        for attempt in range(1, max_retries + 1):
+            try:
+                page.goto(url, wait_until=wait_until, timeout=timeout)
+                return  # éxito
+            except Exception as e:
+                if attempt == max_retries:
+                    raise
+                wait_sec = (2 ** attempt) + random.uniform(1, 3)
+                print(f"[yellow]  >> goto falló (intento {attempt}/{max_retries}): {e}. Reintentando en {wait_sec:.1f}s...[/yellow]")
+                time.sleep(wait_sec)
+
+    def _classify_product(self, title: str, description: str, main_category: str,
+                          deterministic_subcategory: str, brand: str):
+        """
+        Clasifica un producto usando el CategoryClassifier centralizado.
+        Overrides específicos por sitio web se implementarán aquí en el futuro cuando se auditen los resultados.
+        """
+        return self.classifier.classify(title, description, main_category,
+                                        deterministic_subcategory, brand)
 
     def extract_process(self, page):
         print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en AllNutrition...[/green]")
@@ -95,7 +124,12 @@ class AllNutritionScraper(BaseScraper):
 
                 
                 try:
-                    page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                    # Delay aleatorio entre categorías para evitar rate-limiting
+                    delay = random.uniform(3, 8)
+                    print(f"  > Esperando {delay:.1f}s antes de la siguiente categoría...")
+                    time.sleep(delay)
+
+                    self._goto_with_retry(page, url, wait_until="domcontentloaded", timeout=60000)
                     page_number = 1
                     while True:
                         print(f"--- Página {page_number} ---")
@@ -200,10 +234,30 @@ class AllNutritionScraper(BaseScraper):
                                         sku = sku_el.inner_text().strip()
                                     
                                     # 3. Description
-                                    # Combine Benefits + Table if possible, or just benefits
-                                    desc_el = detail_page.locator('.s-main-product__text-wrapper, .c-product-description').first
-                                    if desc_el.count() > 0:
-                                        description = desc_el.inner_text().strip()
+                                    try:
+                                        description_js = detail_page.evaluate(r'''() => {
+                                            let parts = [];
+                                            document.querySelectorAll('.s-main-product-benefits__item').forEach(el => {
+                                                if(el.innerText) parts.push(el.innerText.trim());
+                                            });
+                                            document.querySelectorAll('.s-main-product-table__content').forEach(el => {
+                                                if(el.innerText) parts.push(el.innerText.trim());
+                                            });
+                                            document.querySelectorAll('.s-main-product-table-compare__accordion-item').forEach(el => {
+                                                if(el.innerText) parts.push(el.innerText.trim());
+                                            });
+                                            if (parts.length === 0) {
+                                                const old = document.querySelector('.s-main-product__text-wrapper, .c-product-description');
+                                                if (old && old.innerText) parts.push(old.innerText.trim());
+                                            }
+                                            return parts.length > 0 ? parts.join(' | ').replace(/\n/g, ' ').replace(/\s+/g, ' ') : null;
+                                        }''')
+                                        if description_js:
+                                            description = description_js
+                                    except Exception as desc_e:
+                                        desc_el = detail_page.locator('.s-main-product__text-wrapper, .c-product-description').first
+                                        if desc_el.count() > 0:
+                                            description = desc_el.inner_text().strip()
                                         
                                     detail_page.close()
                                     
@@ -213,15 +267,15 @@ class AllNutritionScraper(BaseScraper):
                                     except: pass
                             
                             # New Categorization Logic
-                            final_subcategory = deterministic_subcategory
-                            # cat_info = self.categorizer.classify_product(title, deterministic_subcategory)
-                            # if cat_info:
-                            #    final_subcategory = cat_info['nombre_subcategoria']
+                            # New Categorization Logic
+                            final_category, final_subcategory = self._classify_product(
+                                title, description, main_category, deterministic_subcategory, brand
+                            )
 
                             yield {
                                 'date': current_date,
                                 'site_name': self.site_name,
-                                'category': self.clean_text(main_category),
+                                'category': self.clean_text(final_category),
                                 'subcategory': final_subcategory,
 
                                 'product_name': title,
@@ -242,7 +296,8 @@ class AllNutritionScraper(BaseScraper):
                         if next_btn.count() > 0 and next_btn.first.is_visible():
                             href = next_btn.first.get_attribute("href")
                             if href:
-                                page.goto(self.base_url + href if href.startswith('/') else href)
+                                next_url = self.base_url + href if href.startswith('/') else href
+                                self._goto_with_retry(page, next_url, wait_until="domcontentloaded", timeout=60000)
                                 page_number += 1
                             else:
                                 next_btn.first.click()

@@ -35,7 +35,6 @@ class ChileSuplementosScraperPart2(BaseScraper):
         selectors = {
             'product_card': '.archive-products .porto-tb-item', 
             'product_name': '.post-title',
-            'brand': '.tb-meta-pwb-brand',
             'price': '.price',
             'link': '.post-title a',
             'rating': '.star-rating',
@@ -96,12 +95,19 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                     raw_title = title_elem.first.inner_text()
                                     title = self.clean_text(raw_title)
                                 
-                                # Brand
+                                # Brand — extraída de las clases CSS del card (pwb-brand-<slug>)
+                                # El sitio no renderiza un elemento dedicado visible con el
+                                # selector '.tb-meta-pwb-brand'; la única fuente confiable
+                                # en la grilla es la clase del propio <div> del producto.
                                 brand = "N/D"
-                                brand_elem = producto.locator(self.selectors['brand'])
-                                if brand_elem.count() > 0:
-                                    raw_brand = brand_elem.first.inner_text()
-                                    brand = self.clean_text(raw_brand)
+                                card_classes = producto.get_attribute("class") or ""
+                                brand_slugs = [
+                                    cls.replace("pwb-brand-", "").replace("-", " ").title()
+                                    for cls in card_classes.split()
+                                    if cls.startswith("pwb-brand-")
+                                ]
+                                if brand_slugs:
+                                    brand = " / ".join(brand_slugs)
 
                                     
                                 # Link
@@ -264,14 +270,33 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                             sku = sku_el.inner_text().strip()
                                         
                                         # 3. Description
-                                        desc_el = detail_page.locator('.woocommerce-product-details__short-description').first
-                                        if desc_el.count() > 0:
-                                            description = desc_el.inner_text().strip()
-                                        else:
-                                            # Fallback to description tab
-                                            desc_el = detail_page.locator('#tab-description, .description').first
-                                        if desc_el.count() > 0:
-                                            description = desc_el.inner_text().strip()
+                                        # Prioridad: short-description (resumen) → tab-description (contenido completo)
+                                        short_desc_el = detail_page.locator('.woocommerce-product-details__short-description').first
+                                        if short_desc_el.count() > 0:
+                                            description = short_desc_el.inner_text().strip()
+                                        
+                                        # Si short-description está vacío, intentar con el tab completo
+                                        if not description:
+                                            tab_desc_el = detail_page.locator('#tab-description').first
+                                            if tab_desc_el.count() > 0:
+                                                description = tab_desc_el.inner_text().strip()
+                                        
+                                        # Último recurso: JSON-LD description
+                                        if not description:
+                                            try:
+                                                jsonld_desc = detail_page.evaluate('''() => {
+                                                    const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                                                    for (const s of scripts) {
+                                                        try {
+                                                            const d = JSON.parse(s.innerText);
+                                                            if (d["@type"] === "Product" && d.description) return d.description;
+                                                        } catch(e) {}
+                                                    }
+                                                    return null;
+                                                }''')
+                                                if jsonld_desc:
+                                                    description = jsonld_desc.strip()
+                                            except: pass
 
                                         detail_page.close()
                                     except Exception as e:

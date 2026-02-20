@@ -84,8 +84,9 @@ class CategoryClassifier:
             else:
                 return "Proteína de Whey"
 
-        # Vegana (alta prioridad)
-        if self._any(text, kw["vegana"]):
+        # Vegana — solo título: evita falsos positivos por descripciones que
+        # mencionan ingredientes vegetales en proteínas de suero convencionales
+        if self._any(title_lower, kw["vegana"]):
             return "Proteína Vegana"
 
         # Carne
@@ -115,6 +116,11 @@ class CategoryClassifier:
         # Hidrolizada
         if self._any(text, kw["hidrolizada"]):
             return "Proteína Hidrolizada"
+
+        # Whey genérico: el título dice "whey" o "suero" sin cualificadores
+        # adicionales → es Proteína de Whey estándar (no Otros)
+        if self._any(text, kw["whey_generico"]):
+            return "Proteína de Whey"
 
         return kw["fallback"]
 
@@ -180,23 +186,28 @@ class CategoryClassifier:
     def _classify_aminoacidos(self, text, title_lower):
         """
         Clasifica subcategoría dentro de Aminoacidos y BCAA.
-        Nota: ZMA puede reclasificar a Vitaminas y Minerales.
+
+        Jerarquía (de mayor a menor especificidad):
+          ZMA          → reclasifica a Vitaminas y Minerales
+          Minerales    → reclasifica a Vitaminas y Minerales
+          EAAs         → EAAs (Esenciales)   [incluye BCAAs, tiene prioridad]
+          BCAAs        → BCAAs
+          Glutamina    → Glutamina
+          Aislados     → Aminoacidos Aislados (un solo AA puro, no glutamina)
+          Complejos    → Complejos de Aminoacidos (catch-all con "amino")
+          fallback     → Complejos de Aminoacidos
         """
         kw = self._aminoacidos
 
-        # ZMA → reclasifica a Vitaminas
+        # ZMA → reclasifica a Vitaminas y Minerales
         if self._any(text, kw["zma"]):
             return "Vitaminas y Minerales", "Multivitamínicos"
 
-        # Minerales (Magnesio/Zinc en nombre)
+        # Minerales (Magnesio/Zinc en el título) → Vitaminas y Minerales
         if self._any(title_lower, kw["minerales"]):
-            return "Aminoacidos y BCAA", "Minerales (Magnesio/ZMA)"
+            return "Vitaminas y Minerales", "Otros Vitaminas y Minerales"
 
-        # HMB
-        if self._any(text, kw["hmb"]):
-            return "Aminoacidos y BCAA", "Otros Aminoacidos y BCAA"
-
-        # EAAs
+        # EAAs — prioridad sobre BCAAs: "EAA + BCAA" es un EAA
         if self._any(text, kw["eaas"]):
             return "Aminoacidos y BCAA", "EAAs (Esenciales)"
 
@@ -208,13 +219,21 @@ class CategoryClassifier:
         if self._any(text, kw["glutamina"]):
             return "Aminoacidos y BCAA", "Glutamina"
 
-        # Leucina
-        if self._any(text, kw["leucina"]):
-            return "Aminoacidos y BCAA", "Leucina"
+        # Aminoácidos Aislados: un único AA puro (no glutamina, ya descartada arriba)
+        # Nota: Beta Alanina y L-Carnitina se excluyen aquí a propósito — deben
+        # pasar por las reglas de Pre Entrenos / Pérdida de Grasa antes de llegar
+        # a esta función (responsabilidad del paso 3 del classify principal).
+        if self._any(text, kw["aislados"]):
+            return "Aminoacidos y BCAA", "Aminoacidos Aislados"
 
-        # Aminoácidos específicos
-        if self._any(text, kw["aminoacidos_especificos"]):
-            return "Aminoacidos y BCAA", "Aminoácidos"
+        # Complejos directos (nombres comerciales conocidos)
+        if self._any(text, kw["complejos_directos"]):
+            return "Aminoacidos y BCAA", "Complejos de Aminoacidos"
+
+        # Heurística catch-all: contiene "amino" pero no encajó en ninguna
+        # subcategoría específica → Complejo de Aminoácidos
+        if self._any(text, kw["amino_generico"]):
+            return "Aminoacidos y BCAA", "Complejos de Aminoacidos"
 
         return "Aminoacidos y BCAA", kw["fallback"]
 
@@ -339,11 +358,38 @@ class CategoryClassifier:
         # ---------------------------------------------------------------
         # "pack" se verifica con word boundary para evitar falsos positivos
         # con palabras como "Doypack", "Backpack", etc.
+        # El separador " + " se excluye cuando ambos lados son ingredientes
+        # conocidos (ej: "EAA + BCAA", "Creatina + Glutamina") para evitar
+        # clasificar nombres de productos combinados como Packs.
+        _supp_ingredients = [
+            "eaa", "bcaa", "creatina", "creatine", "glutamin", "gluta",
+            "proteina", "protein", "whey", "amino", "arginina", "arginine",
+            "citrulina", "citrulline", "taurina", "taurine", "leucina",
+            "leucine", "beta", "vitamina", "vitamin", "omega", "carnitin",
+            # minerales — evita que "Zinc + Magnesio" se clasifique como Pack
+            "magnesio", "zinc", "magne", "zma", "calcio", "calcium",
+            "hierro", "iron", "potasio", "potassium", "sodio", "sodium",
+        ]
+        def _is_ingredient_combo(t):
+            """True si el ' + ' separa ingredientes conocidos (no un pack)."""
+            for sep in gkw["pack_plus_separator"]:
+                if sep in t:
+                    parts = t.split(sep)
+                    if all(
+                        any(ing in part for ing in _supp_ingredients)
+                        for part in parts
+                    ):
+                        return True
+            return False
+
         _pack_kw_no_pack = [k for k in gkw["packs"] if k != "pack"]
         is_pack = (
             bool(re.search(r'\bpack\b', title_norm)) or
             self._any(title_norm, _pack_kw_no_pack) or
-            any(sep in title_norm for sep in gkw["pack_plus_separator"])
+            (
+                any(sep in title_norm for sep in gkw["pack_plus_separator"])
+                and not _is_ingredient_combo(title_norm)
+            )
         )
         if is_pack:
             return "Packs", "Packs"
@@ -395,9 +441,18 @@ class CategoryClassifier:
             final_subcategory = self._classify_vitaminas(title_norm)
 
         elif final_category == "Aminoacidos y BCAA":
-            final_category, final_subcategory = self._classify_aminoacidos(
-                full_text, title_norm
-            )
+            # Excepciones de negocio: Beta Alanina → Pre Entrenos,
+            # L-Carnitina → Pérdida de Grasa. Se interceptan aquí para que
+            # no lleguen a _classify_aminoacidos aunque el sitio los haya
+            # publicado bajo la sección de aminoácidos.
+            if self._any(title_norm, self._pre_entrenos["beta_alanina"]):
+                final_category, final_subcategory = "Pre Entrenos", "Beta Alanina"
+            elif self._any(title_norm, self._perdida_grasa["carnitina"]):
+                final_category, final_subcategory = "Perdida de Grasa", "L-Carnitina"
+            else:
+                final_category, final_subcategory = self._classify_aminoacidos(
+                    full_text, title_norm
+                )
 
         elif final_category == "Pre Entrenos":
             final_subcategory = self._classify_pre_entrenos(full_text)

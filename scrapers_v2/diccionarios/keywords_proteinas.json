@@ -6,6 +6,7 @@
   "aislada": ["iso", "isolate", "aislada", "isolated", "isofit", "isolatada","izolate"],
   "aislada_word_boundary": ["iso"],
   "hidrolizada": ["hydro", "hidrolizada", "hydrolized", "hydrolyzed", "hidrolizado"],
+  "whey_generico": ["whey", "suero"],
   "whey_concentrado": ["concentrado", "concentrate", "blend"],
   "whey_combinacion": ["combinacion", "combinación"],
   "whey_mezcla": ["mezcla"],
