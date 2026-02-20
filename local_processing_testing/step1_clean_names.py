@@ -1,151 +1,237 @@
 import pandas as pd
 import os
 import re
+import glob
 from datetime import datetime
+
+# ---------------------------------------------------------------------------
+# Encoding fix map — corrige diacríticos corruptos que vienen de algunos
+# scrapers/CSVs con encoding mal detectado (latin-1 leído como cp1252, etc.)
+# ---------------------------------------------------------------------------
+ENCODING_FIX = {
+    "Prote\xedna":    "Proteína",
+    "Prote\xeena":    "Proteína",
+    "Case\xedna":     "Caseína",
+    "Multivitam\xednicos": "Multivitamínicos",
+    "Multivitam\xeenicos": "Multivitamínicos",
+    "Probi\xf3ticos": "Probióticos",
+    "Col\xe1geno":    "Colágeno",
+    "Hidrataci\xf3n": "Hidratación",
+    "Energ\xeda":     "Energía",
+    "Energ\xeea":     "Energía",
+    "Caf\xe9":        "Café",
+    "\xd3xido":       "Óxido",
+    "Isot\xf3nicos":  "Isotónicos",
+    "Isot\xf3nica":   "Isotónica",
+    "Bebidas Energ\xe9ticas": "Bebidas Energéticas",
+    "Batidos de prote\xedna": "Batidos de proteína",
+    "Batidos de prote\xeena": "Batidos de proteína",
+    "Probiticos":     "Probióticos",
+    "Colgeno":        "Colágeno",
+    "Protena":        "Proteína",
+    "Casena":         "Caseína",
+    "\xc1cido":       "Ácido",
+    "Botell\xf3n":    "Botellón",
+    "Porta Prote\xedna": "Porta Proteína",
+    "Porta Prote\xeena": "Porta Proteína",
+    "Bot\xe9ll\xf3n": "Botellón",
+}
+
+
+def fix_encoding(text):
+    """Corrige diacríticos corruptos en un string."""
+    if not isinstance(text, str):
+        return text
+    for bad, good in ENCODING_FIX.items():
+        text = text.replace(bad, good)
+    return text
+
+
+def fix_encoding_series(series):
+    """Aplica fix_encoding a toda una columna pandas."""
+    return series.apply(fix_encoding)
+
+
+# ---------------------------------------------------------------------------
+# Brand loading
+# ---------------------------------------------------------------------------
 
 def load_brands(dict_path):
     if not os.path.exists(dict_path):
         print(f"[WARNING] No se encontró el diccionario de marcas en {dict_path}")
         return []
-    
     try:
         df = pd.read_csv(dict_path)
-        # Assuming column 'nombre_marca' exists based on user info
         if 'nombre_marca' in df.columns:
             brands = df['nombre_marca'].dropna().unique().tolist()
-            # Sort by length descending to match longest first (e.g. "Muscle Tech" before "Muscle")
+            # Longest first: evita que "Muscle" elimine "Muscle Tech" primero
             brands.sort(key=len, reverse=True)
             return brands
     except Exception as e:
         print(f"[ERROR] Leyendo diccionario de marcas: {e}")
-        return []
     return []
 
-def clean_name_logic(name, brands_pattern):
+
+# ---------------------------------------------------------------------------
+# Smart title-case: evita el bug de str.title() con apóstrofes/siglas
+# "bcaa's" -> "Bcaa's"  (no "Bcaa'S")
+# ---------------------------------------------------------------------------
+
+def smart_title(s):
+    """
+    Title-case que no rompe apóstrofes ni siglas, y maneja letras acentuadas.
+
+    El regex original [A-Za-z] solo matcheaba ASCII, por lo que caracteres
+    como 'é', 'ó', 'Á' actuaban como separadores y la letra siguiente se
+    capitalizaba → "EdicióN", "CáPsula".  Con \\w (Unicode-aware) + exclusión
+    de dígitos/_ se captura la palabra completa incluyendo tildes.
+
+    Unidades de medida (lb, kg, g, ml, oz, mg, mcg, gr) siempre quedan en
+    minúsculas aunque vayan pegadas a un número (ej. "5Lb" → "5lb").
+    """
+    _UNITS = r'(?:mcg|mg|ml|kg|lb|oz|gr|g)'
+
+    # \w en Python con re es Unicode-aware; excluimos dígitos y _ explícitamente
+    result = re.sub(
+        r"[^\W\d_]+('[^\W\d_]+)?",
+        lambda m: m.group(0)[0].upper() + m.group(0)[1:].lower(),
+        s,
+    )
+    # Post-fix: número seguido de unidad (con o sin espacio) → unidad en minúsculas
+    # Orden: mcg/mg/ml primero (más largos) antes de g/m para evitar sub-matches
+    result = re.sub(
+        r'(\d\s?)(' + _UNITS + r')\b',
+        lambda m: m.group(1) + m.group(2).lower(),
+        result,
+        flags=re.IGNORECASE,
+    )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# WILD-brand aggressive cleaning (single place)
+# ---------------------------------------------------------------------------
+
+def _apply_wild_cleaning(name):
+    """
+    Limpieza agresiva para productos de marca WILD.
+    Elimina palabras de formato genéricas que rompen la agrupación.
+    """
+    name = re.sub(r'\b(Barra|Barrita)s? (de )?Prote[íi]nas?\b', '', name, flags=re.IGNORECASE)
+    name = re.sub(r'\b(Barra|Barrita)s?\b',   '', name, flags=re.IGNORECASE)
+    name = re.sub(r'\bProtein Bars?\b',         '', name, flags=re.IGNORECASE)
+    name = re.sub(r'\bOriginal\b',              '', name, flags=re.IGNORECASE)
+    name = re.sub(r'\bSabor\b',                 '', name, flags=re.IGNORECASE)
+    name = re.sub(r'\bVegan[oa]s?\b',           '', name, flags=re.IGNORECASE)
+    name = re.sub(r'\b\d+\s*g(r)?\b',           '', name, flags=re.IGNORECASE)
+    name = re.sub(r'\b45\s*gr?\b',              '', name, flags=re.IGNORECASE)
+    return name
+
+
+# ---------------------------------------------------------------------------
+# Core cleaning functions
+# ---------------------------------------------------------------------------
+
+def basic_clean(name):
+    """
+    Limpieza básica de puntuación/espacios SIN eliminar la marca.
+    Produce el display_name: nombre legible para el usuario final.
+    """
     if not isinstance(name, str) or not name:
         return ""
-    
-    # Check for WILD brand BEFORE removing it
+    cleaned = re.sub(r'\s+', ' ', name)
+    cleaned = cleaned.strip(" -.,:;|/()%")
+    cleaned = cleaned.replace(" - ", " ")
+    if not cleaned:
+        return ""
+    return smart_title(cleaned.strip())
+
+
+def clean_name_logic(name, brands_pattern):
+    """Elimina la marca del nombre y aplica limpieza básica."""
+    if not isinstance(name, str) or not name:
+        return ""
+
     is_wild = name.lower().startswith("wild")
-    
-    # 1. Remove Brands (Case Insensitive)
+
+    # 1. Eliminar marca
     cleaned = brands_pattern.sub('', name)
-    
-    # 2. Cleanup Punctuation and leftovers
+
+    # 2. Limpiar puntuación residual
     cleaned = re.sub(r'\s+', ' ', cleaned)
     cleaned = cleaned.strip(" -.,:;|/()%")
     cleaned = cleaned.replace(" - ", " ")
-    
-    # 3. Aggressive cleaning for WILD brands only
-    # We apply this to 'cleaned' (the version without the brand string)
-    # BUT wait, if the brand "Wild" was removed, 'cleaned' starts with "Protein..."
-    # So we use the 'is_wild' flag detected earlier.
-    
-    if is_wild:
-        # Remove generic "Format" words
-        cleaned = re.sub(r'\b(Barra|Barrita)s? (de )?Prote[íi]nas?\b', '', cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r'\b(Barra|Barrita)s?\b', '', cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r'\bProtein Bars?\b', '', cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r'\bOriginal\b', '', cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r'\bSabor\b', '', cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r'\bVegan[oa]s?\b', '', cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r'\b\d+\s*g(r)?\b', '', cleaned, flags=re.IGNORECASE)
-        
-        # If the result became empty (e.g. "Wild Protein" -> remove "Wild" -> "Protein" -> remove "Protein"?)
-        # Wait, "Wild Protein" -> remove "Wild" -> "Protein". "Protein" is not removed by above regexes unless "Protein Bars".
-        # But if the brand dictionary has "Wild Protein", then "Wild Protein" is removed completely!
-        # Ah, we removed "Wild Protein" from dictionary. Good.
-        # So "Wild Protein" -> remove "WILD" -> " Protein" -> "Protein".
-        # "Wild Protein Vegana" -> remove "WILD" -> " Protein Vegana" -> remove "Vegana" -> "Protein".
-        # So they group under "Protein".
-        
-        # Re-add "Wild" prefix if it was stripped by brand removal but we want to keep identity?
-        # User wants "Wild Protein", "Wild Protein Vegana" -> "Wild Protein".
-        # If we remove "Wild" (brand), we are left with "Protein".
-        # Is "Protein" a good product name? Maybe too generic?
-        # But if all Wild products map to "Protein" and brand is "Wild Foods", then (Name="Protein", Brand="Wild Foods") is unique enough.
-        pass
 
-    # Remove ", wild" at the end (flexible spacing)
+    # 3. Limpieza agresiva WILD (solo si era producto WILD)
+    if is_wild:
+        cleaned = _apply_wild_cleaning(cleaned)
+
+    # 4. Eliminar ", wild" al final
     cleaned = re.sub(r',\s*wild\s*$', '', cleaned, flags=re.IGNORECASE)
-    
-    # 4. Title Case
-    # Check if 'cleaned' is empty/None to avoid errors
+
     if not cleaned:
         return ""
-    cleaned = cleaned.title()
-    
-    return cleaned.strip()
+
+    return smart_title(cleaned.strip())
+
 
 def standardize_units(name):
-    if not isinstance(name, str): return ""
-    
-    # Standardize weights/volumes
-    # 5 lbs, 5lbs, 5 lb -> 5lb
-    name = re.sub(r'\b(\d+(\.\d+)?)\s*(lbs?|libras?)\b', r'\1lb', name, flags=re.IGNORECASE)
-    # 2 kg, 2kg -> 2kg
-    name = re.sub(r'\b(\d+(\.\d+)?)\s*(kgs?|kilos?)\b', r'\1kg', name, flags=re.IGNORECASE)
-    # 1000 mg -> 1000mg
-    name = re.sub(r'\b(\d+)\s*(mg|mcg|g)\b', r'\1\2', name, flags=re.IGNORECASE)
-    # 60 caps -> 60caps
-    name = re.sub(r'\b(\d+)\s*(caps?|capsulas?|softgels?|tabletas?|servicios?|servs?)\b', r'\1\2', name, flags=re.IGNORECASE)
-    
-    # Normalize "Whey Protein" variations
+    """Normaliza unidades de peso/volumen/porciones y elimina texto promocional."""
+    if not isinstance(name, str):
+        return ""
+
+    # Pesos / volúmenes
+    name = re.sub(r'\b(\d+(\.\d+)?)\s*(lbs?|libras?)\b',        r'\1lb',   name, flags=re.IGNORECASE)
+    name = re.sub(r'\b(\d+(\.\d+)?)\s*(kgs?|kilos?)\b',          r'\1kg',   name, flags=re.IGNORECASE)
+    name = re.sub(r'\b(\d+)\s*(mg|mcg|g)\b',                     r'\1\2',   name, flags=re.IGNORECASE)
+    name = re.sub(r'\b(\d+)\s*(caps?|capsulas?|softgels?|tabletas?|servicios?|servs?)\b',
+                  r'\1\2', name, flags=re.IGNORECASE)
+
+    # Normalizar "100% Whey" -> "Whey"
     name = re.sub(r'\b(100%|100 %)\s*Whey\b', 'Whey', name, flags=re.IGNORECASE)
-    
-    # Extra cleaning for "Nutrition" leftovers
+
+    # Eliminar sufijos genéricos de marca
     name = re.sub(r'\b(Nutrition|Supplements|Labs?|Pharm|Pharma)\b', '', name, flags=re.IGNORECASE)
-    
-    # Clean Promotional/Bundle leftovers (Regalo, Gratis, Shaker)
-    # Strategy: If "Regalo", "Gratis", "Shaker" is found, truncate everything after it?
-    # Or just remove the word? Truncating is safer for " ... + Shaker Dymatize"
-    
-    # Remove "+ Shaker..." or " con Shaker..."
+
+    # Colapsar espacios dobles que pueden quedar tras eliminar palabras
+    name = re.sub(r'\s{2,}', ' ', name).strip()
+
+    # Eliminar texto promocional: truncar desde el marcador en adelante
     name = re.sub(r'(\+|con|incluye)?\s*\b(Shaker|Vaso|Regalo|Gratis)\b.*', '', name, flags=re.IGNORECASE)
-    
-    # Remove " (Unidad)" or " Unidad" at end
+
+    # Eliminar "(Unidad)" al final
     name = re.sub(r'[\(\s]Unidad[\)]?$', '', name, flags=re.IGNORECASE)
-    
-    # NEW: Aggressive cleaning for WILD brands only
-    # We check if the original brand is WILD-related (passed implicitly via brand dictionary logic? No, regex is generic)
-    # But we can check if the name STARTS with "Wild" (since brand wasn't removed for WILD)
-    
+
+    # Limpieza agresiva WILD (también aplica sobre el nombre ya limpio de marca)
     if name.lower().startswith("wild"):
-        # Remove generic "Format" words that break grouping
-        # "Barra de proteina", "Protein Bar", "Barrita", "45 g", "Original", "Sabor"
-        name = re.sub(r'\b(Barra|Barrita)s? (de )?Proteinas?\b', '', name, flags=re.IGNORECASE)
-        name = re.sub(r'\bProtein Bars?\b', '', name, flags=re.IGNORECASE)
-        name = re.sub(r'\bOriginal\b', '', name, flags=re.IGNORECASE)
-        name = re.sub(r'\bSabor\b', '', name, flags=re.IGNORECASE)
-        # Remove weight for Wild Bars to group flavors regardless of "45g" vs "45 g"
-        # Be careful not to remove "2lb" for proteins. Only small grams for bars?
-        # Let's remove "45\s*g(r)?" specifically or generic grams if small?
-        # Safer: "45\s*gr?"
-        name = re.sub(r'\b45\s*gr?\b', '', name, flags=re.IGNORECASE)
-    
-    # 4. Stopword Guard (Prevent removing brand leaving only "Unidad", "Pack", "Caja")
-    # If the remaining name is just a generic word, we probably stripped too much.
-    stopwords = {"unidad", "unidades", "pack", "caja", "display", "promo", "oferta", "barra", "barras", "sachet"}
+        name = _apply_wild_cleaning(name)
+
+    # Stopword guard: si después de toda la limpieza solo queda una palabra
+    # genérica, señalizar al caller para revertir al original.
+    stopwords = {
+        "unidad", "unidades", "pack", "caja", "display",
+        "promo", "oferta", "barra", "barras", "sachet"
+    }
     if name.lower().strip() in stopwords:
-        # Revert logic? We need original name.
-        # But this function only takes 'name' (which is effectively 'cleaned' so far)
-        # We can return None to signal "revert to original" in the caller.
-        return None 
+        return None  # El caller usa el nombre original
 
     return name.strip()
 
+
+# ---------------------------------------------------------------------------
+# Main pipeline step
+# ---------------------------------------------------------------------------
+
 def process_cleaning():
     print("--- PASO 1: Limpieza Determinista de Nombres ---")
-    
-    # Determine Project Root (parent of 'local_processing_testing')
-    current_dir = os.path.dirname(os.path.abspath(__file__))
+
+    current_dir  = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_dir)
-    
-    # Read from raw_data (absolute path)
+
+    # --- Leer todos los CSVs raw ---
     raw_data_dir = os.path.join(project_root, "raw_data")
-    import glob
-    raw_files = glob.glob(os.path.join(raw_data_dir, "*.csv"))
-    
+    raw_files    = glob.glob(os.path.join(raw_data_dir, "*.csv"))
+
     if not raw_files:
         print(f"Error: No hay archivos CSV en {raw_data_dir}")
         return
@@ -154,85 +240,86 @@ def process_cleaning():
     dfs = []
     for f in raw_files:
         try:
-            df = pd.read_csv(f)
-            dfs.append(df)
+            dfs.append(pd.read_csv(f))
         except Exception as e:
             print(f"Error leyendo {f}: {e}")
-    
-    if not dfs: return
-    df = pd.concat(dfs, ignore_index=True)
 
-    # Load Data
-    # df = pd.read_csv(input_csv) # Already loaded via concat
+    if not dfs:
+        return
+
+    df = pd.concat(dfs, ignore_index=True)
     print(f"Cargados {len(df)} registros.")
-    
-    # Load Brands
+
+    # --- Fix de encoding en columnas de texto ---
+    # Algunos scrapers/CSVs producen diacríticos corruptos; los corregimos
+    # antes de cualquier otro procesamiento.
+    for col in ('product_name', 'category', 'subcategory', 'brand'):
+        if col in df.columns:
+            df[col] = fix_encoding_series(df[col])
+    print("Encoding de columnas de texto corregido.")
+
+    # --- Cargar marcas ---
     brands_path = os.path.join(project_root, "marcas_dictionary.csv")
-    brands = load_brands(brands_path)
-    print(f"Cargadas {len(brands)} marcas para limpieza desde {brands_path}")
-    
-    # Compile Regex for Brands
-    # We escape regex chars in brand names just in case
-    # Pattern: \b(Brand1|Brand2|...)\b with ignore case
+    brands      = load_brands(brands_path)
+    print(f"Cargadas {len(brands)} marcas desde {brands_path}")
+
+    # Compilar regex de marcas (longest-first ya garantizado por load_brands)
     if brands:
-        escaped_brands = [re.escape(b) for b in brands]
-        pattern_str = r'\b(' + '|'.join(escaped_brands) + r')\b'
+        escaped      = [re.escape(b) for b in brands]
+        pattern_str  = r'\b(' + '|'.join(escaped) + r')\b'
         brands_pattern = re.compile(pattern_str, re.IGNORECASE)
     else:
-        brands_pattern = re.compile(r'(?!x)x') # Match nothing
-    
-    # Apply Cleaning
-    # We operate on 'ai_clean_name' if valid, else 'product_name'.
-    # Result goes back to 'ai_clean_name' (or new column? Let's refine ai_clean_name)
-    
+        brands_pattern = re.compile(r'(?!x)x')  # no hace match nunca
+
+    # --- Aplicar limpieza fila a fila ---
     count_changed = 0
-    
+
     def row_cleaner(row):
         nonlocal count_changed
-        
-        # Source: prefer AI cleaned name, fallback to original
-        original_source = row.get('ai_clean_name', '')
-        if pd.isna(original_source) or original_source == '':
-            original_source = row['product_name']
-            
-        final_name = clean_name_logic(str(original_source), brands_pattern)
-        if final_name is None: # Stopword guard triggered
-            # Revert to original but Clean it (Title Case)
-            final_name = str(original_source).title()
-        
-        # Apply unit standardization ALWAYS (to both cleaned and reverted names)
-        final_name = standardize_units(final_name)
-        
-        # Check if changed (ignoring case for change detection)
-        # Ensure final_name is string (it should be, but safety first)
-        if final_name and str(final_name).lower() != str(original_source).lower():
-            count_changed += 1
-            
-        return final_name
 
-    df['ai_clean_name'] = df.apply(row_cleaner, axis=1)
-    
+        original_source = row['product_name']
+        if pd.isna(original_source) or not str(original_source).strip():
+            return pd.Series({"clean_name": "", "display_name": ""})
+        original_source = str(original_source)
+
+        # --- display_name: nombre con marca, solo limpieza básica + unidades ---
+        display = basic_clean(original_source)
+        display_final = standardize_units(display)
+        if display_final is None:
+            display_final = smart_title(original_source)
+
+        # --- clean_name: nombre SIN marca (para normalización/matching) ---
+        cleaned = clean_name_logic(original_source, brands_pattern)
+        if not cleaned:
+            cleaned = smart_title(original_source)
+
+        final_name = standardize_units(cleaned)
+        if final_name is None:
+            # Stopword guard: revertir al original limpio
+            final_name = smart_title(original_source)
+
+        # Detectar si hubo cambio real (case-insensitive)
+        if final_name and final_name.lower() != original_source.lower():
+            count_changed += 1
+
+        return pd.Series({"clean_name": final_name, "display_name": display_final})
+
+    df[['clean_name', 'display_name']] = df.apply(row_cleaner, axis=1)
     print(f"Nombres limpiados/modificados: {count_changed}")
-    
-    # Save Outputs
-    today_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    
-    # Create folder if not exists (though data exists)
-    # output_dir is inside local_processing_testing/data/1_cleaned
-    # We use current_dir (which is local_processing_testing)
+
+    # --- Guardar output ---
+    today_str  = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     output_dir = os.path.join(current_dir, "data", "1_cleaned")
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        
+    os.makedirs(output_dir, exist_ok=True)
+
     output_path = os.path.join(output_dir, f"cleaned_{today_str}.csv")
-    
-    # Save 'latest' inside the specific folder
     latest_path = os.path.join(output_dir, "latest_cleaned.csv")
-    
+
     df.to_csv(output_path, index=False, encoding='utf-8-sig')
     df.to_csv(latest_path, index=False, encoding='utf-8-sig')
-    
+
     print(f"[EXITO] Datos limpios guardados en: {latest_path}")
+
 
 if __name__ == "__main__":
     process_cleaning()

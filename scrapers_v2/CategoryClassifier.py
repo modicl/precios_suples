@@ -133,7 +133,7 @@ class CategoryClassifier:
             if (self._any(title_lower, kw["monohidrato"]) or
                     self._any(title_lower, kw["creapure_sello"])):
                 return "Creatina Monohidrato"
-            return "Creatina HCL"
+            return "Clorhidrato"
 
         if self._any(text, kw["malato_magnesio"]):
             return "Malato y Magnesio"
@@ -224,16 +224,16 @@ class CategoryClassifier:
         # pasar por las reglas de Pre Entrenos / Pérdida de Grasa antes de llegar
         # a esta función (responsabilidad del paso 3 del classify principal).
         if self._any(text, kw["aislados"]):
-            return "Aminoacidos y BCAA", "Aminoacidos Aislados"
+            return "Aminoacidos y BCAA", "Aminoácidos Aislados"
 
         # Complejos directos (nombres comerciales conocidos)
         if self._any(text, kw["complejos_directos"]):
-            return "Aminoacidos y BCAA", "Complejos de Aminoacidos"
+            return "Aminoacidos y BCAA", "Complejos de Aminoácidos"
 
         # Heurística catch-all: contiene "amino" pero no encajó en ninguna
         # subcategoría específica → Complejo de Aminoácidos
         if self._any(text, kw["amino_generico"]):
-            return "Aminoacidos y BCAA", "Complejos de Aminoacidos"
+            return "Aminoacidos y BCAA", "Complejos de Aminoácidos"
 
         return "Aminoacidos y BCAA", kw["fallback"]
 
@@ -297,7 +297,7 @@ class CategoryClassifier:
         """Clasifica subcategoría dentro de Bebidas Nutricionales."""
         kw = self._bebidas
         if self._any(text, kw["isotonicos"]):
-            return "Isotónicos"
+            return "Isotónicas"
         if self._any(text, kw["bebidas_energeticas"]):
             return "Bebidas Energéticas"
         if self._any(text, kw["geles"]):

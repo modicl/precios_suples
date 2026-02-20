@@ -49,10 +49,8 @@ class AllNutritionScraper(BaseScraper):
             ],
             "Aminoacidos y BCAA": [
                 {"url": "https://allnutrition.cl/collections/bcaa-1", "subcategory": "Bcaa 1"},
-                {"url": "https://allnutrition.cl/collections/aminoacidos", "subcategory": "Aminoacidos"}
-            ],
-            "Glutamina": [
-                {"url": "https://allnutrition.cl/collections/glutaminas", "subcategory": "Glutaminas"}
+                {"url": "https://allnutrition.cl/collections/aminoacidos", "subcategory": "Aminoacidos"},
+                {"url": "https://allnutrition.cl/collections/glutaminas", "subcategory": "Glutamina"}
             ],
             "Perdida de Grasa": [
                 {"url": "https://allnutrition.cl/collections/quemadores-de-grasa", "subcategory": "Quemadores De Grasa"}
