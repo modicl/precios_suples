@@ -5,6 +5,7 @@ from datetime import datetime
 import re
 import json
 import unicodedata
+from urllib.parse import quote
 
 class MuscleFactoryScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -19,7 +20,7 @@ class MuscleFactoryScraper(BaseScraper):
                 {"url": "https://www.musclefactory.cl/productos/pre-entrenamientos", "subcategory": "Pre Entreno"}
             ],
             "Vitaminas y Minerales": [
-                {"url": "https://www.musclefactory.cl/vitaminas-y-minerales-🌞", "subcategory": "Vitaminas y Minerales"}
+                {"url": "https://www.musclefactory.cl/vitaminas-y-minerales-" + quote("🌞"), "subcategory": "Vitaminas y Minerales"}
             ],
             "Ofertas": [
                 {"url": "https://www.musclefactory.cl/ofertas", "subcategory": "Ofertas"}
