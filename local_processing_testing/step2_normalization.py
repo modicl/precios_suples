@@ -33,6 +33,7 @@ _GENERIC_WORDS = frozenset({
     "powder", "blend", "formula",
     "gainer", "mass gainer",
     "original",
+    "isolate",   # descriptor de tipo de proteína, no distingue variantes
 })
 
 # Words that make two products meaningfully different when present in one

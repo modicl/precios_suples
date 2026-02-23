@@ -396,7 +396,9 @@ class BaseScraper:
         
         # Generar hash basado en la URL limpia (sin parametros dinamicos) para evitar duplicados
         clean_url_key = url.split('?')[0]
-        filename = hashlib.md5(clean_url_key.encode('utf-8')).hexdigest() + file_ext
+        url_hash = hashlib.md5(clean_url_key.encode('utf-8')).hexdigest()
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{url_hash}{file_ext}"
         
         # Definir rutas S3 (dentro de assets/img)
         s3_resized_key = f"assets/img/resized/{subfolder}/{filename}"

@@ -35,6 +35,8 @@ def clean_s3_folder(s3_client, bucket, prefix):
     print(f"Total borrados en '{prefix}': {deleted_count}")
 
 def main():
+    import sys
+
     if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
         print("Error: Credenciales AWS no encontradas en .env")
         return
@@ -46,19 +48,37 @@ def main():
         region_name=AWS_REGION
     )
 
+    # Uso: python clean_s3_images.py [site_folder]
+    # Ejemplo: python clean_s3_images.py chilesuplementos
+    # Sin argumento: borra TODO (comportamiento original)
+    site_folder = sys.argv[1].strip().lower() if len(sys.argv) > 1 else None
+
     print(f"Conectado a S3. Bucket: {BUCKET_NAME}")
-    print("Este script borrará TODAS las imágenes en 'assets/img/resized' y 'assets/img/originals'.")
+
+    if site_folder:
+        prefixes = [
+            f"assets/img/resized/{site_folder}/",
+            f"assets/img/originals/{site_folder}/",
+        ]
+        print(f"Este script borrará SOLO las imágenes de '{site_folder}':")
+    else:
+        prefixes = [
+            "assets/img/resized/",
+            "assets/img/originals/",
+        ]
+        print("Este script borrará TODAS las imágenes (resized + originals).")
+
+    for p in prefixes:
+        print(f"  - {p}")
+
     confirm = input("Escribe 'BORRAR' para confirmar: ")
-    
     if confirm != "BORRAR":
         print("Operación cancelada.")
         return
 
-    # Borramos el contenido de las carpetas principales
-    # Nota: En S3 las carpetas desaparecen si no tienen objetos, pero el scraper las "creará" de nuevo al subir archivos.
-    clean_s3_folder(s3, BUCKET_NAME, "assets/img/resized/")
-    clean_s3_folder(s3, BUCKET_NAME, "assets/img/originals/")
-    
+    for prefix in prefixes:
+        clean_s3_folder(s3, BUCKET_NAME, prefix)
+
     print("\nLimpieza completada.")
 
 if __name__ == "__main__":

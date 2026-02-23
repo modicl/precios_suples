@@ -147,6 +147,32 @@ def basic_clean(name):
     return smart_title(cleaned.strip())
 
 
+def normalize_matching_terms(name: str) -> str:
+    """
+    Normaliza términos que tienen múltiples variantes ortográficas para que
+    el matching fuzzy en step2 los trate como equivalentes.
+
+    Solo aplica al clean_name (campo de matching), NO al display_name.
+
+    Normalizaciones:
+    - ISO100 / ISO100% → ISO 100  (número pegado al texto)
+    - hydrolized / hidrolizada / hidrolizado / hidrolizad* → hydrolyzed
+    """
+    # ISO100 / ISO100% → ISO 100  (solo este caso conocido; no afecta otros alpha+num)
+    name = re.sub(r'\bISO\s*100%?\b', 'ISO 100', name, flags=re.IGNORECASE)
+
+    # Variantes de hydrolyzed → forma canónica inglesa
+    # Cubre: hydrolized, hydrolyzed, hidrolizada, hidrolizado, hidrolizad*
+    name = re.sub(
+        r'\b(hydrolized|hidrolizad[ao]?|hidrolizada|hidrolizado)\b',
+        'hydrolyzed',
+        name,
+        flags=re.IGNORECASE,
+    )
+
+    return name
+
+
 def clean_name_logic(name, brands_pattern):
     """Elimina la marca del nombre y aplica limpieza básica."""
     if not isinstance(name, str) or not name:
@@ -169,14 +195,21 @@ def clean_name_logic(name, brands_pattern):
     # 4. Eliminar ", wild" al final
     cleaned = re.sub(r',\s*wild\s*$', '', cleaned, flags=re.IGNORECASE)
 
+    # 5. Normalizar variantes ortográficas para matching (hydrolyzed, iso100, etc.)
+    cleaned = normalize_matching_terms(cleaned)
+
     if not cleaned:
         return ""
 
     return smart_title(cleaned.strip())
 
 
-def standardize_units(name):
-    """Normaliza unidades de peso/volumen/porciones y elimina texto promocional."""
+def standardize_units(name, is_pack: bool = False):
+    """Normaliza unidades de peso/volumen/porciones y elimina texto promocional.
+
+    is_pack: cuando True (categoría "Packs"), omite el strip de Shaker/Vaso/Regalo
+             porque esas palabras son parte constitutiva del bundle, no texto promo.
+    """
     if not isinstance(name, str):
         return ""
 
@@ -196,8 +229,10 @@ def standardize_units(name):
     # Colapsar espacios dobles que pueden quedar tras eliminar palabras
     name = re.sub(r'\s{2,}', ' ', name).strip()
 
-    # Eliminar texto promocional: truncar desde el marcador en adelante
-    name = re.sub(r'(\+|con|incluye)?\s*\b(Shaker|Vaso|Regalo|Gratis)\b.*', '', name, flags=re.IGNORECASE)
+    # Eliminar texto promocional: truncar desde el marcador en adelante.
+    # Omitir para Packs: en bundles "Shaker", "Vaso", etc. son parte del producto.
+    if not is_pack:
+        name = re.sub(r'(\+|con|incluye)?\s*\b(Shaker|Vaso|Regalo|Gratis)\b.*', '', name, flags=re.IGNORECASE)
 
     # Eliminar "(Unidad)" al final
     name = re.sub(r'[\(\s]Unidad[\)]?$', '', name, flags=re.IGNORECASE)
@@ -281,10 +316,11 @@ def process_cleaning():
         if pd.isna(original_source) or not str(original_source).strip():
             return pd.Series({"clean_name": "", "display_name": ""})
         original_source = str(original_source)
+        is_pack = str(row.get('category', '')).strip().lower() == 'packs'
 
         # --- display_name: nombre con marca, solo limpieza básica + unidades ---
         display = basic_clean(original_source)
-        display_final = standardize_units(display)
+        display_final = standardize_units(display, is_pack=is_pack)
         if display_final is None:
             display_final = smart_title(original_source)
 
@@ -293,7 +329,7 @@ def process_cleaning():
         if not cleaned:
             cleaned = smart_title(original_source)
 
-        final_name = standardize_units(cleaned)
+        final_name = standardize_units(cleaned, is_pack=is_pack)
         if final_name is None:
             # Stopword guard: revertir al original limpio
             final_name = smart_title(original_source)

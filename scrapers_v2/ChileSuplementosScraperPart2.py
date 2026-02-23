@@ -207,15 +207,18 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                     detail_page = None
                                     try:
                                         detail_page = context.new_page()
-                                        detail_page.goto(link, wait_until="domcontentloaded", timeout=40000)
+                                        detail_page.goto(link, wait_until="load", timeout=40000)
                                         
                                         # 1. Main Image
                                         # Priority: Open Graph > JSON-LD > DOM
                                         
                                         # Open Graph
+                                        # Filtramos el favicon/logo del sitio que WooCommerce usa como fallback
+                                        # cuando el producto no tiene imagen o la pagina no cargó del todo
+                                        SITE_LOGO_PATTERNS = ("cropped-favicon", "cropped-logo", "/favicon")
                                         try:
                                             og_img = detail_page.locator('meta[property="og:image"]').first.get_attribute('content')
-                                            if og_img:
+                                            if og_img and not any(p in og_img.lower() for p in SITE_LOGO_PATTERNS):
                                                 image_url = og_img
                                         except: pass
 
