@@ -20,6 +20,7 @@ import sys
 import os
 import time
 import argparse
+import threading
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -51,10 +52,12 @@ SCRAPERS = [
     # (nombre_display, script_relativo_a_SCRAPERS_DIR)
     ("ChileSuplementos",      "ChileSuplementosScraperRunner.py"),
     ("AllNutrition",          "AllNutritionScraper.py"),
+    ("Byon",                  "BYONScraper.py"),
     ("CruzVerde",             "CruzVerdeScraper.py"),
     ("Decathlon",             "DecathlonScraper.py"),
     ("DrSimi",                "DrSimiScraper.py"),
     ("FarmaciaKnop",          "FarmaciaKnopScraper.py"),
+    ("KoteSport",             "KoteSportScraper.py"),
     ("Suples",                "SuplesScraper.py"),
     ("SuplementosBullChile",  "SuplementosBullChileScraper.py"),
     ("SuplementosMayoristas", "SuplementosMayoristasScraper.py"),
@@ -68,8 +71,28 @@ SCRAPERS = [
 ]
 
 
-def _launch(name: str, script: str, headless: bool) -> tuple[str, subprocess.Popen, float]:
-    """Lanza un scraper como subproceso. Retorna (nombre, proceso, t_inicio)."""
+_print_lock = threading.Lock()
+
+
+def _stream_output(name: str, stream, log_file, prefix_color: str = "cyan"):
+    """Lee líneas de 'stream' y las imprime en consola con prefijo [name], además de escribirlas al log."""
+    prefix = f"[{name}]"
+    for raw_line in stream:
+        try:
+            line = raw_line.decode("utf-8", errors="replace").rstrip("\n\r")
+        except Exception:
+            line = repr(raw_line)
+        log_file.write(line + "\n")
+        log_file.flush()
+        with _print_lock:
+            if _RICH:
+                console.print(f"[{prefix_color}]{prefix}[/{prefix_color}] {line}")
+            else:
+                print(f"{prefix} {line}", flush=True)
+
+
+def _run_one(name: str, script: str, headless: bool) -> dict:
+    """Lanza un scraper, transmite su salida en tiempo real y espera a que termine."""
     script_path = os.path.join(SCRAPERS_DIR, script)
     cmd = [sys.executable, script_path]
     # Solo ChileSuplementosScraperRunner.py acepta --headless como argumento CLI.
@@ -77,8 +100,6 @@ def _launch(name: str, script: str, headless: bool) -> tuple[str, subprocess.Pop
     if headless and script == "ChileSuplementosScraperRunner.py":
         cmd.append("--headless")
 
-    # Prefijo en stdout/stderr para identificar de qué scraper viene cada línea
-    # (usamos un archivo de log por scraper para no mezclar salidas)
     log_dir = os.path.join(PROJECT_ROOT, "logs")
     os.makedirs(log_dir, exist_ok=True)
     log_path = os.path.join(
@@ -90,25 +111,31 @@ def _launch(name: str, script: str, headless: bool) -> tuple[str, subprocess.Pop
     proc = subprocess.Popen(
         cmd,
         cwd=SCRAPERS_DIR,
-        stdout=log_file,
-        stderr=log_file,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,  # unifica stdout+stderr en un solo stream
     )
-    return name, proc, time.monotonic(), log_file, log_path
 
+    t_start = time.monotonic()
 
-def _run_one(name: str, script: str, headless: bool) -> dict:
-    """Lanza un scraper y espera a que termine. Retorna dict con resultado."""
-    name, proc, t_start, log_file, log_path = _launch(name, script, headless)
+    # Hilo que lee el stream y lo muestra en consola en tiempo real
+    reader = threading.Thread(
+        target=_stream_output,
+        args=(name, proc.stdout, log_file),
+        daemon=True,
+    )
+    reader.start()
     ret = proc.wait()
+    reader.join()
     elapsed = time.monotonic() - t_start
     log_file.close()
+
     return {
-        "name":     name,
-        "script":   script,
+        "name":       name,
+        "script":     script,
         "returncode": ret,
-        "elapsed":  elapsed,
-        "log":      log_path,
-        "ok":       ret == 0,
+        "elapsed":    elapsed,
+        "log":        log_path,
+        "ok":         ret == 0,
     }
 
 

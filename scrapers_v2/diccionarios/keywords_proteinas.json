@@ -7,8 +7,8 @@
   "aislada_word_boundary": ["iso"],
   "hidrolizada": ["hydro", "hidrolizada", "hydrolized", "hydrolyzed", "hidrolizado"],
   "whey_generico": ["whey", "suero"],
-  "whey_concentrado": ["concentrado", "concentrate", "blend"],
-  "whey_combinacion": ["combinacion", "combinación"],
+  "whey_concentrado": ["concentrado", "concentrada", "concentrate", "blend"],
+  "whey_combinacion": ["combinacion", "combinación", "concentrada + aislada", "concentrado + aislado", "whey concentrada", "whey concentrado"],
   "whey_mezcla": ["mezcla"],
   "benign_phrases": [
     "se mezcla", "facil mezcla", "fácil mezcla", "mezclabilidad",

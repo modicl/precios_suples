@@ -2,9 +2,14 @@
   "barritas_proteicas": [
     "barra proteica", "barrita proteica", "barritas proteicas", "barras proteicas",
     "protein bar", "protein-bar", "proteinbar",
-    "barra de proteina", "barras de proteina",
+    "barra de proteina", "barras de proteina", "barrita de proteina",
     "barra proteina", "barras proteina",
-    "bites", "bite", "protein bites", "barra space protein"
+    "bites", "bite", "protein bites", "barra space protein",
+    "joybar", "slimbar"
+  ],
+  "barritas_proteicas_titulo_only": [
+    "barras protein", "barras de protein",
+    "caja de barras"
   ],
   "snacks_dulces": [
     "cookie", "galleta", "brownie", "muffin", "waffle", "wafer",

@@ -5,7 +5,8 @@
   "termogenicos": [
     "termogenico", "termogenicos", "thermogenic", "thermogenics",
     "quemador termogenico", "fat burner", "fat-burner", "fatburner",
-    "quemador de grasa", "quemador grasa"
+    "quemador de grasa", "quemador grasa",
+    "lipo 6", "lipo-6"
   ],
   "carnitina": [
     "carnitina", "carnitine", "l-carnitina", "l-carnitine", "lcarnitina", "lcarnitine",
@@ -16,8 +17,10 @@
   ],
   "quemadores_naturales": [
     "quemador natural", "quemadores naturales", "natural fat burner",
-    "te verde", "green tea", "garcinia", "cla", "linoleico", "linoleic",
-    "extracto de", "extract of"
+    "te verde extracto", "green tea extract", "te verde 500", "te verde 1000",
+    "garcinia cambogia", "garcinia extract",
+    "acido linoleico conjugado", "conjugated linoleic acid",
+    "extracto de te verde", "extract of green tea"
   ],
   "eliminadores_retencion": [
     "eliminador de retencion", "eliminador retencion", "retencion de liquidos",
@@ -32,3 +35,4 @@
   ],
   "fallback": "Otros Perdida de Grasa"
 }
+

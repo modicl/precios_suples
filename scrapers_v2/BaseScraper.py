@@ -422,7 +422,9 @@ class BaseScraper:
             # 3. Descarga y Subida (Stream) a ORIGINALS
             try:
                 headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                    'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+                    'Referer': self.base_url + '/'
                 }
                 
                 # Implementación de Retry (3 intentos)
@@ -466,7 +468,8 @@ class BaseScraper:
                         
                     return s3_resized_url
                 else:
-                    msg = f"Error {response.status_code} descargando: {url}"
+                    status = response.status_code if response else 'Unknown/Timeout'
+                    msg = f"Error {status} descargando: {url}"
                     print(f"[yellow]{msg}[/yellow]")
                     self._log_info(msg)
                     return ""

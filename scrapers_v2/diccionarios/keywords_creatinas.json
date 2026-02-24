@@ -1,6 +1,15 @@
 {
   "hcl": ["hcl", "clorhidrato", "hydrochloride", "hidrocloruro"],
-  "malato_magnesio": ["malato", "magnesio", "magnapower"],
+  "malato_magnesio": [
+    "malato", "malate",
+    "magnapower",
+    "creatina magnesio", "creatine magnesium", "magnesium creatine",
+    "creatina + magnesio", "creatine + magnesium",
+    "magnesio creatina", "magnesium creatine"
+  ],
+  "malato_magnesio_titulo_only": [
+    "magnesio", "magnesium"
+  ],
   "nitrato": ["nitrato", "nitrate"],
   "alkalyn": ["alkalyn", "alcalina"],
   "creapure_sello": ["creapure"],

@@ -1,0 +1,16 @@
+{
+  "pro_hormonales": [
+    "testosterona", "testosterone",
+    "daa", "acido d-aspartico", "d-aspartic acid",
+    "maca", "ginseng",
+    "tribulus", "tribulus terrestris",
+    "ashwagandha",
+    "hormonales", "hormonal",
+    "potenciador hormonal", "hormonal booster",
+    "testo", "testogen",
+    "dhea",
+    "fenugreek", "fenogreco",
+    "tongkat ali", "longjack"
+  ],
+  "fallback": "Pro Hormonales"
+}

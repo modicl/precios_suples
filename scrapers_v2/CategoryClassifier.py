@@ -57,11 +57,12 @@ class CategoryClassifier:
         self._creatinas   = _load_json("keywords_creatinas.json")
         self._vitaminas   = _load_json("keywords_vitaminas.json")
         self._aminoacidos = _load_json("keywords_aminoacidos.json")
-        self._pre_entrenos   = _load_json("keywords_pre_entrenos.json")
-        self._perdida_grasa  = _load_json("keywords_perdida_grasa.json")
-        self._ganadores      = _load_json("keywords_ganadores.json")
-        self._snacks         = _load_json("keywords_snacks.json")
-        self._bebidas        = _load_json("keywords_bebidas.json")
+        self._pre_entrenos      = _load_json("keywords_pre_entrenos.json")
+        self._perdida_grasa     = _load_json("keywords_perdida_grasa.json")
+        self._ganadores         = _load_json("keywords_ganadores.json")
+        self._snacks            = _load_json("keywords_snacks.json")
+        self._bebidas           = _load_json("keywords_bebidas.json")
+        self._pro_hormonales    = _load_json("keywords_pro_hormonales.json")
 
     # ------------------------------------------------------------------
     # Helpers internos
@@ -87,18 +88,18 @@ class CategoryClassifier:
         # Vegana — solo título: evita falsos positivos por descripciones que
         # mencionan ingredientes vegetales en proteínas de suero convencionales
         if self._any(title_lower, kw["vegana"]):
+            # Excepción: si el título también contiene señales de snack/barra,
+            # redirigir a Snacks antes de clasificar como vegana.
+            if self._any(title_lower, kw["snacks_redirect"]):
+                return "__SNACK_REDIRECT__"
             return "Proteína Vegana"
 
         # Carne
         if self._any(text, kw["carne"]):
             return "Proteína de Carne"
 
-        # Caseína
-        if self._any(text, kw["caseina"]):
-            return "Caseína"
-
         # Purity Rule: si hay concentrado/blend/mezcla (limpiando frases benignas),
-        # es Whey estándar aunque diga "iso" o "hydro"
+        # es Whey estándar aunque diga "iso", "hydro" o "caseína" en la descripción.
         purity_text = text
         for phrase in kw["benign_phrases"]:
             purity_text = purity_text.replace(normalize(phrase), "")
@@ -107,6 +108,12 @@ class CategoryClassifier:
                 self._any(purity_text, kw["whey_combinacion"]) or
                 self._any(purity_text, kw["whey_mezcla"])):
             return "Proteína de Whey"
+
+        # Caseína — se evalúa DESPUÉS de la Purity Rule para que productos con
+        # mezcla (ej: Syntha-6 que contiene caseína entre sus ingredientes) no
+        # sean clasificados como Caseína pura.
+        if self._any(text, kw["caseina"]):
+            return "Caseína"
 
         # Aislada (con word boundary para "iso")
         if (re.search(r'\biso\b', text) or
@@ -125,7 +132,21 @@ class CategoryClassifier:
         return kw["fallback"]
 
     def _classify_creatinas(self, text, title_lower):
-        """Clasifica subcategoría dentro de Creatinas."""
+        """Clasifica subcategoría dentro de Creatinas.
+
+        Jerarquía (de mayor a menor especificidad):
+          HCL          → Clorhidrato  (salvo que el título diga monohidrato)
+          Malato/Mg    → Malato y Magnesio
+          Nitrato      → Nitrato
+          Alkalyn      → Otros Creatinas
+          Creapure     → Creatina Monohidrato  (sello de monohidrato premium)
+          Micronizada  → Micronizada  [evaluada ANTES que monohidrato porque es
+                          más específica: toda micronizada es monohidratada, pero
+                          la descripción suele decir "monohidratada micronizada"
+                          y monohidrato ganaría si se evaluara primero]
+          Monohidrato  → Creatina Monohidrato
+          fallback     → Creatina Monohidrato
+        """
         kw = self._creatinas
 
         # HCL tiene prioridad, pero si el título dice monohidrato, ese gana
@@ -135,7 +156,12 @@ class CategoryClassifier:
                 return "Creatina Monohidrato"
             return "Clorhidrato"
 
+        # Malato/Magnesio: keywords compuestos son seguros en full_text.
+        # "magnesio"/"magnesium" solos solo se evalúan en el título — en la descripción
+        # pueden aparecer como excipiente ("estearato de magnesio") y generar falsos positivos.
         if self._any(text, kw["malato_magnesio"]):
+            return "Malato y Magnesio"
+        if self._any(title_lower, kw.get("malato_magnesio_titulo_only", [])):
             return "Malato y Magnesio"
 
         if self._any(text, kw["nitrato"]):
@@ -148,11 +174,16 @@ class CategoryClassifier:
         if self._any(text, kw["creapure_sello"]):
             return "Creatina Monohidrato"
 
-        if self._any(text, kw["monohidrato"]):
-            return "Creatina Monohidrato"
-
+        # Micronizada se evalúa ANTES que monohidrato: es más específica.
+        # "monohidratada micronizada" en la descripción debe → Micronizada, no Monohidrato.
+        # Se chequea primero en el título (señal fuerte) y luego en el texto completo.
+        if self._any(title_lower, kw["micronizada"]):
+            return "Micronizada"
         if self._any(text, kw["micronizada"]):
             return "Micronizada"
+
+        if self._any(text, kw["monohidrato"]):
+            return "Creatina Monohidrato"
 
         return kw["fallback"]
 
@@ -190,12 +221,23 @@ class CategoryClassifier:
         Jerarquía (de mayor a menor especificidad):
           ZMA          → reclasifica a Vitaminas y Minerales
           Minerales    → reclasifica a Vitaminas y Minerales
-          EAAs         → EAAs (Esenciales)   [incluye BCAAs, tiene prioridad]
-          BCAAs        → BCAAs
+          BCAAs        → BCAAs  [se evalúa en título antes que EAAs para evitar
+                          falsos positivos por frases de marketing en la descripción
+                          como "aminoácidos esenciales para la recuperación"]
+          EAAs         → EAAs (Esenciales)  [solo si no hay BCAA en título]
           Glutamina    → Glutamina
           Aislados     → Aminoacidos Aislados (un solo AA puro, no glutamina)
           Complejos    → Complejos de Aminoacidos (catch-all con "amino")
           fallback     → Complejos de Aminoacidos
+
+        Nota sobre la prioridad BCAA > EAA:
+          Las descripciones de producto suelen contener frases genéricas de marketing
+          ("aminoácidos esenciales para el rendimiento") que disparan keywords de EAA
+          aunque el producto sea un BCAA puro. Al chequear BCAA primero usando solo
+          el TÍTULO (señal fuerte y controlada), evitamos este falso positivo.
+          La única excepción es "EAA + BCAA" en el título: si el título contiene
+          tanto "eaa" como "bcaa", EAA tiene prioridad porque es el producto más
+          completo (contiene todos los esenciales, incluyendo los ramificados).
         """
         kw = self._aminoacidos
 
@@ -207,22 +249,46 @@ class CategoryClassifier:
         if self._any(title_lower, kw["minerales"]):
             return "Vitaminas y Minerales", "Otros Vitaminas y Minerales"
 
-        # EAAs — prioridad sobre BCAAs: "EAA + BCAA" es un EAA
+        # BCAAs (título): se evalúa ANTES de EAAs para evitar falsos positivos
+        # por frases de marketing en la descripción ("aminoácidos esenciales...").
+        # Excepción: si el título tiene TANTO un keyword FUERTE de EAA ("eaa", "eaas",
+        # "essential amino"...) como "bcaa", se trata como EAA completo.
+        # Un keyword débil de EAA ("esenciales") en el título NO bloquea esta guarda:
+        # e.g. "BCAA Matrix Aminoácidos esenciales" → BCAAs.
+        title_has_bcaa     = self._any(title_lower, kw["bcaa"])
+        title_has_eaa_strong = self._any(title_lower, kw["eaas"])
+        if title_has_bcaa and not title_has_eaa_strong:
+            return "Aminoacidos y BCAA", "BCAAs"
+
+        # EAAs — se chequean primero keywords fuertes en el texto completo (title+desc),
+        # y luego keywords débiles (esenciales/esencial/essential) SOLO en el título.
+        # Esto previene que frases de marketing en la descripción como
+        # "aminoácidos esenciales para la recuperación" clasifiquen un producto
+        # de Glutamina o Aislado como EAA.
         if self._any(text, kw["eaas"]):
             return "Aminoacidos y BCAA", "EAAs (Esenciales)"
+        if self._any(title_lower, kw.get("eaas_titulo_only", [])):
+            return "Aminoacidos y BCAA", "EAAs (Esenciales)"
 
-        # BCAAs
+        # BCAAs (texto completo): cubre casos sin BCAA en título pero sí en descripción
         if self._any(text, kw["bcaa"]):
             return "Aminoacidos y BCAA", "BCAAs"
 
-        # Glutamina
+        # Glutamina — se evalúa con título primero para evitar falsos positivos
+        # por keywords de EAA en la descripción que aparezcan antes de llegar aquí.
+        # El check en title_lower captura "glutamina" / "l-glutamina" sin ruido.
+        if self._any(title_lower, kw["glutamina"]):
+            return "Aminoacidos y BCAA", "Glutamina"
         if self._any(text, kw["glutamina"]):
             return "Aminoacidos y BCAA", "Glutamina"
 
-        # Aminoácidos Aislados: un único AA puro (no glutamina, ya descartada arriba)
+        # Aminoácidos Aislados: se evalúa primero en el título para evitar que
+        # descripciones con keywords de EAA enmascaren un aislado puro.
         # Nota: Beta Alanina y L-Carnitina se excluyen aquí a propósito — deben
         # pasar por las reglas de Pre Entrenos / Pérdida de Grasa antes de llegar
         # a esta función (responsabilidad del paso 3 del classify principal).
+        if self._any(title_lower, kw["aislados"]):
+            return "Aminoacidos y BCAA", "Aminoácidos Aislados"
         if self._any(text, kw["aislados"]):
             return "Aminoacidos y BCAA", "Aminoácidos Aislados"
 
@@ -237,11 +303,16 @@ class CategoryClassifier:
 
         return "Aminoacidos y BCAA", kw["fallback"]
 
-    def _classify_pre_entrenos(self, text):
+    def _classify_pre_entrenos(self, text, title=None):
         """Clasifica subcategoría dentro de Pre Entrenos."""
         kw = self._pre_entrenos
+        title = title or ""
         if self._any(text, kw["geles_energia"]):
             return "Energía (Geles/Café)"
+        # Guaraná: evaluar título primero para evitar que "cafeína natural del guaraná"
+        # en la descripción dispare Cafeína en productos que son puramente de guaraná.
+        if self._any(title, kw["guarana"]):
+            return "Guarana"
         if self._any(text, kw["cafeina"]):
             return "Cafeína"
         if self._any(text, kw["beta_alanina"]):
@@ -278,11 +349,17 @@ class CategoryClassifier:
         kw = self._ganadores
         return kw["fallback"]  # Solo hay una subcategoría
 
-    def _classify_snacks(self, text):
+    def _classify_snacks(self, text, title=None):
         """Clasifica subcategoría dentro de Snacks y Comida."""
         kw = self._snacks
+        title = title or ""
         if self._any(text, kw["mantequilla_mani"]):
             return "Mantequilla De Mani"
+        # Barritas: evaluar título primero con keywords título-only para evitar
+        # que descripciones genéricas (ej: "snack con sabor a barras de cereal")
+        # disparen esta subcategoría en productos que no son barras proteicas.
+        if self._any(title, kw["barritas_proteicas_titulo_only"]):
+            return "Barritas Y Snacks Proteicas"
         if self._any(text, kw["barritas_proteicas"]):
             return "Barritas Y Snacks Proteicas"
         if self._any(text, kw["snacks_dulces"]):
@@ -308,6 +385,21 @@ class CategoryClassifier:
             return "Otros Bebidas Nutricionales"
         if self._any(text, kw["otras_bebidas"]):
             return "Otros Bebidas Nutricionales"
+        return kw["fallback"]
+
+    def _classify_pro_hormonales(self, text, title=None):
+        """Clasifica subcategoría dentro de Pro Hormonales.
+
+        Por ahora solo existe la subcategoría catch-all 'Pro Hormonales'.
+        El método está preparado para ampliar con subcategorías en el futuro.
+        Se verifica que el texto contenga al menos un keyword reconocido;
+        si no, se retorna el fallback igualmente para no perder el producto.
+        """
+        kw = self._pro_hormonales
+        # Evaluación título primero (señal más fuerte), luego full_text
+        title = title or ""
+        if self._any(title, kw["pro_hormonales"]) or self._any(text, kw["pro_hormonales"]):
+            return kw["fallback"]
         return kw["fallback"]
 
     # ------------------------------------------------------------------
@@ -432,6 +524,10 @@ class CategoryClassifier:
         # ---------------------------------------------------------------
         if final_category == "Proteinas":
             final_subcategory = self._classify_proteinas(full_text, title_norm, brand)
+            # Redirección a Snacks: barras/cookies/etc. publicadas bajo Proteinas
+            # (ej: "Caja Barras De Proteina Vegana Wafer Bar") deben ir a Snacks.
+            if final_subcategory == "__SNACK_REDIRECT__":
+                return "Snacks y Comida", self._classify_snacks(full_text, title_norm)
 
         elif final_category == "Creatinas":
             final_subcategory = self._classify_creatinas(full_text, title_norm)
@@ -455,7 +551,15 @@ class CategoryClassifier:
                 )
 
         elif final_category == "Pre Entrenos":
-            final_subcategory = self._classify_pre_entrenos(full_text)
+            # Corrección: algunos sitios ubican quemadores termogénicos (ej. Lipo 6)
+            # dentro de su sección de pre-entrenos. Si el título contiene keywords
+            # de termogénicos, reclasificamos a Perdida de Grasa en lugar de
+            # respetar la categoría del sitio.
+            if self._any(title_norm, self._perdida_grasa["termogenicos"]):
+                final_category = "Perdida de Grasa"
+                final_subcategory = self._classify_perdida_grasa(title_norm)
+            else:
+                final_subcategory = self._classify_pre_entrenos(full_text, title_norm)
 
         elif final_category == "Perdida de Grasa":
             final_subcategory = self._classify_perdida_grasa(full_text)
@@ -464,9 +568,12 @@ class CategoryClassifier:
             final_subcategory = self._classify_ganadores(full_text)
 
         elif final_category == "Snacks y Comida":
-            final_subcategory = self._classify_snacks(full_text)
+            final_subcategory = self._classify_snacks(full_text, title_norm)
 
         elif final_category == "Bebidas Nutricionales":
             final_subcategory = self._classify_bebidas(full_text)
+
+        elif final_category == "Pro Hormonales":
+            final_subcategory = self._classify_pro_hormonales(full_text, title_norm)
 
         return final_category, final_subcategory

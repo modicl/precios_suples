@@ -2,10 +2,14 @@
   "zma": ["zma", "zmar"],
   "minerales": ["magnesio", "zinc", "magne"],
   "eaas": [
-    "eaa", "eaas", "esenciales", "essential", "esencial",
+    "eaa", "eaas",
     "map", "amino 9",
-    "essential amino", "aminoacidos esenciales",
+    "essential amino",
     "full spectrum", "espectro completo"
+  ],
+  "eaas_titulo_only": [
+    "esenciales", "essential", "esencial",
+    "aminoacidos esenciales"
   ],
   "bcaa": [
     "bcaa", "bcaas", "ramificados", "branched",
