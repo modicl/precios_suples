@@ -2,8 +2,8 @@
 step4_deduplication.py — Deduplica productos en la BD.
 
 Lógica de dedup:
-  - Un "grupo de duplicados" = mismas (lower(nombre_producto), id_marca, id_subcategoria).
-    Mismo nombre+marca pero distinta subcategoría = productos distintos (no se fusionan).
+  - Un "grupo de duplicados" = mismas (lower(nombre_producto), id_marca).
+    Mismo nombre+marca en DISTINTAS subcategorías = duplicados (se fusionan al mejor).
   - El "maestro" se elige por puntaje:
       +10  si la categoría del producto está en IMPORTANT_CATEGORIES (live desde DB)
       -100 si la categoría contiene "oferta" (p.ej. "Ofertas" siempre pierde)
@@ -123,7 +123,7 @@ def get_local_engine():
 
 def fix_duplicates(engine, dry_run=False):
     mode_label = "[DRY-RUN] " if dry_run else ""
-    print(f"\n--- {mode_label}Deduplicando Productos (insensible a mayúsculas, por subcategoría) ---")
+    print(f"\n--- {mode_label}Deduplicando Productos (insensible a mayúsculas, cross-subcategoría) ---")
 
     with engine.begin() as conn:
         # Live categories for scoring
@@ -131,19 +131,18 @@ def fix_duplicates(engine, dry_run=False):
         print(f"  Categorías cargadas desde BD: {len(important_categories)}")
 
         # 1. Buscar grupos duplicados
-        #    Clave: (lower(nombre_producto), id_marca, id_subcategoria)
-        #    Mismo nombre+marca en distinta subcategoría = productos distintos.
+        #    Clave: (lower(nombre_producto), id_marca)
+        #    Mismo nombre+marca en DISTINTA subcategoría = duplicados (se fusionan al mejor).
         print("  Buscando grupos de duplicados...")
         grupos = conn.execute(
             sa.text("""
                 SELECT
                     lower(nombre_producto)  AS clean_name,
                     id_marca,
-                    id_subcategoria,
                     array_agg(id_producto)     AS ids,
                     array_agg(nombre_producto) AS names
                 FROM productos
-                GROUP BY lower(nombre_producto), id_marca, id_subcategoria
+                GROUP BY lower(nombre_producto), id_marca
                 HAVING count(*) > 1
             """)
         ).fetchall()

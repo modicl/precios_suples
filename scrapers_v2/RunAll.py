@@ -61,6 +61,7 @@ SCRAPERS = [
     ("Suples",                "SuplesScraper.py"),
     ("SuplementosBullChile",  "SuplementosBullChileScraper.py"),
     ("SuplementosMayoristas", "SuplementosMayoristasScraper.py"),
+    ("SportNutriShop",        "SportNutriShopScraper.py"),
     ("SupleTech",             "SupleTechScraper.py"),
     ("SupleStore",            "SupleStoreScraper.py"),
     ("OneNutrition",          "OneNutritionScraper.py"),
@@ -68,6 +69,7 @@ SCRAPERS = [
     ("FitMarketChile",        "FitMarketChileScraper.py"),
     ("Strongest",             "StrongestScraper.py"),
     ("WildFoods",             "WildFoodsScraper.py"),
+    ("WinklerNutrition",      "WinklerNutritionScraper.py")
 ]
 
 

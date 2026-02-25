@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python tools/fuzzy_merge_db_products.py)",
+      "Bash(python -c \":*)",
+      "Bash(bash \"$HOME/.claude/hooks/peon-ping/peon.sh\" packs list)",
+      "Bash(echo \"Session: $CLAUDE_SESSION_ID\")",
+      "Bash(python -c \"import time; print\\(int\\(time.time\\(\\)\\)\\)\")"
+    ]
+  }
+}

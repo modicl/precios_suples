@@ -18,6 +18,8 @@ Usage:
 
 import os
 import sys
+import re
+import json
 import argparse
 import csv
 from collections import defaultdict
@@ -45,6 +47,83 @@ THRESHOLD_SORT = 65   # token_sort_ratio (secondary guard – AND logic)
 INVALID_BRANDS = {"n/d", "nan", "none", ""}
 
 load_dotenv()
+
+# ── Brand keyword patterns for name stripping ─────────────────────────────────
+_BRAND_DICT: dict[str, list] = {}       # canonical_lower → [compiled_regex, ...]
+_BRAND_FLAT: list[tuple] = []           # [(keyword_str, compiled_regex)] sorted longest-first
+
+def _load_brand_patterns():
+    """Load brand keyword patterns from keywords_marcas.json (lazy, once)."""
+    global _BRAND_DICT, _BRAND_FLAT
+    if _BRAND_DICT:
+        return
+
+    json_path = os.path.join(
+        os.path.dirname(__file__), '..', 'scrapers_v2', 'diccionarios', 'keywords_marcas.json'
+    )
+    if not os.path.exists(json_path):
+        return
+
+    with open(json_path, encoding='utf-8') as f:
+        data = json.load(f)
+
+    flat = []
+    for canonical, info in data.items():
+        kws = sorted(info.get("keywords", []), key=len, reverse=True)
+        pats = []
+        for kw in kws:
+            pat = re.compile(
+                r'(?<![a-záéíóúüña-z0-9])' + re.escape(kw.lower()) + r'(?![a-záéíóúüña-z0-9])',
+                re.IGNORECASE,
+            )
+            pats.append(pat)
+            flat.append((kw, pat))
+        _BRAND_DICT[canonical.lower()] = pats
+
+    _BRAND_FLAT = sorted(flat, key=lambda x: len(x[0]), reverse=True)
+
+
+# Regex que detecta si un string es SOLO tokens genéricos (números, unidades, puntuación).
+# Si el resultado del stripping queda así de vacío de contenido, no usamos el stripped.
+_GENERIC_ONLY_RE = re.compile(
+    r'^[\s\d,.\-/x]*(lbs?|kgs?|gr?|oz|tabs?|caps?|mg|mcg|iu|ml|l|serv|scoop|amp|unid|cápsulas?|capsulas?|comprimidos?|tabletas?|softgels?)?[\s\d,.\-/x]*$',
+    re.IGNORECASE,
+)
+
+def _is_generic(text: str) -> bool:
+    """True si el texto solo contiene números, unidades y puntuación (sin nombre real)."""
+    return bool(_GENERIC_ONLY_RE.fullmatch(text.strip()))
+
+
+def _strip_brand(name: str, nombre_marca: str | None) -> str:
+    """
+    Return the product name with the brand tokens removed (lowercase).
+    - Known brand  → strip only that brand's keywords.
+    - N/D brand    → try all brand keywords (longest first, stop at first hit).
+    Falls back to the original lowercased name if:
+      - stripping would leave nothing, OR
+      - the stripped result is only generic tokens (numbers + units), which would
+        cause false positives like "30 cápsulas" matching any capsule product.
+    """
+    original = name.lower().strip()
+    brand_key = (nombre_marca or '').lower().strip()
+
+    if brand_key and brand_key not in INVALID_BRANDS:
+        for pat in _BRAND_DICT.get(brand_key, []):
+            new = pat.sub('', original).strip()
+            if new and new != original and not _is_generic(new):
+                return ' '.join(new.split())
+    else:
+        # N/D: try every brand keyword, stop at first that changes the name
+        for _kw, pat in _BRAND_FLAT:
+            new = pat.sub('', original).strip()
+            if new and new != original and len(new) > 3 and not _is_generic(new):
+                return ' '.join(new.split())
+
+    return ' '.join(original.split())
+
+
+_load_brand_patterns()   # load once at import time
 
 
 def get_engine(use_prod: bool = True):
@@ -79,18 +158,28 @@ def is_match(p1: dict, p2: dict) -> bool:
     """
     Return True if p1 and p2 should be considered the same product.
     Mirrors the logic in normalize_products.normalize_names().
+
+    Brand names are stripped from both product names before fuzzy scoring so
+    that "Myprotein Creatina 250 gr" and "Creatina 250 gr Monohidrato My Protein"
+    (where the second has brand N/D embedded in the title) are correctly matched.
+    The original names are still used for all semantic guard checks.
     """
     n1, n2 = p1['nombre_producto'], p2['nombre_producto']
-    c1, c2 = n1.lower().strip(), n2.lower().strip()
 
-    # Dual-scorer guard
+    # Brand-stripped names: used for fuzzy scoring AND critical keyword check.
+    # Using stripped names for check_critical_mismatch avoids false negatives when
+    # a critical keyword is part of the brand (e.g. 'protein' in 'My Protein' / 'Myprotein').
+    c1 = _strip_brand(n1, p1.get('nombre_marca'))
+    c2 = _strip_brand(n2, p2.get('nombre_marca'))
+
+    # Dual-scorer guard (on brand-stripped names)
     if fuzz.token_set_ratio(c1, c2) < THRESHOLD_SET:
         return False
     if fuzz.token_sort_ratio(c1, c2) < THRESHOLD_SORT:
         return False
 
-    # Critical keyword mismatch
-    if check_critical_mismatch(n1, n2):
+    # Critical keyword mismatch (on stripped names so brand tokens don't interfere)
+    if check_critical_mismatch(c1, c2):
         return False
 
     # Percentage mismatch
@@ -125,53 +214,76 @@ def is_match(p1: dict, p2: dict) -> bool:
 
 def find_clusters(products: list[dict]) -> list[list[dict]]:
     """
-    Group products by (id_marca, id_subcategoria) then find fuzzy duplicates
-    within each group.  Returns a list of clusters (each cluster has ≥2 items).
+    Two-pass fuzzy clustering over all products.
+
+    Pass A — group by id_subcategoria
+        Compares every product against others in the same subcategory,
+        regardless of brand.  Catches the canonical "same brand but brand was
+        stored as N/D in one record" case (e.g. 'Myprotein Creatina 250 gr'
+        vs 'Creatina 250 gr Monohidrato My Protein').
+
+    Pass B — group by id_marca (known brands only)
+        Compares products of the same brand across ALL subcategories.
+        Catches the case where the same product was inserted under different
+        subcategories and therefore survived step4's exact-name dedup.
+
+    Both passes share a single Union-Find over ALL products so a cluster
+    built in pass A is automatically extended in pass B without duplicates.
+    Returns a list of clusters (each cluster has ≥ 2 items).
     """
-    groups: dict[tuple, list] = defaultdict(list)
+    prod_by_id = {p['id_producto']: p for p in products}
+
+    # ── Global Union-Find ──────────────────────────────────────────────────
+    parent: dict[int, int] = {p['id_producto']: p['id_producto'] for p in products}
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(x: int, y: int) -> None:
+        rx, ry = find(x), find(y)
+        if rx != ry:
+            if rx < ry:
+                parent[ry] = rx
+            else:
+                parent[rx] = ry
+
+    def _run_pass(groups: dict) -> None:
+        for group in groups.values():
+            if len(group) < 2:
+                continue
+            ids = [p['id_producto'] for p in group]
+            for i in range(len(ids)):
+                for j in range(i + 1, len(ids)):
+                    if is_match(prod_by_id[ids[i]], prod_by_id[ids[j]]):
+                        union(ids[i], ids[j])
+
+    # ── Pass A: same subcategory, any brand ───────────────────────────────
+    subcat_groups: dict = defaultdict(list)
     for p in products:
-        groups[(p['id_marca'], p['id_subcategoria'])].append(p)
+        subcat_groups[p['id_subcategoria']].append(p)
+    _run_pass(subcat_groups)
+
+    # ── Pass B: same brand, any subcategory (skip N/D) ────────────────────
+    marca_groups: dict = defaultdict(list)
+    for p in products:
+        brand = (p.get('nombre_marca') or '').lower().strip()
+        if brand and brand not in INVALID_BRANDS:
+            marca_groups[p['id_marca']].append(p)
+    _run_pass(marca_groups)
+
+    # ── Collect clusters with > 1 member ──────────────────────────────────
+    cluster_map: dict[int, list] = defaultdict(list)
+    for p in products:
+        cluster_map[find(p['id_producto'])].append(p)
 
     all_clusters: list[list[dict]] = []
-
-    for (marca, subcat), group in groups.items():
-        if len(group) < 2:
-            continue
-
-        # Union-Find style clustering
-        parent = {p['id_producto']: p['id_producto'] for p in group}
-        prod_by_id = {p['id_producto']: p for p in group}
-
-        def find(x):
-            while parent[x] != x:
-                parent[x] = parent[parent[x]]
-                x = parent[x]
-            return x
-
-        def union(x, y):
-            rx, ry = find(x), find(y)
-            if rx != ry:
-                # Keep the lower ID as root (older product = master)
-                if rx < ry:
-                    parent[ry] = rx
-                else:
-                    parent[rx] = ry
-
-        ids = [p['id_producto'] for p in group]
-        for i in range(len(ids)):
-            for j in range(i + 1, len(ids)):
-                if is_match(prod_by_id[ids[i]], prod_by_id[ids[j]]):
-                    union(ids[i], ids[j])
-
-        # Collect clusters with >1 member
-        cluster_map: dict[int, list] = defaultdict(list)
-        for pid in ids:
-            cluster_map[find(pid)].append(prod_by_id[pid])
-
-        for root_id, members in cluster_map.items():
-            if len(members) > 1:
-                members.sort(key=lambda p: p['id_producto'])
-                all_clusters.append(members)
+    for members in cluster_map.values():
+        if len(members) > 1:
+            members.sort(key=lambda p: p['id_producto'])
+            all_clusters.append(members)
 
     return all_clusters
 

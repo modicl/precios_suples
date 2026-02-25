@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import re
+import json
 import glob
 from datetime import datetime
 
@@ -56,19 +57,30 @@ def fix_encoding_series(series):
 # Brand loading
 # ---------------------------------------------------------------------------
 
-def load_brands(dict_path):
-    if not os.path.exists(dict_path):
-        print(f"[WARNING] No se encontró el diccionario de marcas en {dict_path}")
+def load_brands(json_path):
+    """Carga todos los keywords de marcas desde keywords_marcas.json, ordenados de mayor a menor longitud."""
+    if not os.path.exists(json_path):
+        print(f"[WARNING] No se encontró keywords_marcas.json en {json_path}")
         return []
     try:
-        df = pd.read_csv(dict_path)
-        if 'nombre_marca' in df.columns:
-            brands = df['nombre_marca'].dropna().unique().tolist()
-            # Longest first: evita que "Muscle" elimine "Muscle Tech" primero
-            brands.sort(key=len, reverse=True)
-            return brands
+        with open(json_path, encoding='utf-8') as f:
+            data = json.load(f)
+        keywords = []
+        for info in data.values():
+            for kw in info.get('keywords', []):
+                kw = kw.strip()
+                if kw:
+                    keywords.append(kw)
+        # Deduplicar y ordenar de mayor a menor (longest-first evita sub-matches)
+        seen = set()
+        unique_kw = []
+        for kw in sorted(keywords, key=len, reverse=True):
+            if kw.lower() not in seen:
+                seen.add(kw.lower())
+                unique_kw.append(kw)
+        return unique_kw
     except Exception as e:
-        print(f"[ERROR] Leyendo diccionario de marcas: {e}")
+        print(f"[ERROR] Leyendo keywords de marcas: {e}")
     return []
 
 
@@ -294,9 +306,9 @@ def process_cleaning():
     print("Encoding de columnas de texto corregido.")
 
     # --- Cargar marcas ---
-    brands_path = os.path.join(project_root, "marcas_dictionary.csv")
+    brands_path = os.path.join(project_root, "scrapers_v2", "diccionarios", "keywords_marcas.json")
     brands      = load_brands(brands_path)
-    print(f"Cargadas {len(brands)} marcas desde {brands_path}")
+    print(f"Cargados {len(brands)} keywords de marcas desde keywords_marcas.json")
 
     # Compilar regex de marcas (longest-first ya garantizado por load_brands)
     if brands:

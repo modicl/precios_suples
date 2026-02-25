@@ -47,15 +47,28 @@ def safe_url(value):
 # Shared ID resolution
 # ---------------------------------------------------------------------------
 
-def _resolve_row_ids(row, brand_map, subcat_map, cat_map, fallback_map, fallback_brand_id):
+def _resolve_row_ids(row, brand_map, subcat_map, cat_map, fallback_map,
+                     fallback_brand_id, db_brand_by_name=None, product_name=None):
     """
     Resolve (brand_id, subcat_id, cat_id) for a single DataFrame row.
 
     Returns (b_id, s_id, c_id).  s_id may be None if not found (caller should
     skip the row in that case).  Warnings about missing categories/subcategories
     are NOT emitted here — callers decide how to handle None s_id.
+
+    Brand inheritance: if the row has no brand (resolves to fallback/N/D) and
+    db_brand_by_name + product_name are provided, the brand is inherited from
+    an existing DB product with the same normalized name.
     """
     b_id = brand_map.get(make_key(row['brand']), fallback_brand_id)
+
+    # Brand inheritance: productos sin marca heredan la marca de un gemelo en BD
+    if db_brand_by_name is not None and product_name is not None:
+        if b_id == fallback_brand_id:
+            inherited = db_brand_by_name.get(make_key(product_name))
+            if inherited:
+                b_id = inherited
+
     c_id = cat_map.get(make_key(row['category']))
     s_id = subcat_map.get(make_key(row['subcategory']))
 
@@ -135,6 +148,18 @@ def insert_data_bulk(engine, df):
         }
         fallback_brand_id = brand_map.get('n/d', 14)
 
+        # Mapa de nombre_producto (normalizado) → id_marca para productos que ya
+        # tienen marca real en la BD.  Se usa para que productos nuevos sin marca
+        # hereden la marca de un gemelo ya existente (brand inheritance).
+        nd_id = fallback_brand_id
+        db_brand_by_name = {
+            make_key(row.nombre_producto): row.id_marca
+            for row in conn.execute(sa.text(
+                "SELECT nombre_producto, id_marca FROM productos "
+                "WHERE id_marca != :nd AND id_marca != 14"
+            ), {"nd": nd_id}).fetchall()
+        }
+
         # Tiendas — insert new ones first
         existing_shops_set = {
             make_key(row.nombre_tienda)
@@ -175,7 +200,8 @@ def insert_data_bulk(engine, df):
                 continue
 
             b_id, s_id, c_id = _resolve_row_ids(
-                row, brand_map, subcat_map, cat_map, fallback_map, fallback_brand_id
+                row, brand_map, subcat_map, cat_map, fallback_map, fallback_brand_id,
+                db_brand_by_name=db_brand_by_name, product_name=p_display
             )
 
             if not s_id:
@@ -198,6 +224,34 @@ def insert_data_bulk(engine, df):
             print(f"[WARNING] Fase 1: {skipped_no_subcat} filas saltadas — subcategoría no encontrada en DB.")
             for cat_val, n in sorted(skipped_cats.items(), key=lambda x: -x[1]):
                 print(f"  categoria='{cat_val}': {n} filas")
+
+        # ── Intra-batch brand inheritance ───────────────────────────────────
+        # Build a map of normalized_name → real brand_id from products in THIS
+        # batch that already have a known brand (not fallback/N/D).
+        # Then propagate to any sibling in the batch that still has fallback.
+        batch_brand_by_name: dict[str, int] = {}
+        for (p_key, b_id, s_id), prod in products_dedup.items():
+            if b_id != fallback_brand_id:
+                batch_brand_by_name[p_key] = b_id
+
+        if batch_brand_by_name:
+            inherited_count = 0
+            updated_dedup: dict = {}
+            for (p_key, b_id, s_id), prod in products_dedup.items():
+                if b_id == fallback_brand_id and p_key in batch_brand_by_name:
+                    new_b_id = batch_brand_by_name[p_key]
+                    new_key  = (p_key, new_b_id, s_id)
+                    prod = dict(prod, id_marca=new_b_id)
+                    updated_dedup[new_key] = prod
+                    inherited_count += 1
+                else:
+                    updated_dedup[(p_key, b_id, s_id)] = prod
+            if inherited_count:
+                print(f"[Brand Inheritance] {inherited_count} producto(s) heredaron marca dentro del lote.")
+                products_dedup = updated_dedup
+                # Extend db_brand_by_name so Phases 2 & 3 resolve consistently
+                db_brand_by_name.update(batch_brand_by_name)
+        # ────────────────────────────────────────────────────────────────────
 
         batch_products = list(products_dedup.values())
         if batch_products:
@@ -241,7 +295,8 @@ def insert_data_bulk(engine, df):
                 continue
 
             b_id, s_id, c_id = _resolve_row_ids(
-                row, brand_map, subcat_map, cat_map, fallback_map, fallback_brand_id
+                row, brand_map, subcat_map, cat_map, fallback_map, fallback_brand_id,
+                db_brand_by_name=db_brand_by_name, product_name=p_display
             )
             t_id = shop_map.get(make_key(row['site_name']))
 
@@ -312,7 +367,8 @@ def insert_data_bulk(engine, df):
                 continue
 
             b_id, s_id, c_id = _resolve_row_ids(
-                row, brand_map, subcat_map, cat_map, fallback_map, fallback_brand_id
+                row, brand_map, subcat_map, cat_map, fallback_map, fallback_brand_id,
+                db_brand_by_name=db_brand_by_name, product_name=p_display
             )
             t_id = shop_map.get(make_key(row['site_name']))
 

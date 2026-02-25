@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -h \"^from tools\\\\|^import tools\" \"c:\\\\Users\\\\Villa\\\\Documents\\\\proyectos_python\\\\precios_suples\\\\data_processing_v2\"/*.py)",
+      "Bash(grep -r \"from tools\\\\.\" \"c:\\\\Users\\\\Villa\\\\Documents\\\\proyectos_python\\\\precios_suples\\\\local_processing_testing\"/*.py)",
+      "Bash(grep -r \"from tools\\\\.\" \"c:\\\\Users\\\\Villa\\\\Documents\\\\proyectos_python\\\\precios_suples\\\\scrapers_v2\"/*.py)",
+      "Bash(find \"c:\\\\Users\\\\Villa\\\\Documents\\\\proyectos_python\\\\precios_suples\" -name \"*.py\" -type f ! -path \"*/venv/*\" ! -path \"*/.git/*\" ! -path \"*/__pycache__/*\" -exec grep -l \"from tools\\\\.\" {} ;)",
+      "Bash(git mv data_processing old/data_processing)",
+      "Bash(git mv img_debugging old/img_debugging)",
+      "Bash(git mv bd/update_vitaminas_category.sql old/update_vitaminas_category.sql)",
+      "Bash(git mv img_debugging/test_image_processing.py old/)",
+      "Bash(git mv bd/update_vitaminas_category.sql old/)",
+      "WebFetch(domain:www.sportnutrishop.cl)",
+      "Bash(claude mcp add --transport stdio playwright -- cmd /c npx -y @playwright/mcp@latest)",
+      "Bash(claude mcp list)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k, '':'', v[:3] if isinstance\\(v,list\\) else v\\) for k,v in d.items\\(\\)]\")",
+      "Bash(PGPASSWORD=root psql -h localhost -p 5432 -U root -d suplementos -f \"c:\\\\Users\\\\Villa\\\\Documents\\\\proyectos_python\\\\precios_suples\\\\tools\\\\migrate_arginina_oxido_nitrico.sql\")",
+      "Bash(where psql)",
+      "Bash(python -c \"import psycopg2; print\\(''psycopg2 ok''\\)\")",
+      "Bash(python -c \":*)",
+      "Bash(git add scrapers_v2/CategoryClassifier.py scrapers_v2/SportNutriShopScraper.py scrapers_v2/BYONScraper.py scrapers_v2/AllNutritionScraper.py scrapers_v2/SuplesScraper.py scrapers_v2/FitMarketChileScraper.py scrapers_v2/WinklerNutritionScraper.py scrapers_v2/diccionarios/keywords_aminoacidos.json scrapers_v2/diccionarios/keywords_pre_entrenos.json scrapers_v2/diccionarios/keywords_snacks.json tools/migrate_arginina_oxido_nitrico.sql)",
+      "Bash(git add scrapers_v2/CategoryClassifier.py scrapers_v2/SportNutriShopScraper.py scrapers_v2/BYONScraper.py scrapers_v2/AllNutritionScraper.py scrapers_v2/SuplesScraper.py scrapers_v2/FitMarketChileScraper.py scrapers_v2/WinklerNutritionScraper.py scrapers_v2/diccionarios/keywords_aminoacidos.json scrapers_v2/diccionarios/keywords_pre_entrenos.json scrapers_v2/diccionarios/keywords_snacks.json)"
+    ]
+  }
+}

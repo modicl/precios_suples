@@ -1,6 +1,6 @@
 import os
 import sys
-import csv
+import json
 import sqlalchemy as sa
 from sqlalchemy import text
 from dotenv import load_dotenv
@@ -12,22 +12,18 @@ from collections import defaultdict
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from tools.db_multiconnect import get_targets
 
-def load_brand_dictionary(filepath):
-    """Load canonical brand names from CSV."""
-    brands = []
-    if not os.path.exists(filepath):
-        print(f"Warning: Dictionary file not found at {filepath}")
+def load_brand_dictionary(json_path):
+    """Carga nombres canónicos de marcas desde keywords_marcas.json."""
+    if not os.path.exists(json_path):
+        print(f"Warning: Dictionary file not found at {json_path}")
         return []
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if row.get('nombre_marca'):
-                    brands.append(row['nombre_marca'].strip())
+        with open(json_path, encoding='utf-8') as f:
+            data = json.load(f)
+        return list(data.keys())
     except Exception as e:
         print(f"Error loading dictionary: {e}")
         return []
-    return brands
 
 def clean_brands_db(engine, db_name):
     print(f"\n--- Cleaning Brands for: {db_name} ---")
@@ -38,7 +34,7 @@ def clean_brands_db(engine, db_name):
             print(f"[{db_name}] Starting smart brand cleaning...")
             
             # 1. Load Dictionary
-            dic_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'marcas_dictionary.csv')
+            dic_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'scrapers_v2', 'diccionarios', 'keywords_marcas.json')
             canonical_brands = load_brand_dictionary(dic_path)
             print(f"[{db_name}] Loaded {len(canonical_brands)} brands from dictionary.")
 
