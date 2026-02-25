@@ -5,8 +5,7 @@ from playwright.sync_api import Page
 from datetime import datetime
 from rich import print
 import re
-import csv
-import os
+
 
 
 class KoteSportScraper(BaseScraper):
@@ -115,72 +114,6 @@ class KoteSportScraper(BaseScraper):
         )
 
         self.classifier = CategoryClassifier()
-
-        # Load brands dictionary for brand extraction from titles
-        self.brands_list = []
-        brands_csv = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'marcas_dictionary.csv')
-        try:
-            with open(brands_csv, encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    brand_name = row.get('nombre_marca', '').strip()
-                    if brand_name:
-                        self.brands_list.append(brand_name)
-            # Ordenar por longitud descendente: marcas más largas tienen prioridad
-            # (evita que "GU" matchee antes que "The Gummies")
-            self.brands_list.sort(key=len, reverse=True)
-        except Exception as e:
-            print(f"[yellow]Advertencia: No se pudo cargar marcas_dictionary.csv: {e}[/yellow]")
-
-    # ------------------------------------------------------------------
-    # Brand extraction helpers
-    # ------------------------------------------------------------------
-
-    def _normalize_brand(self, raw: str) -> str:
-        """
-        Matches a raw brand string (e.g. from the DOM) against the brands dictionary
-        and returns the canonical entry if a match is found, otherwise returns the
-        raw string as-is.
-
-        Uses a longest-match strategy so that e.g. "Nutrex Research" is preferred
-        over "Nutrex" when both are in the dictionary and both match.
-
-        Direction cases handled:
-          - dict entry is substring of raw  → "WINKLER NUTRITION" → "WINKLER"
-          - raw is substring of dict entry  → raw is a prefix of a longer canonical name
-        """
-        if not raw:
-            return raw
-        raw_upper = raw.upper().strip()
-        best: str | None = None
-        for b in self.brands_list:
-            b_upper = b.upper()
-            if b_upper in raw_upper or raw_upper in b_upper:
-                if best is None or len(b) > len(best):
-                    best = b
-        return best if best is not None else raw
-
-    def _extract_brand_from_text(self, text: str) -> str:
-        """
-        Scans any text string (title, description, etc.) against the brands dictionary.
-        Returns the longest matching brand name (to prefer e.g. "Nutrex Research" over
-        "Nutrex"), or 'N/D' if none found.
-        """
-        if not text:
-            return "N/D"
-
-        text_upper = text.upper()
-        best: str | None = None
-        for b in self.brands_list:
-            if b.upper() in text_upper:
-                if best is None or len(b) > len(best):
-                    best = b
-
-        return best if best is not None else "N/D"
-
-    def _extract_brand_from_title(self, title: str) -> str:
-        """Kept for backward compatibility — delegates to _extract_brand_from_text."""
-        return self._extract_brand_from_text(title)
 
     # ------------------------------------------------------------------
     # Main scraping logic
@@ -374,11 +307,11 @@ class KoteSportScraper(BaseScraper):
                                         if brand_img.count() > 0:
                                             alt = brand_img.get_attribute('alt') or ""
                                             if alt.strip():
-                                                brand_from_page = self._normalize_brand(self.clean_text(alt))
+                                                brand_from_page = self.clean_text(alt)
                                         if not brand_from_page:
                                             brand_link = detail_page.locator('.wd-product-brands a').first
                                             if brand_link.count() > 0:
-                                                brand_from_page = self._normalize_brand(self.clean_text(brand_link.inner_text()))
+                                                brand_from_page = self.clean_text(brand_link.inner_text())
                                     except Exception:
                                         pass
 
@@ -404,16 +337,11 @@ class KoteSportScraper(BaseScraper):
                                     image_url = local_img
 
                             # --- Brand extraction ---
-                            # Priority: 1) DOM brand block on detail page
-                            #           2) Title scan against dictionary
-                            #           3) Description scan against dictionary
-                            #           4) enrich_brand (LLM / fuzzy fallback)
-                            brand = brand_from_page or "N/D"
+                            # Priority: 1) DOM brand block on detail page (normalizado vía BrandClassifier)
+                            #           2) enrich_brand con scan_title=True: busca en título y descripción
+                            brand = self.enrich_brand(brand_from_page or "N/D", title, scan_title=True)
                             if brand == "N/D":
-                                brand = self._extract_brand_from_text(title)
-                            if brand == "N/D":
-                                brand = self._extract_brand_from_text(description)
-                            brand = self.enrich_brand(brand, title)
+                                brand = self.enrich_brand("N/D", description, scan_title=True)
 
                             # --- Classification ---
                             final_category, final_sub = self.classifier.classify(

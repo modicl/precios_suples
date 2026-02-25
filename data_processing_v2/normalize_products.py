@@ -122,7 +122,9 @@ def extract_flavors(text):
         'almendra', 'almond', 'menta', 'mint', 'miel', 'honey', 
         'lúcuma', 'lucuma', 'avellana', 'hazelnut',
         'canela', 'cinnamon', 'red velvet', 'cheesecake',
-        'nature' # treated as flavor/variant for bars
+        'nature', # treated as flavor/variant for bars
+        'kiwi', 'guanabana', 'maracuya', 'guarana', 'frutos tropicales', 'frutas tropicales',
+        'tropical', 'cereza', 'cherry', 'melocoton', 'peach', 'durazno',
     ]
     
     found_flavors = set()
@@ -153,7 +155,43 @@ def check_critical_mismatch(text1, text2):
         'polvo', 'caps', 'capsulas', 'tabletas', 'comprimidos', 'softgel', 'liquido', 'grano', 'molido',
         # New Criticals
         'nightime', 'munchy', 'barras', 'cento', 'cinquanta', 'master', 'lab',
-        'lysine', 'cysteine', 'tyrosine', 'proline', 'leucine', 'glutamine', 'creatine', 'creatina', 'bcaa', 'mix'
+        'lysine', 'cysteine', 'tyrosine', 'proline', 'leucine', 'glutamine', 'creatine', 'creatina', 'bcaa', 'mix',
+        # Product sub-variants / editions (added to fix missed clusters)
+        'cereal', 'vegano', 'multilayer', 'silver', 'forte', 'recubierto', 'recubiertos',
+        'kids', 'adulto', 'dunkin', 'sweets',
+        # Editions
+        'edicion limitada', 'edición limitada',
+        # Product line variants (size/tier labels for bars and products)
+        'xxl', 'junior', 'classic',
+        # Supplement-type discriminators
+        'iso', 'whey', 'beef', 'zero',
+        # Active ingredient names (Greatlhete / Mesoestetic / Winkler / etc.)
+        'nac', 'omega', 'magnesio', 'cromo', 'ashwagandha', 'ashwa', 'zma',
+        'mesostabyl', 'dmae', 'silicio',
+        # Burner sub-lines
+        'keto', 'hardcore', 'nighttime', 'ultra',
+        # Collab flavors (treated as product-identity differentiators)
+        'hersheys', 'reeses',
+        # Pre-workout product line names (Winkler)
+        'kreator', 'cgt',
+        # Product line sub-names (Foodtech, Your Goal, etc.)
+        'shaks', '4chef', 'snack', 'bite',
+        # Target / population discriminators
+        'sport', 'adult',
+        # Active ingredients not yet covered
+        'curcuma', 'cúrcuma', 'melena', 'pylorioff', 'complejo',
+        'l-carnitina', 'carnitina', 'alcachofa', 'extracto',
+        'vitamina', 'perejil', 'blandas',
+        # Flavor/line names for café
+        'respecto', 'settanta', 'espresso',
+        # Omega sub-formulas
+        'ultrapure', 'dha', 'tg',
+        # Branded extract forms
+        'ksm',
+        # Pasta shapes
+        'penne', 'espaguetis', 'fusilli', 'rigatoni',
+        # Sub-brand / line names for bars
+        'soul', 'protein',
     ]
     
     for kw in keywords:
@@ -185,9 +223,24 @@ def check_percentage_mismatch(text1, text2):
     # Returns True if mismatch found
     p1 = set(re.findall(r'(\d+)%', text1))
     p2 = set(re.findall(r'(\d+)%', text2))
-    return p1 != p2
+    if p1 != p2:
+        return True
+    # Also catch "79 Cacao" / "70 Cacao" style percentages (no % symbol)
+    # Matches a number immediately before "cacao" or "cocoa"
+    c1 = set(re.findall(r'(\d+)\s*(?:cacao|cocoa)', text1.lower()))
+    c2 = set(re.findall(r'(\d+)\s*(?:cacao|cocoa)', text2.lower()))
+    return c1 != c2
 
-def normalize_names(threshold=87):
+def normalize_names(threshold=83, threshold_sort=65):
+    """
+    threshold:      Minimum token_set_ratio score to consider a match (default 83).
+    threshold_sort: Minimum token_sort_ratio score required as secondary guard (default 65).
+                    Both conditions must be satisfied (AND logic) to prevent false positives
+                    caused by token_set_ratio being too permissive with token subsets.
+                    A value of 65 is intentionally permissive: the semantic filters
+                    (check_critical_mismatch, sizes, flavors, brand) carry the main
+                    responsibility for blocking false positives.
+    """
     processed_dir = "processed_data"
     output_dir = os.path.join(processed_dir, "fuzzy_matched")
     
@@ -217,7 +270,7 @@ def normalize_names(threshold=87):
         if not isinstance(text, str): return ""
         return text.lower().strip()
 
-    print("[blue]Iniciando clustering AVANZADO (Multi-size + Boundary Check)...[/blue]")
+    print("[blue]Iniciando clustering AVANZADO (Dual-scorer + Boundary Check)...[/blue]")
     
     count = 0
     total = len(unique_names)
@@ -233,10 +286,13 @@ def normalize_names(threshold=87):
         Nx_candidate = extract_pack_quantity(name)
         flavors_candidate = extract_flavors(name)
         
+        # Use token_set_ratio as primary scorer (captures brand-in-name reordering).
+        # A lower cutoff is intentional here because token_sort_ratio is applied
+        # as a secondary guard below to filter false positives.
         matches = process.extract(
             clean_name, 
             normalized_names, 
-            scorer=fuzz.token_sort_ratio, 
+            scorer=fuzz.token_set_ratio, 
             processor=cleaner,
             limit=5, 
             score_cutoff=threshold
@@ -246,6 +302,13 @@ def normalize_names(threshold=87):
         
         for match_tuple in matches:
             candidate_rep = match_tuple[0]
+
+            # 0. Dual-scorer guard: token_sort_ratio must also meet its own threshold.
+            #    This prevents pure-subset matches (e.g. "Protein Bar" inside "Protein Bar Cereal")
+            #    from being clustered together when one name is simply a subset of the other.
+            tsr = fuzz.token_sort_ratio(cleaner(name), cleaner(candidate_rep))
+            if tsr < threshold_sort:
+                continue
             
             # 1. Critical Keywords (Boundary Sensitive)
             if check_critical_mismatch(name, candidate_rep):
@@ -260,19 +323,10 @@ def normalize_names(threshold=87):
             if Nx_candidate != Nx_rep:
                 continue
 
-            # 3. Size Logic (SET Comparison)
-            # If "400 iu, 250 soft" vs "400 iu, 200 soft"
-            # Set1: {400 iu, 250 caps} | Set2: {400 iu, 200 caps}
-            # Intersection: {400 iu}. Difference: {250 caps} vs {200 caps}
-            # Rule: If BOTH have detected sizes, the SETS must match EXACTLY (or subset? No, exact for safety).
-            # "Prostar 5lb" -> {5 lb}. "Prostar 5lb + Shaker" -> {5 lb}. Match OK.
-            # "Prostar 5lb" -> {5 lb}. "Prostar 1lb" -> {1 lb}. Mismatch.
-            
-            sizes_rep = extract_sizes(candidate_rep)
-            
             # 3. Size Logic (Strict)
             # If the detected sizes are different (even if one is empty and the other is not),
             # they are considered different products.
+            sizes_rep = extract_sizes(candidate_rep)
             if sizes_candidate != sizes_rep:
                 continue
 
@@ -281,8 +335,6 @@ def normalize_names(threshold=87):
             if pack_candidate != pack_rep:
                 continue
             
-            # 5. Flavors
-            flavors_rep = extract_flavors(candidate_rep)
             # 5. Flavors
             flavors_rep = extract_flavors(candidate_rep)
             if flavors_candidate != flavors_rep:

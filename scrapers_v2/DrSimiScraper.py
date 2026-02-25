@@ -372,11 +372,11 @@ class DrSimiScraper(BaseScraper):
                         # Si la marca sigue siendo N/D, intentar detectarla con el diccionario
                         # Primero en el título, luego en la descripción
                         if brand in ["N/D", "ND", ""]:
-                            detected_brand = self.brand_matcher.get_best_match(name)
+                            detected_brand = self.enrich_brand("N/D", name, scan_title=True)
                             if detected_brand != "N/D":
                                 brand = detected_brand
                             else:
-                                detected_brand = self.brand_matcher.get_best_match(description)
+                                detected_brand = self.enrich_brand("N/D", description, scan_title=True)
                                 if detected_brand != "N/D":
                                     brand = detected_brand
 

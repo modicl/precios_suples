@@ -142,6 +142,14 @@ def insert_data_into_db(engine, df, db_name):
         marca_result = conn.execute(sa.text("SELECT nombre_marca, id_marca FROM marcas")).fetchall()
         marca_ids_norm = {clean_text(row.nombre_marca): row.id_marca for row in marca_result}
 
+        ## Mapa de nombre_producto → id_marca para productos que ya tienen marca real en la BD.
+        ## Se usa para que productos nuevos sin marca hereden la marca de un gemelo ya existente.
+        nd_id = marca_ids_norm.get("n/d", 14)
+        db_prod_result = conn.execute(sa.text(
+            "SELECT nombre_producto, id_marca FROM productos WHERE id_marca != :nd AND id_marca != 14"
+        ), {"nd": nd_id}).fetchall()
+        db_brand_by_name = {clean_text(row.nombre_producto): row.id_marca for row in db_prod_result}
+
         ## Obtenemos los productos ya existentes
         # prod_result = conn.execute(sa.text("SELECT nombre_producto, id_marca, id_subcategoria FROM productos")).fetchall()
         # Set con tupla normalizada: (normalized_name, id_marca, id_subcategoria)
@@ -163,6 +171,11 @@ def insert_data_into_db(engine, df, db_name):
             
             # Look up IDs
             id_marca = marca_ids_norm.get(brand_norm, 14) # 14 is 'Sin Marca'
+            # Si el producto llega sin marca, intentar heredar de un gemelo ya en la BD
+            if id_marca in (14, nd_id):
+                inherited = db_brand_by_name.get(clean_text(nombre_final))
+                if inherited:
+                    id_marca = inherited
             id_subcategoria = subcat_ids_norm.get(subcat_norm)
             
             if id_subcategoria:
@@ -373,23 +386,28 @@ def insert_data_into_db(engine, df, db_name):
 
     # Insertamos los datos
     if len(historial_precios_json) > 0:
+        # Deduplicar por (id_producto_tienda, fecha::date): conservar solo la entrada
+        # más reciente por día para evitar que múltiples timestamps del mismo día
+        # sean interpretados como cambios de precio (falsos descuentos en la vista).
+        seen_pt_date = {}
+        for hp in historial_precios_json:
+            key = (hp["id_producto_tienda"], hp["fecha_precio"].date() if hasattr(hp["fecha_precio"], "date") else str(hp["fecha_precio"])[:10])
+            existing = seen_pt_date.get(key)
+            if existing is None or hp["fecha_precio"] > existing["fecha_precio"]:
+                seen_pt_date[key] = hp
+        historial_precios_json = list(seen_pt_date.values())
+        duplicados_eliminados = len(historial_precios_json) - len(seen_pt_date)
+
         with engine.connect() as conn:
             # 1. Borrar datos de HOY para evitar duplicados/sucios antes de insertar
             print(f"[{db_name}] Eliminando registros de historia_precios del día de hoy antes de insertar...")
             conn.execute(sa.text("DELETE FROM historia_precios WHERE fecha_precio::date = CURRENT_DATE"))
             conn.commit()
 
-
-            # Usamos ON CONFLICT gracias al constraint uq_precio_fecha (id_producto_tienda, fecha_precio)
-            query = """
-                INSERT INTO historia_precios (id_producto_tienda, precio, fecha_precio) 
-                VALUES(:id_producto_tienda, :precio, :fecha_precio)
-            """
-            
             # Batching for price history
             total_prices = len(historial_precios_json)
             print(f"[{db_name}] Historial de precios a insertar: {total_prices} (Bulk Optimization)")
-            
+
             query = """
                 INSERT INTO historia_precios (id_producto_tienda, precio, fecha_precio) 
                 VALUES %s
@@ -408,10 +426,6 @@ def insert_data_into_db(engine, df, db_name):
                 raw_conn = engine.raw_connection()
                 try:
                     with raw_conn.cursor() as cur:
-                         # Use ON CONFLICT DO NOTHING if duplicates in batch? 
-                         # Actually usually duplicate check handles it, but adding it makes it robust.
-                         # Original code relied on DELETE previously.
-                         # execute_values expands %s.
                          psycopg2.extras.execute_values(cur, query, values, page_size=1000)
                     raw_conn.commit()
                     print(f"[{db_name}] Historial de precios insertado correctamente.")

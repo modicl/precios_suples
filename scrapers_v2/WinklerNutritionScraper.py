@@ -60,7 +60,7 @@ class WinklerNutritionScraper(BaseScraper):
         selectors = {
             # Grid de productos (WooCommerce con tema Wolf/Deadlift)
             "product_card": "article.product",
-            "product_name": ".entry-title",
+            "product_name": ".woocommerce-loop-product__title",
             "link": "a.entry-link-mask",
             "thumbnail": "img.attachment-woocommerce_thumbnail",
             # Paginación WooCommerce estándar
@@ -169,10 +169,15 @@ class WinklerNutritionScraper(BaseScraper):
                                 self.seen_urls.add(link)
 
                             # ── Título ─────────────────────────────────────────
-                            title = "N/D"
+                            title = ""
                             name_el = card.locator(self.selectors["product_name"])
                             if name_el.count() > 0:
                                 title = self.clean_text(name_el.first.inner_text())
+
+                            # Saltamos productos sin nombre válido
+                            if not title or title.upper() == "N/D":
+                                print(f"[yellow]  >> Saltando producto sin nombre en {link}[/yellow]")
+                                continue
 
                             # ── Precio ─────────────────────────────────────────
                             price, active_discount = self._extract_price(card)
@@ -229,7 +234,7 @@ class WinklerNutritionScraper(BaseScraper):
                                     try:
                                         desc_el = detail_page.locator(self.selectors["detail_desc"])
                                         if desc_el.count() > 0:
-                                            description = desc_el.first.inner_text().strip()
+                                            description = self.clean_description(desc_el.first.inner_text())
                                     except Exception:
                                         pass
 
@@ -237,7 +242,7 @@ class WinklerNutritionScraper(BaseScraper):
                                         try:
                                             sd_el = detail_page.locator(self.selectors["detail_short_desc"])
                                             if sd_el.count() > 0:
-                                                description = sd_el.first.inner_text().strip()
+                                                description = self.clean_description(sd_el.first.inner_text())
                                         except Exception:
                                             pass
 

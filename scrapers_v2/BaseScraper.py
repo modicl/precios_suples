@@ -24,7 +24,7 @@ project_root = os.path.abspath(os.path.join(current_dir, '..'))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from data_processing.brand_matcher import BrandMatcher
+from BrandClassifier import BrandClassifier
 from tools.categorizer import ProductCategorizer
 
 load_dotenv()
@@ -159,8 +159,8 @@ class BaseScraper:
         self.site_name = site_name # Nombre del sitio web
         self.output_suffix = output_suffix
         
-        # Inicializar BrandMatcher y ProductCategorizer (Offline Mode)
-        self.brand_matcher = BrandMatcher()
+        # Inicializar BrandClassifier y ProductCategorizer (Offline Mode)
+        self.brand_classifier = BrandClassifier()
         self.categorizer = ProductCategorizer(enable_ai=False)
         self.seen_urls = set()  # For deduplication across categories
 
@@ -294,18 +294,20 @@ class BaseScraper:
                 
         return products
 
-    def enrich_brand(self, brand: str, product_name: str) -> str:
+    def enrich_brand(self, brand: str, product_name: str, scan_title: bool = False) -> str:
         """
-        Intenta mejorar la marca detectada:
-        1. Si la marca ya es válida (no es 'N/D' ni vacía), se mantiene.
-        2. Si no es válida, usa BrandMatcher para buscarla en el nombre del producto.
+        Normaliza la marca usando BrandClassifier.
+
+        - Si la marca es válida (no es 'N/D' ni vacía): normaliza al nombre
+          canónico según keywords_marcas.json (ej. "WINKLER NUTRI" → "WINKLER NUTRITION").
+        - Si la marca no es válida y scan_title=True: intenta extraerla del título
+          del producto (solo para scrapers sin marca en el DOM, ej. DrSimi).
+        - Si no se encuentra nada: retorna "N/D".
+
+        Por defecto scan_title=False para que los scrapers deterministas nunca
+        escaneen el título aunque el DOM esté vacío.
         """
-        # Check against list of "unknown" indicators, including "ND" which might result from aggressive cleaning
-        invalid_brands = ["N/D", "ND", "N.D.", ""]
-        if brand and brand.strip().upper() not in invalid_brands:
-            return brand
-        
-        return self.brand_matcher.get_best_match(product_name)
+        return self.brand_classifier.classify(brand, product_name, scan_title=scan_title)
 
     def clean_text(self, text: str) -> str:
         """
@@ -316,6 +318,42 @@ class BaseScraper:
             return ""
         # Regex para eliminar emojis y símbolos gráficos, preservando acentos y '/'
         return re.sub(r'[^\w\s\u00C0-\u00FF\u002D\u002E\u002C\u002F\u002B\u0025]', '', text).strip()
+
+    def clean_description(self, text: str) -> str:
+        """
+        Normaliza espacios raros en descripciones extraídas con Playwright inner_text().
+
+        Playwright convierte &nbsp; → U+00A0 (Non-Breaking Space), y WooCommerce
+        los usa extensamente. También pueden aparecer tabulaciones, zero-width spaces
+        y otros separadores Unicode que los IDEs y parsers CSV reportan como 'espacios raros'.
+
+        A diferencia de clean_text(), NO elimina puntuación ni caracteres especiales
+        para preservar el contenido completo de la descripción.
+        """
+        if not text:
+            return ""
+        # U+2028 Line Separator y U+2029 Paragraph Separator → salto de línea normal
+        # (algunos browsers/parsers no los reconocen como \n y los reportan como caracteres raros)
+        text = re.sub(r'[\u2028\u2029]', '\n', text)
+        # Reemplazar variantes de espacios Unicode por espacio normal
+        # U+00A0 Non-Breaking Space, U+2003 Em Space, U+2002 En Space,
+        # U+200B Zero Width Space, U+FEFF BOM/Zero Width No-Break Space,
+        # U+0009 Tab → todos se convierten a espacio normal
+        text = re.sub(r'[\u00a0\u2000-\u200b\u202f\u205f\u3000\ufeff\t]', ' ', text)
+        # Colapsar múltiples espacios consecutivos en uno solo
+        text = re.sub(r' {2,}', ' ', text)
+        # Limpiar líneas: quitar espacios al inicio/fin de cada línea
+        lines = [line.strip() for line in text.splitlines()]
+        # Eliminar líneas vacías consecutivas (dejar máximo una línea en blanco entre párrafos)
+        result = []
+        prev_blank = False
+        for line in lines:
+            is_blank = line == ""
+            if is_blank and prev_blank:
+                continue
+            result.append(line)
+            prev_blank = is_blank
+        return "\n".join(result).strip()
 
     def _setup_logging(self):
         """Configura el logger específico para el scraper."""
@@ -394,11 +432,12 @@ class BaseScraper:
         if not file_ext or len(file_ext) > 5:
             file_ext = ".jpg" # Fallback extension
         
-        # Generar hash basado en la URL limpia (sin parametros dinamicos) para evitar duplicados
+        # Generar nombre de archivo único basado solo en el hash de la URL
+        # (sin timestamp: el mismo URL siempre produce el mismo filename,
+        #  lo que permite que el cache S3 detecte duplicados entre ejecuciones)
         clean_url_key = url.split('?')[0]
         url_hash = hashlib.md5(clean_url_key.encode('utf-8')).hexdigest()
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{timestamp}_{url_hash}{file_ext}"
+        filename = f"{url_hash}{file_ext}"
         
         # Definir rutas S3 (dentro de assets/img)
         s3_resized_key = f"assets/img/resized/{subfolder}/{filename}"
