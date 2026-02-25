@@ -115,12 +115,16 @@ class CategoryClassifier:
         if self._any(text, kw["caseina"]):
             return "Caseína"
 
-        # Aislada (con word boundary para "iso")
-        if (re.search(r'\biso\b', text) or
-                self._any(text, [k for k in kw["aislada"] if k != "iso"])):
+        # Aislada (con word boundary para "iso") — se evalúa SOLO en el título
+        # para evitar que descripciones que mencionan "aislada" como ingrediente
+        # o calidad genérica clasifiquen un Whey estándar como Proteína Aislada.
+        if (re.search(r'\biso\b', title_lower) or
+                self._any(title_lower, [k for k in kw["aislada"] if k != "iso"])):
             return "Proteína Aislada"
 
-        # Hidrolizada
+        # Hidrolizada — idem: se evalúa en título primero
+        if self._any(title_lower, kw["hidrolizada"]):
+            return "Proteína Hidrolizada"
         if self._any(text, kw["hidrolizada"]):
             return "Proteína Hidrolizada"
 
@@ -140,11 +144,7 @@ class CategoryClassifier:
           Nitrato      → Nitrato
           Alkalyn      → Otros Creatinas
           Creapure     → Creatina Monohidrato  (sello de monohidrato premium)
-          Micronizada  → Micronizada  [evaluada ANTES que monohidrato porque es
-                          más específica: toda micronizada es monohidratada, pero
-                          la descripción suele decir "monohidratada micronizada"
-                          y monohidrato ganaría si se evaluara primero]
-          Monohidrato  → Creatina Monohidrato
+          Monohidrato  → Creatina Monohidrato  (incluye keywords de micronizada)
           fallback     → Creatina Monohidrato
         """
         kw = self._creatinas
@@ -174,14 +174,7 @@ class CategoryClassifier:
         if self._any(text, kw["creapure_sello"]):
             return "Creatina Monohidrato"
 
-        # Micronizada se evalúa ANTES que monohidrato: es más específica.
-        # "monohidratada micronizada" en la descripción debe → Micronizada, no Monohidrato.
-        # Se chequea primero en el título (señal fuerte) y luego en el texto completo.
-        if self._any(title_lower, kw["micronizada"]):
-            return "Micronizada"
-        if self._any(text, kw["micronizada"]):
-            return "Micronizada"
-
+        # Monohidrato (incluye keywords de micronizada, que es un subtipo de monohidrato)
         if self._any(text, kw["monohidrato"]):
             return "Creatina Monohidrato"
 
@@ -353,13 +346,12 @@ class CategoryClassifier:
         """Clasifica subcategoría dentro de Snacks y Comida."""
         kw = self._snacks
         title = title or ""
-        if self._any(text, kw["mantequilla_mani"]):
-            return "Mantequilla De Mani"
-        # Barritas: evaluar título primero con keywords título-only para evitar
-        # que descripciones genéricas (ej: "snack con sabor a barras de cereal")
-        # disparen esta subcategoría en productos que no son barras proteicas.
+        # Barritas: evaluar título primero para que un sabor "peanut butter"
+        # en la descripción no enmascare una barrita proteica evidente.
         if self._any(title, kw["barritas_proteicas_titulo_only"]):
             return "Barritas Y Snacks Proteicas"
+        if self._any(text, kw["mantequilla_mani"]):
+            return "Mantequilla De Mani"
         if self._any(text, kw["barritas_proteicas"]):
             return "Barritas Y Snacks Proteicas"
         if self._any(text, kw["snacks_dulces"]):
@@ -370,9 +362,15 @@ class CategoryClassifier:
             return "Cereales"
         return kw["fallback"]
 
-    def _classify_bebidas(self, text):
+    def _classify_bebidas(self, text, title=None):
         """Clasifica subcategoría dentro de Bebidas Nutricionales."""
         kw = self._bebidas
+        title = title or ""
+        # Geles: evaluar título primero para evitar que una descripción que
+        # menciona hidratación/electrolitos en un gel energético lo clasifique
+        # como Isotónica (que se chequea en full_text más abajo).
+        if self._any(title, kw["geles"]):
+            return "Geles Energéticos"
         if self._any(text, kw["isotonicos"]):
             return "Isotónicas"
         if self._any(text, kw["bebidas_energeticas"]):
@@ -520,6 +518,25 @@ class CategoryClassifier:
                 return "Bebidas Nutricionales", "Batidos de proteína"
 
         # ---------------------------------------------------------------
+        # 3.5. Arginina / Citrulina → Pre Entrenos > Óxido Nítrico
+        #       (global: aplica independiente de qué categoría use el scraper)
+        # ---------------------------------------------------------------
+        _no_amino_kw = [
+            "arginina", "arginine", "l-arginina", "l-arginine",
+            "citrulina", "citrulline", "l-citrulina", "l-citrulline",
+        ]
+        if self._any(title_norm, _no_amino_kw):
+            return "Pre Entrenos", "Óxido Nítrico"
+
+        # ---------------------------------------------------------------
+        # 3.6. ZMA → Vitaminas y Minerales > Multivitamínicos
+        #       (global: evita que scraper con URL pro-hormonales/perdida-grasa
+        #        clasifique ZMA erróneamente)
+        # ---------------------------------------------------------------
+        if self._any(title_norm, self._aminoacidos["zma"]):
+            return "Vitaminas y Minerales", "Multivitamínicos"
+
+        # ---------------------------------------------------------------
         # 4. Clasificación por categoría principal
         # ---------------------------------------------------------------
         if final_category == "Proteinas":
@@ -571,7 +588,7 @@ class CategoryClassifier:
             final_subcategory = self._classify_snacks(full_text, title_norm)
 
         elif final_category == "Bebidas Nutricionales":
-            final_subcategory = self._classify_bebidas(full_text)
+            final_subcategory = self._classify_bebidas(full_text, title_norm)
 
         elif final_category == "Pro Hormonales":
             final_subcategory = self._classify_pro_hormonales(full_text, title_norm)

@@ -43,7 +43,8 @@ class SuplesScraper(BaseScraper):
                 { "url": "https://www2.suples.cl/collections/probioticos", "subcategory": "Probióticos" }
             ],
             "Pre Entrenos": [
-                { "url": "https://www2.suples.cl/collections/pre-workout", "subcategory": "Pre Entreno" }
+                { "url": "https://www2.suples.cl/collections/pre-workout", "subcategory": "Pre Entreno" },
+                { "url": "https://www2.suples.cl/collections/arginina", "subcategory": "Óxido Nítrico" }
             ],
             "Ganadores de Peso": [
                 { "url": "https://www2.suples.cl/collections/ganadores-de-masa", "subcategory": "Ganadores de Peso" }
@@ -51,7 +52,6 @@ class SuplesScraper(BaseScraper):
             "Aminoacidos y BCAA": [
                 { "url": "https://www2.suples.cl/collections/aminoacidos", "subcategory": "Aminoácidos" },
                 { "url": "https://www2.suples.cl/collections/aminoacidos-y-nutrientes-esenciales", "subcategory": "Otros Aminoacidos y BCAA" },
-                { "url": "https://www2.suples.cl/collections/arginina", "subcategory": "Otros Aminoacidos y BCAA" },
                 { "url": "https://www2.suples.cl/collections/hmb", "subcategory": "Otros Aminoacidos y BCAA" },
                 { "url": "https://www2.suples.cl/collections/zma", "subcategory": "Minerales (Magnesio/ZMA)" }
             ],

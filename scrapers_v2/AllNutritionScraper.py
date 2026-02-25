@@ -37,12 +37,12 @@ class AllNutritionScraper(BaseScraper):
                 {"url": "https://allnutrition.cl/collections/coenzima-q10", "subcategory": "Coenzima Q10"},
                 {"url": "https://allnutrition.cl/collections/omega-3", "subcategory": "Omega 3"},
                 {"url": "https://allnutrition.cl/collections/super-alimentos", "subcategory": "Super Alimentos"},
-                {"url": "https://allnutrition.cl/collections/arginina", "subcategory": "Arginina"}
             ],
             "Pre Entrenos": [
                 {"url": "https://allnutrition.cl/collections/pre-workout", "subcategory": "Pre Workout"},
                 {"url": "https://allnutrition.cl/collections/guarana-y-cafeina", "subcategory": "Guarana Y Cafeina"},
-                {"url": "https://allnutrition.cl/collections/carbohidratos", "subcategory": "Carbohidratos"}
+                {"url": "https://allnutrition.cl/collections/carbohidratos", "subcategory": "Carbohidratos"},
+                {"url": "https://allnutrition.cl/collections/arginina", "subcategory": "Óxido Nítrico"}
             ],
             "Ganadores de Peso": [
                 {"url": "https://allnutrition.cl/collections/ganadores-de-peso", "subcategory": "Ganadores De Peso"}

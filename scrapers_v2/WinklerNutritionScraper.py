@@ -43,10 +43,10 @@ class WinklerNutritionScraper(BaseScraper):
                     "subcategory": "Bienestar General"  # CategoryClassifier refinará
                 }
             ],
-            "Perdida de Grasa": [
+            "Pro Hormonales": [
                 {
                     "url": "https://winklernutrition.cl/categoria-producto/pro-hormonales-wk/",
-                    "subcategory": "Quemadores"  # CategoryClassifier refinará
+                    "subcategory": "Pro Hormonales"
                 }
             ],
             "Bebidas Nutricionales": [

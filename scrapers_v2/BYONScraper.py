@@ -69,6 +69,14 @@ class BYONScraper(BaseScraper):
                     "url": "https://www.byon.cl/collections/cafeinas",
                     "subcategory": "Cafeína"
                 },
+                {
+                    "url": "https://www.byon.cl/collections/argininas",
+                    "subcategory": "Óxido Nítrico"
+                },
+                {
+                    "url": "https://www.byon.cl/collections/citrulina",
+                    "subcategory": "Óxido Nítrico"
+                },
             ],
             "Aminoacidos y BCAA": [
                 {
@@ -84,15 +92,7 @@ class BYONScraper(BaseScraper):
                     "subcategory": "Aminoácidos"
                 },
                 {
-                    "url": "https://www.byon.cl/collections/argininas",
-                    "subcategory": "Otros Aminoacidos y BCAA"
-                },
-                {
                     "url": "https://www.byon.cl/collections/glutaminas",
-                    "subcategory": "Otros Aminoacidos y BCAA"
-                },
-                {
-                    "url": "https://www.byon.cl/collections/citrulina",
                     "subcategory": "Otros Aminoacidos y BCAA"
                 },
                 {

@@ -1,11 +1,9 @@
 from BaseScraper import BaseScraper
+from BrandClassifier import BrandClassifier
 from CategoryClassifier import CategoryClassifier, normalize
 from rich import print
 from datetime import datetime
 import re
-import csv
-import os
-import unicodedata
 
 class FitMarketChileScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
@@ -65,35 +63,14 @@ class FitMarketChileScraper(BaseScraper):
         }
 
         super().__init__(base_url, headless, category_urls, selectors, site_name="FitMarketChile")
-        self.known_brands = self._load_brands()
+        self._brand_clf = BrandClassifier()
         self.seen_urls = set()
         self.classifier = CategoryClassifier()
 
-    def _load_brands(self):
-        """Carga el diccionario de marcas desde el CSV en la raíz del proyecto."""
-        brands = []
-        csv_path = os.path.join(os.path.dirname(__file__), '..', 'marcas_dictionary.csv')
-        try:
-            with open(csv_path, newline='', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    brand_name = row.get('nombre_marca', '').strip()
-                    if brand_name:
-                        brands.append(brand_name)
-            # Sort by length descending so longer/more specific brands match first
-            brands.sort(key=len, reverse=True)
-            print(f"[green]  >> {len(brands)} marcas cargadas desde marcas_dictionary.csv[/green]")
-        except Exception as e:
-            print(f"[yellow]  >> No se pudo cargar marcas_dictionary.csv: {e}[/yellow]")
-        return brands
-
     def _extract_brand(self, title, description):
-        """Busca una marca conocida en el título y descripción del producto."""
-        text_to_search = (title + " " + (description or "")).lower()
-        for brand in self.known_brands:
-            if brand.lower() in text_to_search:
-                return brand
-        return "N/D"
+        """Busca la marca en el título y descripción usando BrandClassifier."""
+        combined = (title or '') + ' ' + (description or '')
+        return self._brand_clf.extract_from_title(combined)
 
     def _classify_product(self, title, description, main_category, deterministic_subcategory, brand):
         """
@@ -170,7 +147,7 @@ class FitMarketChileScraper(BaseScraper):
             elif any(k in text for k in beta_ala_kw):
                 return "Pre Entrenos", "Beta Alanina"
             elif any(k in text for k in arginina_kw):
-                return "Pre Entrenos", "Arginina"
+                return "Pre Entrenos", "Óxido Nítrico"
             elif any(k in text for k in bcaa_kw):
                 return "Pre Entrenos", "BCAAs"
             elif any(k in text for k in cafeina_kw):

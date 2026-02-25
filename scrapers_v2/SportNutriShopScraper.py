@@ -1,12 +1,11 @@
 # Scraper para SportNutriShop.cl (Shopify / Dawn theme)
 from BaseScraper import BaseScraper
+from BrandClassifier import BrandClassifier
 from CategoryClassifier import CategoryClassifier
 from playwright.sync_api import Page
 from datetime import datetime
 from rich import print
 import re
-import csv
-import os
 
 
 class SportNutriShopScraper(BaseScraper):
@@ -29,10 +28,6 @@ class SportNutriShopScraper(BaseScraper):
             ],
             "Aminoacidos y BCAA": [
                 {
-                    "url": "https://www.sportnutrishop.cl/collections/arginina",
-                    "subcategory": "Otros Aminoacidos y BCAA"
-                },
-                {
                     "url": "https://www.sportnutrishop.cl/collections/aminos-y-bcaas",
                     "subcategory": "Aminoácidos"
                 },
@@ -49,6 +44,10 @@ class SportNutriShopScraper(BaseScraper):
                 {
                     "url": "https://www.sportnutrishop.cl/collections/beta-alanina",
                     "subcategory": "Pre Entreno"
+                },
+                {
+                    "url": "https://www.sportnutrishop.cl/collections/arginina",
+                    "subcategory": "Óxido Nítrico"
                 }
             ],
             "Ganadores de Peso": [
@@ -116,19 +115,7 @@ class SportNutriShopScraper(BaseScraper):
         )
 
         self.classifier = CategoryClassifier()
-
-        # Load brands dictionary for brand extraction from titles
-        self.brands_list = []
-        brands_csv = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'marcas_dictionary.csv')
-        try:
-            with open(brands_csv, encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    brand_name = row.get('nombre_marca', '').strip()
-                    if brand_name:
-                        self.brands_list.append(brand_name)
-        except Exception as e:
-            print(f"[yellow]Advertencia: No se pudo cargar marcas_dictionary.csv: {e}[/yellow]")
+        self._brand_clf = BrandClassifier()
 
     # ------------------------------------------------------------------
     # Brand extraction helpers
@@ -136,38 +123,24 @@ class SportNutriShopScraper(BaseScraper):
 
     def _extract_brand_from_title(self, title: str) -> str:
         """
-        Tries to extract a brand from the product title using two strategies:
-        1. Last segment after ' - ' heuristic (SportNutriShop titles often end in '- BRAND')
-        2. Dictionary scan: check if any known brand name appears anywhere in the title.
-        Returns the brand string if found, or 'N/D' if not.
+        Extrae la marca del título usando dos estrategias:
+        1. Último segmento tras ' - ' (SportNutriShop frecuentemente termina en '- MARCA')
+           validado con BrandClassifier.normalize_brand().
+        2. Escaneo completo del título con BrandClassifier.extract_from_title().
+        Retorna la marca canónica, el candidato crudo, o 'N/D'.
         """
         if not title:
             return "N/D"
 
-        title_upper = title.upper()
-
         # Strategy 1: last segment after ' - '
         if " - " in title:
             candidate = title.split(" - ")[-1].strip()
-            # Validate against dictionary (case-insensitive)
-            for b in self.brands_list:
-                if b.upper() == candidate.upper():
-                    return b
-            # If the candidate looks like a real brand (not a number/size/etc.), use it
             if candidate and not re.match(r'^\d', candidate) and len(candidate) > 1:
-                # Do a quick partial check against dictionary
-                for b in self.brands_list:
-                    if b.upper() in candidate.upper() or candidate.upper() in b.upper():
-                        return b
-                # Return the raw candidate — enrich_brand will validate/fallback further
-                return candidate
+                # normalize_brand returns canonical if found, else the raw input
+                return self._brand_clf.normalize_brand(candidate)
 
-        # Strategy 2: full dictionary scan
-        for b in self.brands_list:
-            if b.upper() in title_upper:
-                return b
-
-        return "N/D"
+        # Strategy 2: full BrandClassifier scan
+        return self._brand_clf.extract_from_title(title)
 
     # ------------------------------------------------------------------
     # Main scraping logic
@@ -352,13 +325,32 @@ class SportNutriShopScraper(BaseScraper):
                                     except Exception:
                                         pass
 
-                                    # 3. Description
+                                    # 3. Description — JSON-LD first (más confiable en Dawn theme)
                                     try:
-                                        desc_el = detail_page.locator('.product__description, .product-single__description').first
-                                        if desc_el.count() > 0:
-                                            description = desc_el.inner_text().strip()
+                                        desc_val = detail_page.evaluate('''() => {
+                                            const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                                            for (const s of scripts) {
+                                                try {
+                                                    const d = JSON.parse(s.innerText);
+                                                    if (d["@type"] === "Product" && d.description)
+                                                        return d.description;
+                                                } catch(e){}
+                                            }
+                                            return null;
+                                        }''')
+                                        if desc_val:
+                                            description = str(desc_val).strip()
                                     except Exception:
                                         pass
+
+                                    # DOM fallback: Dawn theme usa details > .rte
+                                    if not description:
+                                        try:
+                                            desc_el = detail_page.locator('details .rte, .product__description, .product-single__description').first
+                                            if desc_el.count() > 0:
+                                                description = desc_el.inner_text().strip()
+                                        except Exception:
+                                            pass
 
                                     detail_page.close()
 

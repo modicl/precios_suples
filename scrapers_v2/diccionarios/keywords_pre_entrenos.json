@@ -19,7 +19,9 @@
     "beta alanina", "beta-alanina", "beta alanine", "beta-alanine"
   ],
   "oxido_nitrico": [
-    "oxido nitrico", "nitric oxide", "no2", "n.o.", "pump", "vasodilatador", "vasodilator"
+    "oxido nitrico", "nitric oxide", "no2", "n.o.", "pump", "vasodilatador", "vasodilator",
+    "arginina", "arginine", "l-arginina", "l-arginine",
+    "citrulina", "citrulline", "l-citrulina", "l-citrulline"
   ],
   "otros_pre_entrenos": [
     "booster", "estimulante", "stimulant", "focus", "concentracion", "concentration"
