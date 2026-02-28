@@ -89,12 +89,12 @@ def main():
         description="Re-triggeriza el Lambda copiando imágenes originals/ sobre sí mismas."
     )
     parser.add_argument(
-        "--subfolder", type=str, default="chilesuplementos",
-        help="Subcarpeta dentro de originals/ (default: chilesuplementos). Vacío = todos los sitios."
+        "--subfolder", type=str, default=None,
+        help="Subcarpeta dentro de originals/ (ej: chilesuplementos). Por defecto procesa todos los sitios."
     )
     parser.add_argument(
         "--all-sites", action="store_true",
-        help="Procesar todos los sitios (ignora --subfolder)."
+        help="Procesar todos los sitios (equivalente a no pasar --subfolder)."
     )
     parser.add_argument(
         "--dry-run", action="store_true",

@@ -29,20 +29,12 @@ VIEWS = [
     ("mv_click_stats",   True),
     ("mv_search_stats",  False),
     ("mv_active_brands", False),
+    ("mv_active_subcategories", False)
 ]
 
 
-def get_local_engine():
-    targets = get_targets()
-    local_target = next((t for t in targets if t["name"] == "Local"), None)
-    if not local_target:
-        print("Error: No se encontró la configuración para 'Local' en db_multiconnect.")
-        sys.exit(1)
-    return sa.create_engine(local_target["url"])
-
-
-def refresh_views(engine):
-    print("\n--- Actualizando Vistas Materializadas ---")
+def refresh_views(engine, db_name=""):
+    print(f"\n--- Actualizando Vistas Materializadas [{db_name}] ---")
     start_time = time.time()
 
     # REFRESH MATERIALIZED VIEW must run outside a transaction (AUTOCOMMIT).
@@ -77,8 +69,16 @@ def refresh_views(engine):
 
 def main():
     print("--- PASO 5: Refresh Materialized Views ---")
-    engine = get_local_engine()
-    refresh_views(engine)
+    targets = get_targets()
+    print(f"Destinos de BD encontrados: {[t['name'] for t in targets]}")
+
+    for target in targets:
+        db_name = target["name"]
+        try:
+            engine = sa.create_engine(target["url"])
+            refresh_views(engine, db_name=db_name)
+        except Exception as e:
+            print(f"[ERROR FATAL] {db_name}: {e}")
 
 
 if __name__ == "__main__":

@@ -312,6 +312,14 @@ class FitMarketChileScraper(BaseScraper):
                                 title, description, main_category, deterministic_subcategory, brand
                             )
 
+                            site_folder = self.site_name.replace(" ", "_").lower()
+                            if thumbnail_url:
+                                local_thumb = self.download_image(thumbnail_url, subfolder=site_folder)
+                                if local_thumb: thumbnail_url = local_thumb
+                            if image_url:
+                                local_img = self.download_image(image_url, subfolder=site_folder)
+                                if local_img: image_url = local_img
+
                             yield {
                                 'date': current_date,
                                 'site_name': self.site_name,

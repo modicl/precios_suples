@@ -1,0 +1,130 @@
+{
+  "Proteinas": [
+    "blend", "keto", "baja en carbohidratos", "recuperacion", "masa muscular",
+    "saborizada", "nocturna", "rapida absorcion",
+    "post entreno", "alta proteina por porcion", "baja en grasa", "multifuente",
+    "digestivo", "polvo", "capsulas", "sin azucar", "sin gluten"
+  ],
+  "Creatinas": [
+    "creapure", "alcalina", "fuerza", "volumen", "atp", "rendimiento",
+    "sin sabor", "saborizada", "polvo", "capsulas", "pura",
+    "rapida absorcion", "blend", "pre entreno", "post entreno", "explosividad",
+    "potencia", "resistencia muscular", "sin estimulantes", "ciclo de carga", "aguante"
+  ],
+  "Pre Entrenos": [
+    "estimulante", "sin cafeina", "pump", "energia", "citrulina", "polvo", "capsulas",
+    "termogenico", "enfoque", "resistencia", "explosividad", "vasodilatador",
+    "vascularidad", "taurina", "alta intensidad", "rendimiento", "focus",
+    "sin azucar", "dosis alta", "multi ingrediente", "electrolitos", "sin colorantes"
+  ],
+  "Perdida de Grasa": [
+    "termogenico", "cla", "sin estimulantes", "liquido", "capsulas", "diuretico",
+    "control apetito", "lipotropico", "energia", "definicion", "polvo", "extracto",
+    "cetonas", "metabolismo", "yohimbina", "te verde",
+    "sin jitters", "termogenico natural", "control peso", "metabolismo activo", "crema reductora"
+  ],
+  "Packs": [
+    "volumen", "definicion", "principiante", "avanzado", "ahorro", "mensual",
+    "recuperacion", "rendimiento", "energia", "salud", "pre y post", "completo",
+    "basico", "pro", "sinergia", "degustacion", "viaje", "regalo",
+    "ciclo completo", "todo en uno", "iniciacion", "para atletas", "multi producto"
+  ],
+  "Ganadores de Peso": [
+    "alto en calorias", "carbohidratos", "blend de proteinas", "volumen", "ectomorfo",
+    "recuperacion", "calorico", "avena", "maltodextrina", "creatina añadida",
+    "vitaminas añadidas", "reemplazo de comida", "polvo", "fuerza", "masa muscular",
+    "digestivo", "calorias limpias", "bulk",
+    "para delgados", "alto en proteina", "sin lactosa", "facil digestion", "alta calidad proteica"
+  ],
+  "Aminoacidos y BCAA": [
+    "recuperacion", "intra entreno", "polvo", "capsulas", "liquido",
+    "ratio 2:1:1", "ratio 8:1:1", "sin sabor", "saborizado", "resistencia",
+    "anticatabolico", "esencial", "hidratacion", "taurina", "energia", "reparacion muscular",
+    "electrolitos", "aminoacidos esenciales", "sin carbohidratos", "anabolismo", "anti fatiga"
+  ],
+  "Ofertas": [
+    "descuento", "liquidacion", "2x1", "cyber", "sale", "promocion", "black friday",
+    "outlet", "por vencer", "envio gratis", "rebaja", "imperdible", "pack",
+    "especial", "remate", "oportunidad", "flash", "stock limitado", "clearance",
+    "tiempo limitado", "precio especial", "agotamiento stock", "descuento exclusivo"
+  ],
+  "Snacks y Comida": [
+    "galleta", "avena", "sin azucar", "keto", "bajo en calorias", "proteico",
+    "sin gluten", "snack", "desayuno", "crujiente", "chips", "brownie",
+    "panqueques", "sirope", "salsa", "saludable", "rapido",
+    "alto en fibra", "sin conservantes", "natural", "artesanal", "alternativa saludable"
+  ],
+  "Bebidas Nutricionales": [
+    "lista para tomar", "rtd", "sin azucar", "hidratacion", "electrolitos",
+    "recuperacion", "refrescante", "gasificada", "vitaminas", "cero calorias",
+    "cafeina", "sustituto", "en lata", "botella", "on the go", "recovery drink",
+    "multivitaminica", "funcional", "deportiva", "sin colorantes", "baja en calorias"
+  ],
+  "Post Entreno": [
+    "recuperacion", "blend", "reparacion", "electrolitos", "antioxidantes",
+    "aminoacidos", "alivio muscular", "glucogeno", "rapida absorcion", "formula",
+    "polvo", "sinergia", "anabolico", "descanso", "reconstruccion", "aislado",
+    "ventana anabolica", "carga glucogeno", "vitaminas", "minerales", "recuperacion total"
+  ],
+  "Hidratación": [
+    "electrolitos", "isotonico", "sodio", "potasio", "magnesio", "sin azucar",
+    "polvo", "pastillas efervescentes", "resistencia", "calambres", "sudor",
+    "calor", "intra entreno", "recuperacion", "sales", "minerales", "rendimiento",
+    "liquido", "sobres",
+    "balance electolitico", "rehidratacion", "sin calorias", "refrescante", "deshidratacion"
+  ],
+  "Colageno": [
+    "hidrolizado", "peptidos", "articulaciones", "piel", "cabello", "uñas",
+    "vitamina c", "magnesio", "acido hialuronico", "polvo", "capsulas", "belleza",
+    "antiage", "salud articular", "sin sabor", "saborizado", "bovino", "marino",
+    "regeneracion", "movilidad articular", "flexibilidad", "antioxidante", "suplemento beauty"
+  ],
+  "Aceites y Omegas": [
+    "epa", "dha", "aceite de pescado", "aceite de krill", "mct", "linaza", "chia",
+    "salud cardiovascular", "antiinflamatorio", "cerebro", "articulaciones",
+    "capsulas blandas", "liquido", "prensado en frio", "keto",
+    "energia", "colesterol", "corazon",
+    "plant based", "alta concentracion", "pureza molecular", "sin mercurio", "trigliceridos"
+  ],
+  "Alimentos": [
+    "harina", "semillas", "frutos secos", "sin gluten", "natural",
+    "desayuno", "carbohidratos complejos", "fibra", "organico", "integral",
+    "horneable", "crudo", "superfood", "despensa", "cocina", "sustituto", "sano",
+    "alto en proteina", "sin azucar añadida", "bajo IG", "funcional", "nutricion real"
+  ],
+  "Superalimento": [
+    "adaptogeno", "polvo", "organico", "antioxidante", "energia natural",
+    "inmunidad", "detox", "capsulas", "bienestar",
+    "extracto concentrado", "certificado organico", "multibeneficio", "plant based", "suplemento natural"
+  ],
+  "Vitaminas y Minerales": [
+    "zinc", "hierro", "sistema inmune", "energia", "salud osea",
+    "capsulas", "polvo", "efervescente", "diario", "bienestar",
+    "dosis diaria", "biodisponible", "sin colorantes", "para deportistas",
+    "liposomal", "alta potencia", "solucion liquida"
+  ],
+  "Deportistas": [
+    "endurance", "gel", "gomas", "energia rapida", "recuperacion", "resistencia",
+    "articulaciones", "electrolitos", "rendimiento", "vo2 max", "sin dopping",
+    "competicion", "alta intensidad",
+    "nutricion avanzada", "periodizacion", "combustible rapido", "ultraresistencia", "fuerza explosiva"
+  ],
+  "OTROS": [
+    "shaker", "mezclador", "ropa", "muñequeras", "cinturon", "toalla", "bolso",
+    "guantes", "straps", "pastillero", "bandas", "merchandising", "agarres",
+    "botellas", "magnesia", "tiza", "shaker electrico", "embudo", "gorra",
+    "gym", "entrenamiento", "equipamiento", "regalo", "complemento"
+  ],
+  "Carbohidratos": [
+    "rapida absorcion", "lenta absorcion", "intra entreno", "post entreno",
+    "energia", "glucogeno", "polvo", "sin sabor", "volumen", "resistencia",
+    "complejo", "simple", "recarga", "carbo",
+    "carga de glucogeno", "sin proteina", "facil digestion", "alto IG", "bajo IG"
+  ],
+  "Pro Hormonales": [
+    "testosterona", "anabolico natural", "fuerza", "libido", "recuperacion",
+    "masa muscular", "capsulas", "polvo", "regulador", "descanso", "vigor",
+    "energia",
+    "potenciador hormonal", "salud masculina", "equilibrio hormonal", "testosterona natural", "sin esteroides"
+  ]
+}

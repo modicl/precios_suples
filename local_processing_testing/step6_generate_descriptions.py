@@ -105,14 +105,8 @@ def build_user_prompt(row: dict) -> str:
 # ---------------------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------------------
-def get_conn():
-    from tools.db_multiconnect import get_targets
-    targets = get_targets()
-    local = next((t for t in targets if t["name"] == "Local"), None)
-    if not local:
-        print("ERROR: No se encontró BD local en .env")
-        sys.exit(1)
-    return psycopg2.connect(local["url"])
+def get_conn(url: str):
+    return psycopg2.connect(url)
 
 
 def fetch_products(conn, *, force: bool) -> list[dict]:
@@ -205,27 +199,37 @@ async def generate_one(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-async def run(args):
+async def run(args, targets: list):
+    """
+    Genera descripciones LLM UNA sola vez (usando el primer target como fuente)
+    y guarda los resultados en TODOS los targets.
+    """
     if not OPENAI_API_KEY:
         print("ERROR: Variable de entorno CHATGPT_MINI4 no encontrada.")
         sys.exit(1)
 
-    conn = get_conn()
-    rows = fetch_products(conn, force=args.forzar)
+    # 1. Fetch desde el primer target (Local)
+    source = targets[0]
+    conn_source = get_conn(source["url"])
+    rows = fetch_products(conn_source, force=args.forzar)
+    conn_source.close()
 
     if not rows:
         print("Paso 6 — Descripciones LLM: todos los productos ya tienen descripcion_llm. Nada que hacer.")
-        conn.close()
         return
 
     total = len(rows)
     modo  = "DRY-RUN (sin escritura)" if args.dry_run else "ESCRITURA en BD"
+    target_names = [t["name"] for t in targets]
     print(f"\n--- Paso 6: Generación de Descripciones LLM ({MODEL}) ---")
+    print(f"Fuente (fetch)                : {source['name']}")
+    print(f"Destinos (escritura)          : {target_names}")
     print(f"Productos sin descripcion_llm : {total}")
     print(f"Modo                          : {modo}")
     print(f"Concurrencia                  : {args.concurrencia}")
     print()
 
+    # 2. Generar descripciones con LLM (una sola vez)
     client    = AsyncOpenAI(api_key=OPENAI_API_KEY)
     semaphore = asyncio.Semaphore(args.concurrencia)
 
@@ -237,6 +241,7 @@ async def run(args):
     ok_count    = 0
     error_count = 0
     errors      = []
+    results     = {}   # {id_producto: descripcion}
     t_start     = time.time()
 
     for i, coro in enumerate(asyncio.as_completed(tasks), 1):
@@ -250,8 +255,7 @@ async def run(args):
         else:
             ok_count += 1
             status = "OK   "
-            if not args.dry_run:
-                save_description(conn, pid, desc)
+            results[pid] = desc
 
         rps = i / elapsed if elapsed > 0 else 0
         eta = (total - i) / rps if rps > 0 else 0
@@ -275,9 +279,20 @@ async def run(args):
         for pid, err in errors:
             print(f"    id={pid}: {err[:120]}")
 
-    conn.close()
+    # 3. Guardar los mismos resultados en TODOS los targets
+    if not args.dry_run and results:
+        print(f"\n  Guardando {len(results)} descripciones en {len(targets)} BD(s)...")
+        for target in targets:
+            print(f"    [{target['name']}]...")
+            try:
+                conn = get_conn(target["url"])
+                for pid, desc in results.items():
+                    save_description(conn, pid, desc)
+                conn.close()
+                print(f"    [{target['name']}] OK")
+            except Exception as e:
+                print(f"    [{target['name']}] ERROR: {e}")
 
-    # Salir con código de error si algún producto falló, para que el .bat lo detecte
     if error_count > 0:
         sys.exit(1)
 
@@ -293,7 +308,12 @@ def main():
     parser.add_argument("--concurrencia", type=int, default=10,
                         help="Requests paralelos a OpenAI (default: 10)")
     args = parser.parse_args()
-    asyncio.run(run(args))
+
+    from tools.db_multiconnect import get_targets
+    targets = get_targets()
+    print(f"Destinos de BD encontrados: {[t['name'] for t in targets]}")
+
+    asyncio.run(run(args, targets))
 
 
 if __name__ == "__main__":

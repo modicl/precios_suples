@@ -19,7 +19,8 @@
       "Bash(python -c \"import psycopg2; print\\(''psycopg2 ok''\\)\")",
       "Bash(python -c \":*)",
       "Bash(git add scrapers_v2/CategoryClassifier.py scrapers_v2/SportNutriShopScraper.py scrapers_v2/BYONScraper.py scrapers_v2/AllNutritionScraper.py scrapers_v2/SuplesScraper.py scrapers_v2/FitMarketChileScraper.py scrapers_v2/WinklerNutritionScraper.py scrapers_v2/diccionarios/keywords_aminoacidos.json scrapers_v2/diccionarios/keywords_pre_entrenos.json scrapers_v2/diccionarios/keywords_snacks.json tools/migrate_arginina_oxido_nitrico.sql)",
-      "Bash(git add scrapers_v2/CategoryClassifier.py scrapers_v2/SportNutriShopScraper.py scrapers_v2/BYONScraper.py scrapers_v2/AllNutritionScraper.py scrapers_v2/SuplesScraper.py scrapers_v2/FitMarketChileScraper.py scrapers_v2/WinklerNutritionScraper.py scrapers_v2/diccionarios/keywords_aminoacidos.json scrapers_v2/diccionarios/keywords_pre_entrenos.json scrapers_v2/diccionarios/keywords_snacks.json)"
+      "Bash(git add scrapers_v2/CategoryClassifier.py scrapers_v2/SportNutriShopScraper.py scrapers_v2/BYONScraper.py scrapers_v2/AllNutritionScraper.py scrapers_v2/SuplesScraper.py scrapers_v2/FitMarketChileScraper.py scrapers_v2/WinklerNutritionScraper.py scrapers_v2/diccionarios/keywords_aminoacidos.json scrapers_v2/diccionarios/keywords_pre_entrenos.json scrapers_v2/diccionarios/keywords_snacks.json)",
+      "Bash(ls \"c:\\\\Users\\\\Villa\\\\Documents\\\\proyectos_python\\\\precios_suples\\\\old\\\\data_processing\"\" && ls \"c:UsersVillaDocumentsproyectos_pythonprecios_suplesdata_processing_v2\"\")"
     ]
   }
 }

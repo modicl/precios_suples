@@ -5,7 +5,17 @@
       "Bash(python -c \":*)",
       "Bash(bash \"$HOME/.claude/hooks/peon-ping/peon.sh\" packs list)",
       "Bash(echo \"Session: $CLAUDE_SESSION_ID\")",
-      "Bash(python -c \"import time; print\\(int\\(time.time\\(\\)\\)\\)\")"
+      "Bash(python -c \"import time; print\\(int\\(time.time\\(\\)\\)\\)\")",
+      "Bash(powershell -Command \"Get-Command pg_dump -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source; Get-ChildItem -Path ''C:\\\\Program Files'' -Recurse -Filter ''pg_dump.exe'' -ErrorAction SilentlyContinue | Select-Object -First 3 FullName\")",
+      "Bash(cmd /c \"where pg_dump\")",
+      "Bash(cmd /c \"where psql\")",
+      "Bash(docker ps --format \"table {{.Names}}\\\\t{{.Image}}\\\\t{{.Status}}\\\\t{{.Ports}}\")",
+      "Bash(docker exec suples-db psql -U root -d suplementos -c \"SELECT pg_size_pretty\\(pg_database_size\\(''suplementos''\\)\\) AS size;\")",
+      "Bash(docker exec suples-db psql -U root -d suplementos -c \"\\\\dx\")",
+      "Bash(docker exec suples-db psql -U root -d suplementos -c \"SELECT schemaname, matviewname FROM pg_matviews;\")",
+      "Bash(grep -n \"\\\\\\\\restrict\\\\|\\\\\\\\unrestrict\" migration_dump.sql)",
+      "Bash(docker exec suples-db psql -U root -d suplementos -c \":*)",
+      "Bash(python -:*)"
     ]
   }
 }

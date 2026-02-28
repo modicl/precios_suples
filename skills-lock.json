@@ -1,6 +1,11 @@
 {
   "version": 1,
   "skills": {
+    "neon-postgres": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "computedHash": "574cf4b7c901ebc7d88d34e2c3e3d08fdec127bd0047f888de148ff0af787d4e"
+    },
     "web-scraping": {
       "source": "jamditis/claude-skills-journalism",
       "sourceType": "github",

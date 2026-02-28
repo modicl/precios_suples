@@ -2,8 +2,8 @@ import os
 import sys
 import unicodedata
 import sqlalchemy as sa
-from sqlalchemy import text
 import pandas as pd
+import psycopg2.extras
 from datetime import datetime
 
 # Add root to path to find tools
@@ -80,24 +80,30 @@ def _resolve_row_ids(row, brand_map, subcat_map, cat_map, fallback_map,
 
 
 # ---------------------------------------------------------------------------
-# Engine
+# Bulk insert helper (psycopg2 native — mucho más eficiente en Neon)
 # ---------------------------------------------------------------------------
 
-def get_local_engine():
-    targets = get_targets()
-    local_target = next((t for t in targets if t['name'] == 'Local'), None)
-    if not local_target:
-        print("Error: No se encontró la configuración para 'Local' en db_multiconnect.")
-        sys.exit(1)
-    return sa.create_engine(local_target['url'])
+def _bulk_execute_values(engine, query, values, page_size=1000):
+    """
+    Ejecuta un INSERT masivo usando psycopg2.execute_values.
+    Genera un único INSERT multi-valor por página, minimizando round-trips
+    a la BD remota (Neon).  Requiere cursor nativo, por eso usa raw_connection.
+    """
+    raw_conn = engine.raw_connection()
+    try:
+        with raw_conn.cursor() as cur:
+            psycopg2.extras.execute_values(cur, query, values, page_size=page_size)
+        raw_conn.commit()
+    finally:
+        raw_conn.close()
 
 
 # ---------------------------------------------------------------------------
 # Main insertion
 # ---------------------------------------------------------------------------
 
-def insert_data_bulk(engine, df):
-    print(f"--- Insertando {len(df)} registros (MODO BATCH OPTIMIZADO) ---")
+def insert_data_bulk(engine, df, db_name="DB"):
+    print(f"\n--- [{db_name}] Insertando {len(df)} registros (MODO BATCH OPTIMIZADO) ---")
 
     with engine.connect() as conn:
 
@@ -255,17 +261,20 @@ def insert_data_bulk(engine, df):
 
         batch_products = list(products_dedup.values())
         if batch_products:
-            print(f"Insertando/Actualizando {len(batch_products)} productos únicos...")
+            print(f"[{db_name}] Insertando/Actualizando {len(batch_products)} productos únicos...")
             try:
-                conn.execute(sa.text("""
+                _bulk_execute_values(engine, """
                     INSERT INTO productos (nombre_producto, url_imagen, url_thumb_imagen, id_marca, id_subcategoria)
-                    VALUES (:nombre_producto, :url_imagen, :url_thumb_imagen, :id_marca, :id_subcategoria)
+                    VALUES %s
                     ON CONFLICT (nombre_producto, id_marca, id_subcategoria)
                     DO UPDATE SET url_imagen = EXCLUDED.url_imagen
-                """), batch_products)
-                conn.commit()
+                """, [
+                    (p["nombre_producto"], p["url_imagen"], p["url_thumb_imagen"], p["id_marca"], p["id_subcategoria"])
+                    for p in batch_products
+                ])
+                print(f"[{db_name}] Productos insertados correctamente.")
             except Exception as e:
-                print(f"[ERROR CRITICO] Fallo en bulk insert productos: {e}")
+                print(f"[{db_name}] [ERROR CRITICO] Fallo en bulk insert productos: {e}")
 
         # Retrieve product ID map
         print("Recuperando IDs de productos...")
@@ -324,13 +333,19 @@ def insert_data_bulk(engine, df):
 
         batch_links = list(links_dedup.values())
         if batch_links:
-            print(f"Insertando/Actualizando {len(batch_links)} enlaces...")
-            conn.execute(sa.text("""
-                INSERT INTO producto_tienda (id_producto, id_tienda, url_link, descripcion)
-                VALUES (:id_producto, :id_tienda, :url_link, :descripcion)
-                ON CONFLICT (id_producto, id_tienda) DO UPDATE SET url_link = EXCLUDED.url_link
-            """), batch_links)
-            conn.commit()
+            print(f"[{db_name}] Insertando/Actualizando {len(batch_links)} enlaces...")
+            try:
+                _bulk_execute_values(engine, """
+                    INSERT INTO producto_tienda (id_producto, id_tienda, url_link, descripcion)
+                    VALUES %s
+                    ON CONFLICT (id_producto, id_tienda) DO UPDATE SET url_link = EXCLUDED.url_link
+                """, [
+                    (lnk["id_producto"], lnk["id_tienda"], lnk["url_link"], lnk["descripcion"])
+                    for lnk in batch_links
+                ])
+                print(f"[{db_name}] Producto-Tienda insertados correctamente.")
+            except Exception as e:
+                print(f"[{db_name}] [ERROR] Fallo en bulk insert producto_tienda: {e}")
 
         # Retrieve link ID map
         print("Recuperando IDs de enlaces...")
@@ -415,20 +430,22 @@ def insert_data_bulk(engine, df):
             print(f"[WARNING] Fase 3: {miss_ptid_count} precios saltados — enlace no encontrado (fallo Fase 2 → 3).")
 
         if prices_batch:
-            print(f"Insertando {len(prices_batch)} precios...")
-            chunk_size   = 2000
-            total_prices = len(prices_batch)
-            for i in range(0, total_prices, chunk_size):
-                chunk = prices_batch[i:i + chunk_size]
-                try:
-                    conn.execute(sa.text("""
-                        INSERT INTO historia_precios (id_producto_tienda, precio, fecha_precio)
-                        VALUES (:id_producto_tienda, :precio, :fecha_precio)
-                    """), chunk)
-                    conn.commit()
-                    print(f"  Chunk precios {i}–{min(i + chunk_size, total_prices)} OK.")
-                except Exception as e:
-                    print(f"  [ERROR] Chunk de precios {i}–{min(i + chunk_size, total_prices)}: {e}")
+            print(f"[{db_name}] Eliminando precios del día de hoy antes de reinsertar...")
+            conn.execute(sa.text("DELETE FROM historia_precios WHERE fecha_precio::date = CURRENT_DATE"))
+            conn.commit()
+
+            print(f"[{db_name}] Insertando {len(prices_batch)} precios...")
+            try:
+                _bulk_execute_values(engine, """
+                    INSERT INTO historia_precios (id_producto_tienda, precio, fecha_precio)
+                    VALUES %s
+                """, [
+                    (hp["id_producto_tienda"], hp["precio"], hp["fecha_precio"])
+                    for hp in prices_batch
+                ])
+                print(f"[{db_name}] Historial de precios insertado correctamente.")
+            except Exception as e:
+                print(f"[{db_name}] [ERROR] Fallo en bulk insert historia_precios: {e}")
 
     print("Proceso Batch Finalizado.")
 
@@ -447,9 +464,17 @@ def main():
         print(f"Error: No se encontró {input_csv}. Ejecuta el Paso 2 primero.")
         return
 
-    df     = pd.read_csv(input_csv)
-    engine = get_local_engine()
-    insert_data_bulk(engine, df)
+    df      = pd.read_csv(input_csv)
+    targets = get_targets()
+    print(f"Destinos de BD encontrados: {[t['name'] for t in targets]}")
+
+    for target in targets:
+        db_name = target['name']
+        try:
+            engine = sa.create_engine(target['url'])
+            insert_data_bulk(engine, df, db_name=db_name)
+        except Exception as e:
+            print(f"[ERROR FATAL] {db_name}: {e}")
 
 
 if __name__ == "__main__":

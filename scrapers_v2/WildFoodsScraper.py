@@ -195,6 +195,11 @@ class WildFoodsScraper(BaseScraper):
                                 brand = "Wild Foods" 
                                 if "way bar" in name.lower():
                                     brand = "Way Bar"
+
+                                site_folder = self.site_name.replace(" ", "_").lower()
+                                if image_url:
+                                    local_img = self.download_image(image_url, subfolder=site_folder)
+                                    if local_img: image_url = local_img
                                 
                                 yield {
                                     'date': current_date,

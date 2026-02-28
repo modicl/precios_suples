@@ -112,18 +112,9 @@ def fetch_links_bulk(conn, product_ids):
     return product_links
 
 
-def get_local_engine():
-    targets = get_targets()
-    local_target = next((t for t in targets if t["name"] == "Local"), None)
-    if not local_target:
-        print("Error: No se encontró la configuración para 'Local' en db_multiconnect.")
-        sys.exit(1)
-    return sa.create_engine(local_target["url"])
-
-
-def fix_duplicates(engine, dry_run=False):
+def fix_duplicates(engine, dry_run=False, db_name=""):
     mode_label = "[DRY-RUN] " if dry_run else ""
-    print(f"\n--- {mode_label}Deduplicando Productos (insensible a mayúsculas, cross-subcategoría) ---")
+    print(f"\n--- {mode_label}Deduplicando Productos [{db_name}] (insensible a mayúsculas, cross-subcategoría) ---")
 
     with engine.begin() as conn:
         # Live categories for scoring
@@ -292,8 +283,16 @@ def main():
     args = parser.parse_args()
 
     print("--- PASO 4: Deduplicación de Productos ---")
-    engine = get_local_engine()
-    fix_duplicates(engine, dry_run=args.dry_run)
+    targets = get_targets()
+    print(f"Destinos de BD encontrados: {[t['name'] for t in targets]}")
+
+    for target in targets:
+        db_name = target["name"]
+        try:
+            engine = sa.create_engine(target["url"])
+            fix_duplicates(engine, dry_run=args.dry_run, db_name=db_name)
+        except Exception as e:
+            print(f"[ERROR FATAL] {db_name}: {e}")
 
 
 if __name__ == "__main__":

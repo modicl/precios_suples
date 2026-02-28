@@ -266,6 +266,14 @@ class FarmaciaKnopScraper(BaseScraper):
                             name, description, main_category, deterministic_subcategory
                         )
 
+                        site_folder = self.site_name.replace(" ", "_").lower()
+                        if image_url:
+                            local_thumb = self.download_image(image_url, subfolder=site_folder)
+                            if local_thumb: image_url = local_thumb
+                        if detail_image_url:
+                            local_img = self.download_image(detail_image_url, subfolder=site_folder)
+                            if local_img: detail_image_url = local_img
+
                         yield {
                             'date': current_date,
                             'site_name': self.site_name,
