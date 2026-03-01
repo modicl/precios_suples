@@ -336,16 +336,49 @@ def insert_data_bulk(engine, df, db_name="DB"):
             print(f"[{db_name}] Insertando/Actualizando {len(batch_links)} enlaces...")
             try:
                 _bulk_execute_values(engine, """
-                    INSERT INTO producto_tienda (id_producto, id_tienda, url_link, descripcion)
+                    INSERT INTO producto_tienda (id_producto, id_tienda, url_link, descripcion, is_active, fecha_ultima_vista)
                     VALUES %s
-                    ON CONFLICT (id_producto, id_tienda) DO UPDATE SET url_link = EXCLUDED.url_link
+                    ON CONFLICT (id_producto, id_tienda) DO UPDATE SET
+                        url_link           = EXCLUDED.url_link,
+                        is_active          = true,
+                        fecha_ultima_vista = NOW()
                 """, [
-                    (lnk["id_producto"], lnk["id_tienda"], lnk["url_link"], lnk["descripcion"])
+                    (lnk["id_producto"], lnk["id_tienda"], lnk["url_link"], lnk["descripcion"], True, None)
                     for lnk in batch_links
                 ])
                 print(f"[{db_name}] Producto-Tienda insertados correctamente.")
             except Exception as e:
                 print(f"[{db_name}] [ERROR] Fallo en bulk insert producto_tienda: {e}")
+
+        # ── Fase 2b: Desactivar productos que ya no aparecen en la tienda ──────
+        # Para cada tienda presente en el batch, marcar is_active=false en los
+        # producto_tienda que NO fueron vistos en este run.
+        if batch_links:
+            product_ids_by_tienda: dict[int, list[int]] = {}
+            for lnk in batch_links:
+                tid = lnk["id_tienda"]
+                product_ids_by_tienda.setdefault(tid, []).append(lnk["id_producto"])
+
+            raw_conn = engine.raw_connection()
+            try:
+                deactivated_total = 0
+                with raw_conn.cursor() as cur:
+                    for tid, active_pids in product_ids_by_tienda.items():
+                        cur.execute("""
+                            UPDATE producto_tienda
+                            SET is_active = false
+                            WHERE id_tienda = %s
+                              AND id_producto != ALL(%s)
+                              AND is_active = true
+                        """, (tid, active_pids))
+                        deactivated_total += cur.rowcount
+                raw_conn.commit()
+            finally:
+                raw_conn.close()
+
+            if deactivated_total:
+                print(f"[{db_name}] [is_active] {deactivated_total} producto(s) marcados como inactivos (no encontrados en este run).")
+        # ────────────────────────────────────────────────────────────────────────
 
         # Retrieve link ID map
         print("Recuperando IDs de enlaces...")

@@ -7,8 +7,9 @@ set "STEP1=%ROOT%local_processing_testing\step1_clean_names.py"
 set "STEP2=%ROOT%local_processing_testing\step2_normalization.py"
 set "STEP3=%ROOT%local_processing_testing\step3_db_insertion.py"
 set "STEP4=%ROOT%local_processing_testing\step4_deduplication.py"
-set "STEP5=%ROOT%local_processing_testing\step5_refresh_views.py"
-set "STEP6=%ROOT%local_processing_testing\step6_generate_descriptions.py"
+set "STEP5=%ROOT%local_processing_testing\step5_generate_descriptions.py"
+set "STEP6=%ROOT%local_processing_testing\step6_tag_keywords.py"
+set "STEP7=%ROOT%local_processing_testing\step7_refresh_views.py"
 set "LOGS_DIR=%ROOT%logs"
 
 :: Crear carpeta logs si no existe
@@ -38,8 +39,9 @@ echo    Paso 1 - Limpieza de nombres
 echo    Paso 2 - Normalizacion / clustering
 echo    Paso 3 - Insercion en base de datos
 echo    Paso 4 - Deduplicacion
-echo    Paso 5 - Refresh de vistas materializadas
-echo    Paso 6 - Generacion de descripciones LLM
+echo    Paso 5 - Generacion de descripciones LLM
+echo    Paso 6 - Tagging de keywords
+echo    Paso 7 - Refresh de vistas materializadas
 echo.
 pause
 
@@ -51,8 +53,8 @@ echo. >> "%LOGFILE%"
 :: PASO 1
 :: -----------------------------------------------------------
 echo.
-echo  [1/6] Limpieza de nombres...
-echo  [1/6] Limpieza de nombres... >> "%LOGFILE%"
+echo  [1/7] Limpieza de nombres...
+echo  [1/7] Limpieza de nombres... >> "%LOGFILE%"
 echo  -------------------------------------------------- >> "%LOGFILE%"
 
 "%PYTHON%" "%STEP1%" 2>&1 | powershell -NoProfile -Command "$input | Tee-Object -FilePath '%LOGFILE%' -Append"
@@ -68,9 +70,9 @@ if !errorlevel! neq 0 (
 :: PASO 2
 :: -----------------------------------------------------------
 echo.
-echo  [2/6] Normalizacion / clustering...
+echo  [2/7] Normalizacion / clustering...
 echo. >> "%LOGFILE%"
-echo  [2/6] Normalizacion / clustering... >> "%LOGFILE%"
+echo  [2/7] Normalizacion / clustering... >> "%LOGFILE%"
 echo  -------------------------------------------------- >> "%LOGFILE%"
 
 "%PYTHON%" "%STEP2%" 2>&1 | powershell -NoProfile -Command "$input | Tee-Object -FilePath '%LOGFILE%' -Append"
@@ -86,9 +88,9 @@ if !errorlevel! neq 0 (
 :: PASO 3
 :: -----------------------------------------------------------
 echo.
-echo  [3/6] Insercion en base de datos...
+echo  [3/7] Insercion en base de datos...
 echo. >> "%LOGFILE%"
-echo  [3/6] Insercion en base de datos... >> "%LOGFILE%"
+echo  [3/7] Insercion en base de datos... >> "%LOGFILE%"
 echo  -------------------------------------------------- >> "%LOGFILE%"
 
 "%PYTHON%" "%STEP3%" 2>&1 | powershell -NoProfile -Command "$input | Tee-Object -FilePath '%LOGFILE%' -Append"
@@ -104,9 +106,9 @@ if !errorlevel! neq 0 (
 :: PASO 4
 :: -----------------------------------------------------------
 echo.
-echo  [4/6] Deduplicacion...
+echo  [4/7] Deduplicacion...
 echo. >> "%LOGFILE%"
-echo  [4/6] Deduplicacion... >> "%LOGFILE%"
+echo  [4/7] Deduplicacion... >> "%LOGFILE%"
 echo  -------------------------------------------------- >> "%LOGFILE%"
 
 "%PYTHON%" "%STEP4%" 2>&1 | powershell -NoProfile -Command "$input | Tee-Object -FilePath '%LOGFILE%' -Append"
@@ -122,9 +124,9 @@ if !errorlevel! neq 0 (
 :: PASO 5
 :: -----------------------------------------------------------
 echo.
-echo  [5/6] Refresh de vistas materializadas...
+echo  [5/7] Generacion de descripciones LLM...
 echo. >> "%LOGFILE%"
-echo  [5/6] Refresh de vistas materializadas... >> "%LOGFILE%"
+echo  [5/7] Generacion de descripciones LLM... >> "%LOGFILE%"
 echo  -------------------------------------------------- >> "%LOGFILE%"
 
 "%PYTHON%" "%STEP5%" 2>&1 | powershell -NoProfile -Command "$input | Tee-Object -FilePath '%LOGFILE%' -Append"
@@ -140,9 +142,9 @@ if !errorlevel! neq 0 (
 :: PASO 6
 :: -----------------------------------------------------------
 echo.
-echo  [6/6] Generacion de descripciones LLM...
+echo  [6/7] Tagging de keywords...
 echo. >> "%LOGFILE%"
-echo  [6/6] Generacion de descripciones LLM... >> "%LOGFILE%"
+echo  [6/7] Tagging de keywords... >> "%LOGFILE%"
 echo  -------------------------------------------------- >> "%LOGFILE%"
 
 "%PYTHON%" "%STEP6%" 2>&1 | powershell -NoProfile -Command "$input | Tee-Object -FilePath '%LOGFILE%' -Append"
@@ -151,6 +153,24 @@ if !errorlevel! neq 0 (
     echo.
     echo  [ERROR] Paso 6 fallo.
     echo  [ERROR] Paso 6 fallo. >> "%LOGFILE%"
+    goto fin_error
+)
+
+:: -----------------------------------------------------------
+:: PASO 7
+:: -----------------------------------------------------------
+echo.
+echo  [7/7] Refresh de vistas materializadas...
+echo. >> "%LOGFILE%"
+echo  [7/7] Refresh de vistas materializadas... >> "%LOGFILE%"
+echo  -------------------------------------------------- >> "%LOGFILE%"
+
+"%PYTHON%" "%STEP7%" 2>&1 | powershell -NoProfile -Command "$input | Tee-Object -FilePath '%LOGFILE%' -Append"
+
+if !errorlevel! neq 0 (
+    echo.
+    echo  [ERROR] Paso 7 fallo.
+    echo  [ERROR] Paso 7 fallo. >> "%LOGFILE%"
     goto fin_error
 )
 
