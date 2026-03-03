@@ -1,5 +1,5 @@
 """
-step7_tag_keywords.py
+step6_tag_keywords.py
 ---------------------
 Asigna keywords (tags) a productos usando LLM.
 
@@ -8,14 +8,14 @@ Lógica:
   - Por cada producto, toma las keywords disponibles del diccionario JSON
     usando nombre_categoria como clave directa (coincide exactamente con la BD)
   - Llama a GPT-4o-mini para que elija máximo 5 keywords del listado
-  - Guarda el array en productos.tags (text[] en PostgreSQL)
+  - Guarda el array en productos.tags (text[] en PostgreSQL) en Local y Producción
   - Genera siempre un reporte CSV con muestra de 50 productos
 
 Uso:
-    python local_processing_testing/step7_tag_keywords.py
-    python local_processing_testing/step7_tag_keywords.py --dry-run
-    python local_processing_testing/step7_tag_keywords.py --forzar
-    python local_processing_testing/step7_tag_keywords.py --concurrencia 15
+    python local_processing_testing/step6_tag_keywords.py
+    python local_processing_testing/step6_tag_keywords.py --dry-run
+    python local_processing_testing/step6_tag_keywords.py --forzar
+    python local_processing_testing/step6_tag_keywords.py --concurrencia 15
 
 Flags:
     --dry-run         Muestra prompts/respuestas sin escribir en BD
@@ -138,14 +138,8 @@ def build_user_prompt(row: dict, available_keywords: list[str]) -> str:
 # ---------------------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------------------
-def get_local_conn() -> psycopg2.extensions.connection:
-    from tools.db_multiconnect import get_targets
-    targets = get_targets()
-    local = next((t for t in targets if t["name"] == "Local"), None)
-    if not local:
-        print("ERROR: No se encontró BD Local en .env")
-        sys.exit(1)
-    return psycopg2.connect(local["url"])
+def get_conn(url: str) -> psycopg2.extensions.connection:
+    return psycopg2.connect(url)
 
 
 def fetch_products(conn, *, force: bool) -> list[dict]:
@@ -174,13 +168,21 @@ def fetch_products(conn, *, force: bool) -> list[dict]:
     return [dict(r) for r in cur.fetchall()]
 
 
-def save_tags(conn, producto_id: int, tags: list[str]):
-    cur = conn.cursor()
-    cur.execute(
-        "UPDATE productos SET tags = %s WHERE id_producto = %s",
-        (tags, producto_id),
-    )
-    conn.commit()
+def save_tags(targets: list[dict], producto_id: int, tags: list[str]):
+    """Escribe los tags en todos los targets (Local + Producción)."""
+    for target in targets:
+        try:
+            conn = get_conn(target["url"])
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE productos SET tags = %s WHERE id_producto = %s",
+                (tags, producto_id),
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"\n  [WARN] Error guardando tags en {target['name']} "
+                  f"(id={producto_id}): {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -291,13 +293,21 @@ async def run(args):
         print("ERROR: Variable de entorno CHATGPT_MINI4 no encontrada.")
         sys.exit(1)
 
+    from tools.db_multiconnect import get_targets
+    targets = get_targets()
+    if not targets:
+        print("ERROR: No se encontró ninguna BD configurada en .env")
+        sys.exit(1)
+
     keyword_dict = load_keyword_dict()
-    conn = get_local_conn()
-    rows = fetch_products(conn, force=args.forzar)
+
+    # Leer siempre desde Local (targets[0])
+    conn_source = get_conn(targets[0]["url"])
+    rows = fetch_products(conn_source, force=args.forzar)
+    conn_source.close()
 
     if not rows:
-        print("Paso 7 — Tags: todos los productos ya tienen tags asignados. Nada que hacer.")
-        conn.close()
+        print("Paso 6 — Tags: todos los productos ya tienen tags asignados. Nada que hacer.")
         return
 
     # Solo procesar productos cuya categoría esté en el diccionario
@@ -321,8 +331,9 @@ async def run(args):
 
     total = len(rows_with_keywords)
 
-    modo = "DRY-RUN (sin escritura)" if args.dry_run else "ESCRITURA en BD Local"
-    print(f"\n--- Paso 7: Asignación de Keywords/Tags ({MODEL}) ---")
+    target_names = " + ".join(t["name"] for t in targets)
+    modo = "DRY-RUN (sin escritura)" if args.dry_run else f"ESCRITURA en BD ({target_names})"
+    print(f"\n--- Paso 6: Asignación de Keywords/Tags ({MODEL}) ---")
     print(f"Productos sin tags             : {len(rows)}")
     print(f"Con categoría en diccionario   : {total}")
     if args.muestra:
@@ -335,7 +346,6 @@ async def run(args):
 
     if total == 0:
         print("  Nada que procesar (ningún producto tiene categoría mapeada).")
-        conn.close()
         return
 
     client    = AsyncOpenAI(api_key=OPENAI_API_KEY)
@@ -368,7 +378,7 @@ async def run(args):
             ok_count += 1
             status = "OK   "
             if not args.dry_run:
-                save_tags(conn, pid, tags)
+                save_tags(targets, pid, tags)
             all_results.append({
                 **row,
                 "tags":               tags,
@@ -400,8 +410,6 @@ async def run(args):
     # Reporte CSV siempre que haya resultados
     if all_results:
         write_csv_report(all_results, is_muestra=bool(args.muestra))
-
-    conn.close()
 
     if error_count > 0:
         sys.exit(1)

@@ -2,6 +2,67 @@
 
 ---
 
+## [2026-03-02] - Robustez y performance en step3: dedup de URLs, remap bulk y fix de packs
+
+### Contexto
+Al ejecutar el step3 con datos reales aparecieron tres errores en cadena: `uq_tienda_url` (misma URL con dos productos distintos en el CSV), `uq_producto_tienda` (el remap creaba un duplicado cuando el destino ya tenía fila), y `fk_producto_tienda` (DELETE sin reasignar `historia_precios`). Además el Paso A era un loop de Python con queries individuales que tardaba ~15 minutos en Neon.
+
+### Cambios Implementados
+
+#### 1. `local_processing_testing/step3_db_insertion.py` — dedup de URLs en el batch
+
+- Nuevo dict `url_dedup` keyed por `(tid, url)`: detecta cuando la misma URL aparece en el CSV con dos `id_producto` distintos (el scraper la recogió desde dos categorías).
+- Criterio de desempate: se prefiere la subcategoría más específica; si la fila nueva es `packs`, `ofertas`, `promo`, etc. se descarta. Si es más específica, reemplaza a la anterior.
+- Previene que el bulk INSERT reciba dos filas con la misma `(id_tienda, url_link)` → eliminaba el error `uq_tienda_url`.
+
+#### 2. `local_processing_testing/step3_db_insertion.py` — Paso A reescrito como operación SQL bulk
+
+Reemplaza el loop de Python (~2990 iteraciones × 3 queries individuales) por una tabla temporal + 3 queries SQL:
+
+- `CREATE TEMP TABLE _batch_links` con los datos del batch
+- `UPDATE historia_precios ... JOIN _batch_links JOIN winner` — reasigna historial de huérfanos al winner (caso A2)
+- `DELETE FROM producto_tienda ... JOIN _batch_links JOIN winner` — elimina huérfanos cuyo destino ya existe (caso A2, resuelve FK violation)
+- `UPDATE producto_tienda ... LEFT JOIN dest ... WHERE dest IS NULL` — reasigna URL cuando el destino no existe aún (caso A1)
+
+**Impacto en performance:** ~15 minutos → ~2 segundos en Neon.
+
+#### 3. `scrapers_v2/OneNutritionScraper.py` — `_strip_bundle_suffix` corregido
+
+- Nueva constante `_SUPPLEMENT_SUFFIX_RE`: regex que detecta si el sufijo del bundle es otro suplemento (creatina, omega, whey, caseína, vitamina, etc.).
+- Si el sufijo es un suplemento → **no stripear** (es un pack real, se conserva como producto separado).
+- Si el sufijo es un accesorio (shaker, balde, etc.) → stripear como antes.
+- Antes: `"ISO 100 5lb + CREATINA 500 OSTROVIT"` → `"ISO 100 5lb"` (incorrecto, generaba duplicados).
+- Ahora: `"ISO 100 5lb + CREATINA 500 OSTROVIT"` → sin cambio (producto separado).
+
+---
+
+## [2026-03-02] - Corrección de URL reutilizada en OneNutrition y limpieza de duplicados en producto_tienda
+
+### Contexto
+OneNutrition reutilizó la URL `iso-100-14-lb-dymatize` para un bundle (`ISO 100 (1.4 Lb) DYMATIZE + SHAKER DYMATIZE`), causando que el producto `id=414` (`Iso 100 1.4lb`, Dymatize, Proteína Aislada) dejara de actualizarse desde el 22 de febrero y que se creara un duplicado `id=7758` en la categoría Packs. Se corrigió el pipeline de inserción, el scraper y la BD para que el próximo run resuelva esto automáticamente.
+
+### Cambios Implementados
+
+#### 1. `local_processing_testing/step3_db_insertion.py` — pipeline de inserción reforzado
+- **Fase 2 (URL remap)**: segunda pasada que, si una URL ya existe asignada a otro `id_producto`, la reasigna al producto correcto mediante `UPDATE` por `url_link`. Antes solo se hacía upsert por `id_producto`, dejando URLs huérfanas.
+- **Fase 2b (desactivación)**: ahora desactiva por `url_link != ALL(active_urls)` en lugar de por `id_producto`. Más preciso: un producto se marca `is_active=False` cuando su URL ya no aparece en el scraping, independientemente de si el `id_producto` cambió.
+
+#### 2. `scrapers_v2/OneNutritionScraper.py` — normalización de títulos de bundles
+- Nueva función `_normalize_size_notation()`: elimina paréntesis alrededor de cantidades (`(1.4 Lb)` → `1.4lb`) y colapsa el espacio entre número y unidad (`300 GR` → `300gr`). Crítico para que el fuzzy match en Step 2 alcance score 100 contra el nombre canónico en BD.
+- Nueva función `_strip_bundle_suffix()`: si el título contiene un sufijo de bundle (`+ SHAKER`, `+ BALDE`, etc.) y el prefijo ya incluye una cantidad de presentación (ej. `1.4lb`, `5 lb`), stripea el sufijo. Respeta fórmulas combinadas legítimas (`ZMA + B6`, `Calcio + Magnesio + Zinc`). Llama a `_normalize_size_notation` antes de procesar.
+- Test de 20 casos ejecutado y confirmado.
+
+#### 3. Limpieza de duplicados en `producto_tienda` (BD local y producción)
+- Detectados y eliminados grupos donde la misma tienda+URL apuntaba a distintos `id_producto` (122 losers eliminados en producción en dos pasadas).
+- 399 registros de `historia_precios` reasignados del loser al winner antes de eliminar.
+- Agregado `UNIQUE CONSTRAINT uq_tienda_url (id_tienda, url_link)` en `producto_tienda` en **ambas BDs** para prevenir recurrencia.
+
+### Estado post-cambio
+- `id=414` (`Iso 100 1.4lb`, Dymatize): activo en 4 tiendas; OneNutrition se reconectará automáticamente en el próximo run.
+- `id=7758` (`Iso 100 1.4lb Dymatize + Shaker Dymatize`, Packs): será marcado `is_active=False` automáticamente en el próximo run por la Fase 2b, sin intervención manual.
+
+---
+
 ## [2026-02-25] - Deduplicación fuzzy de productos en BD producción
 
 ### Contexto

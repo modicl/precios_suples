@@ -5,6 +5,119 @@ from rich import print
 from datetime import datetime
 import re
 
+# Patrones de sufijos de bundle que OneNutrition agrega al nombre del producto.
+# Cuando la tienda regala un accesorio/suplemento, lo concatena con " + " al nombre
+# base. Estos patrones identifican ese sufijo para que el pipeline lo trate como el
+# mismo producto base (sin el regalo) y no cree un duplicado en Packs.
+#
+# Condición para stripear: el segmento ANTES del " + " debe contener una cantidad
+# de presentación (peso/volumen/unidades) Y el sufijo NO debe comenzar con el nombre
+# de otro suplemento (creatina, proteina, omega, etc.) — esos son packs reales.
+# Ejemplos que SÍ stripeamos (sufijo = accesorio sin valor nutricional propio):
+#   "ISO 100 (1.4 Lb) DYMATIZE + SHAKER DYMATIZE"      → "ISO 100 1.4lb DYMATIZE"
+#   "METAPURE 2KG QNT + BALDE PLÁSTICO"                → "METAPURE 2KG QNT"
+# Ejemplos que NO stripeamos (sufijo = otro suplemento → producto separado):
+#   "ISO 100 5LB DYMATIZE + CREATINA 300 GR DYMATIZE"  → sin cambio
+#   "ISO 100 5LB DYMATIZE + CREATINA 500 OSTROVIT"     → sin cambio
+#   "ISO 100 5LB + CREAPURE KIFFER 400 GR"             → sin cambio
+# Ejemplos que NO stripeamos (fórmulas combinadas):
+#   "Calcio + Magnesio + Zinc 100 Tab Solgar"           → sin cambio
+#   "ZMA + B6 60Cap Winkler"                            → sin cambio
+#   "Mg + B6 90Tabletas Ostrovit"                       → sin cambio
+_QTY_RE = re.compile(
+    r'\b\d+(?:[.,]\d+)?\s*(?:gr|g|kg|lb|lbs|cap|caps|tab|tabs|mg|ml|softgel|servicios|uni)\b',
+    re.IGNORECASE
+)
+
+# Palabras que, si aparecen al inicio del sufijo, indican que es otro suplemento
+# (no un accesorio) → NO stripear, conservar como producto separado.
+_SUPPLEMENT_SUFFIX_RE = re.compile(
+    r'^(?:creatina|creapure|proteina|whey|caseina|colageno|collagen|omega|vitamina|vitamin|'
+    r'magnesio|zinc|calcio|calcium|hierro|bcaa|glutamina|glutamine|cla|carnitina|carnitine|'
+    r'cafeina|caffeine|pre.?entreno|preworkout|gainers?|mass|gainer|aminoacid|amino|'
+    r'melatonin|melatonina|tribulus|ashwagandha|zma|casein|albumin|albumina|arginine|'
+    r'arginina|citrulline|citrulina|beta.?alanine|beta.?alanina|hmb|ecdysterone|ecdisterona)',
+    re.IGNORECASE
+)
+
+# Regex para normalizar cantidades de presentación entre paréntesis y colapsar
+# el espacio entre número y unidad.
+# "(1.4 Lb)" → "1.4lb"  |  "(2 Kg)" → "2kg"  |  "5 LB" → "5lb"
+# Esto hace que "ISO 100 (1.4 Lb) DYMATIZE" produzca el mismo clean_name
+# que "Iso 100 1.4lb" de otras tiendas, evitando duplicados en el pipeline.
+_SIZE_PARENS_RE = re.compile(
+    r'\((\d+(?:[.,]\d+)?)\s*(lb|lbs|kg|g|gr|ml|mg|oz)\)',
+    re.IGNORECASE
+)
+_SIZE_SPACE_RE = re.compile(
+    r'(\d+(?:[.,]\d+)?)\s+(lb|lbs|kg|g|gr|ml|mg|oz)\b',
+    re.IGNORECASE
+)
+
+
+def _normalize_size_notation(title: str) -> str:
+    """
+    Normaliza la notación de cantidades de presentación para que el pipeline
+    de matching fuzzy (step2) agrupe correctamente productos de distintas tiendas.
+
+    Transformaciones:
+        "(1.4 Lb)"  → "1.4lb"
+        "(2 Kg)"    → "2kg"
+        "5 LB"      → "5lb"
+        "300 GR"    → "300gr"
+
+    No toca unidades dentro de paréntesis que no son cantidades de presentación
+    (e.g. "(60 Cap)" se mantiene porque 'cap' no está en la lista de unidades
+    de presentación de este regex).
+    """
+    # Paso 1: eliminar paréntesis alrededor de la cantidad
+    result = _SIZE_PARENS_RE.sub(lambda m: m.group(1) + m.group(2).lower(), title)
+    # Paso 2: colapsar espacio entre número y unidad
+    result = _SIZE_SPACE_RE.sub(lambda m: m.group(1) + m.group(2).lower(), result)
+    return result
+
+
+def _strip_bundle_suffix(title: str) -> str:
+    """
+    Elimina el sufijo de bundle del título si el segmento antes del ' + '
+    ya contiene una cantidad de presentación (peso/volumen/unidades) Y el
+    sufijo no es otro suplemento (en cuyo caso es un pack real y se conserva).
+
+    Ejemplos stripeados (sufijo = accesorio):
+        "ISO 100 (1.4 Lb) DYMATIZE + SHAKER DYMATIZE"     → "ISO 100 1.4lb DYMATIZE"
+        "METAPURE 2KG QNT + BALDE PLÁSTICO"               → "METAPURE 2KG QNT"
+    Ejemplos conservados (sufijo = otro suplemento → pack real):
+        "ISO 100 5LB DYMATIZE + CREATINA 300 GR DYMATIZE" → sin cambio
+        "ISO 100 5LB + CREAPURE KIFFER 400 GR"            → sin cambio
+    Ejemplos conservados (fórmulas combinadas):
+        "Calcio + Magnesio + Zinc 100 Tab Solgar"          → sin cambio
+        "ZMA + B6 60Cap Winkler"                           → sin cambio
+    """
+    # Normalizar notación de cantidades antes de buscar el corte
+    title = _normalize_size_notation(title)
+
+    # Iterar todos los ' + ' del título para encontrar el punto de corte correcto
+    for m in re.finditer(r'\s*\+\s*', title):
+        prefix = title[:m.start()]
+        suffix_start = title[m.end():]
+
+        # Si el sufijo es otro suplemento, es un pack real → no stripear
+        if _SUPPLEMENT_SUFFIX_RE.match(suffix_start):
+            return title
+
+        # Solo stripear si el prefijo ya contiene una cantidad de presentación
+        if _QTY_RE.search(prefix):
+            cleaned = prefix.strip()
+            return cleaned if cleaned else title
+
+        # También stripear si lo que sigue es "Shaker" (accesorio sin cantidad en prefijo)
+        if re.match(r'Shaker\b', suffix_start, re.IGNORECASE):
+            cleaned = prefix.strip()
+            return cleaned if cleaned else title
+
+    return title
+
+
 class OneNutritionScraper(BaseScraper):
     def __init__(self, base_url, headless=False):
         
@@ -113,7 +226,7 @@ class OneNutritionScraper(BaseScraper):
                             title = "N/D"
                             if producto.locator(self.selectors['product_name']).count() > 0:
                                 raw_title = producto.locator(self.selectors['product_name']).first.inner_text()
-                                title = self.clean_text(raw_title)
+                                title = _strip_bundle_suffix(self.clean_text(raw_title))
                             
                             # Brand (inferred)
                             brand = "N/D"

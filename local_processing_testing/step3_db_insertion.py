@@ -292,8 +292,14 @@ def insert_data_bulk(engine, df, db_name="DB"):
         # ------------------------------------------------------------------ #
         print("Preparando lote de Producto-Tienda...")
 
-        links_dedup    = {}
+        links_dedup    = {}   # (pid, tid)      → link dict  — un link por producto+tienda
+        url_dedup      = {}   # (tid, url)       → pid        — para detectar misma URL con distinto producto
+        url_conflict_count = 0
         miss_pid_count = 0
+
+        # Categorías de menor prioridad: si la misma URL aparece en dos categorías,
+        # se prefiere la fila cuya subcategoría NO sea de baja prioridad.
+        LOW_PRIORITY_SUBCATS = {"packs", "ofertas", "promo", "bundle", "outlet"}
 
         for _, row in df.iterrows():
             p_display = row.get('normalized_name', row['product_name'])
@@ -320,20 +326,135 @@ def insert_data_bulk(engine, df, db_name="DB"):
                     print(f"  [DEBUG MISS] PID no encontrado para: '{p_display}', BrandID={b_id}, SubID={s_id}")
                 continue
 
-            key = (pid, t_id)
-            links_dedup[key] = {
+            url  = row['link']
+            lnk  = {
                 "id_producto": pid,
                 "id_tienda":   t_id,
-                "url_link":    row['link'],
+                "url_link":    url,
                 "descripcion": row.get('description', ''),
             }
 
+            # ── Dedup por (tid, url): misma URL en la misma tienda con distinto pid ──
+            # Ocurre cuando el scraper recoge el mismo producto desde dos categorías
+            # distintas (ej. Proteinas y Packs). Preferir la categoría más específica
+            # (no-pack, no-oferta). Si ambas son igual de prioritarias, queda la primera.
+            url_key = (t_id, make_key(url))
+            existing_pid = url_dedup.get(url_key)
+            if existing_pid is not None and existing_pid != pid:
+                url_conflict_count += 1
+                subcat_lower = make_key(str(row.get('subcategory', '')))
+                is_low = any(kw in subcat_lower for kw in LOW_PRIORITY_SUBCATS)
+                if is_low:
+                    # La fila actual es de baja prioridad → ignorar, la anterior gana
+                    continue
+                else:
+                    # La fila actual es más específica → reemplaza la anterior
+                    old_pid = existing_pid
+                    old_key = (old_pid, t_id)
+                    links_dedup.pop(old_key, None)
+
+            url_dedup[url_key] = pid
+
+            # ── Dedup por (pid, tid): mismo producto+tienda, quedarse con este link ──
+            links_dedup[(pid, t_id)] = lnk
+
+        if url_conflict_count > 0:
+            print(f"[WARNING] Fase 2: {url_conflict_count} URL(s) duplicada(s) en el CSV (misma URL, distinto producto) — se conservó la categoría más específica.")
         if miss_pid_count > 0:
             print(f"[WARNING] Fase 2: {miss_pid_count} filas saltadas — producto no encontrado (fallo Fase 1 → 2).")
 
         batch_links = list(links_dedup.values())
         if batch_links:
             print(f"[{db_name}] Insertando/Actualizando {len(batch_links)} enlaces...")
+
+            # ── Paso A: URL remap (bulk) ─────────────────────────────────────
+            # Detecta y resuelve filas en producto_tienda cuya URL coincide con
+            # una del batch pero tiene distinto id_producto. Dos casos:
+            #
+            # A1) El producto destino NO tiene fila para esa tienda todavía:
+            #     → UPDATE id_producto al nuevo (tienda reutilizó la URL).
+            #
+            # A2) El producto destino YA tiene fila para esa tienda:
+            #     → Reasignar historia_precios al winner y eliminar el huérfano
+            #       (era un pack/bundle creado por el scraper anterior).
+            #
+            # Implementación: tabla temporal + CTEs — una sola ida/vuelta a la BD.
+            raw_conn_remap = engine.raw_connection()
+            try:
+                with raw_conn_remap.cursor() as cur:
+                    # 1. Crear tabla temporal con los datos del batch
+                    cur.execute("""
+                        CREATE TEMP TABLE _batch_links (
+                            id_producto  INTEGER,
+                            id_tienda    INTEGER,
+                            url_link     TEXT,
+                            descripcion  TEXT
+                        ) ON COMMIT DROP
+                    """)
+                    psycopg2.extras.execute_values(cur, """
+                        INSERT INTO _batch_links (id_producto, id_tienda, url_link, descripcion)
+                        VALUES %s
+                    """, [(lnk["id_producto"], lnk["id_tienda"], lnk["url_link"], lnk["descripcion"] or "")
+                          for lnk in batch_links])
+
+                    # 2. A2: reasignar historia_precios de huérfanos cuyo destino ya existe
+                    cur.execute("""
+                        UPDATE historia_precios hp
+                        SET id_producto_tienda = winner.id_producto_tienda
+                        FROM producto_tienda orphan
+                        JOIN _batch_links b
+                          ON orphan.id_tienda = b.id_tienda
+                         AND orphan.url_link  = b.url_link
+                         AND orphan.id_producto != b.id_producto
+                        JOIN producto_tienda winner
+                          ON winner.id_producto = b.id_producto
+                         AND winner.id_tienda   = b.id_tienda
+                        WHERE hp.id_producto_tienda = orphan.id_producto_tienda
+                    """)
+                    hp_migrated = cur.rowcount
+
+                    # 3. A2: eliminar huérfanos cuyo destino ya existe
+                    cur.execute("""
+                        DELETE FROM producto_tienda orphan
+                        USING _batch_links b
+                        JOIN producto_tienda winner
+                          ON winner.id_producto = b.id_producto
+                         AND winner.id_tienda   = b.id_tienda
+                        WHERE orphan.id_tienda    = b.id_tienda
+                          AND orphan.url_link     = b.url_link
+                          AND orphan.id_producto != b.id_producto
+                    """)
+                    url_deleted = cur.rowcount
+
+                    # 4. A1: reasignar URL al producto correcto cuando el destino NO existe aún
+                    cur.execute("""
+                        UPDATE producto_tienda pt
+                        SET id_producto        = b.id_producto,
+                            descripcion        = b.descripcion,
+                            is_active          = true,
+                            fecha_ultima_vista = NOW()
+                        FROM _batch_links b
+                        LEFT JOIN producto_tienda dest
+                          ON dest.id_producto = b.id_producto
+                         AND dest.id_tienda   = b.id_tienda
+                        WHERE pt.id_tienda    = b.id_tienda
+                          AND pt.url_link     = b.url_link
+                          AND pt.id_producto != b.id_producto
+                          AND dest.id_producto IS NULL
+                    """)
+                    url_updated = cur.rowcount
+
+                raw_conn_remap.commit()
+            finally:
+                raw_conn_remap.close()
+
+            if url_updated:
+                print(f"[{db_name}] [URL remap] {url_updated} enlace(s) reasignados a nuevo producto (URL reutilizada por la tienda).")
+            if url_deleted:
+                print(f"[{db_name}] [URL remap] {url_deleted} enlace(s) huérfanos eliminados ({hp_migrated} precios reasignados al winner).")
+
+            # ── Paso B: INSERT / UPDATE por (id_producto, id_tienda) ─────────
+            # Después del remap ya no hay riesgo de colisión en uq_tienda_url.
             try:
                 _bulk_execute_values(engine, """
                     INSERT INTO producto_tienda (id_producto, id_tienda, url_link, descripcion, is_active, fecha_ultima_vista)
@@ -352,32 +473,32 @@ def insert_data_bulk(engine, df, db_name="DB"):
 
         # ── Fase 2b: Desactivar productos que ya no aparecen en la tienda ──────
         # Para cada tienda presente en el batch, marcar is_active=false en los
-        # producto_tienda que NO fueron vistos en este run.
+        # producto_tienda que NO fueron vistos en este run (por URL).
         if batch_links:
-            product_ids_by_tienda: dict[int, list[int]] = {}
+            urls_by_tienda: dict[int, list[str]] = {}
             for lnk in batch_links:
                 tid = lnk["id_tienda"]
-                product_ids_by_tienda.setdefault(tid, []).append(lnk["id_producto"])
+                urls_by_tienda.setdefault(tid, []).append(lnk["url_link"])
 
             raw_conn = engine.raw_connection()
             try:
                 deactivated_total = 0
                 with raw_conn.cursor() as cur:
-                    for tid, active_pids in product_ids_by_tienda.items():
+                    for tid, active_urls in urls_by_tienda.items():
                         cur.execute("""
                             UPDATE producto_tienda
                             SET is_active = false
                             WHERE id_tienda = %s
-                              AND id_producto != ALL(%s)
+                              AND url_link != ALL(%s)
                               AND is_active = true
-                        """, (tid, active_pids))
+                        """, (tid, active_urls))
                         deactivated_total += cur.rowcount
                 raw_conn.commit()
             finally:
                 raw_conn.close()
 
             if deactivated_total:
-                print(f"[{db_name}] [is_active] {deactivated_total} producto(s) marcados como inactivos (no encontrados en este run).")
+                print(f"[{db_name}] [is_active] {deactivated_total} producto(s) marcados como inactivos (URL no encontrada en este run).")
         # ────────────────────────────────────────────────────────────────────────
 
         # Retrieve link ID map
