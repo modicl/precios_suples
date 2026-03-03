@@ -8,7 +8,7 @@ from datetime import datetime
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from data_processing_v2.normalize_products import (
+from shared.normalize_products import (
     extract_sizes,
     detect_packaging,
     extract_pack_quantity,

@@ -26,7 +26,7 @@ import sqlalchemy as sa
 from collections import defaultdict
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from tools.db_multiconnect import get_targets
+from shared.db_multiconnect import get_targets
 
 LOW_PRIORITY_KEYWORDS = [
     "oferta", "pack", "promo", "bundle", "especial",

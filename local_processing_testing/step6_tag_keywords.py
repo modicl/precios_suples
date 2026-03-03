@@ -293,7 +293,7 @@ async def run(args):
         print("ERROR: Variable de entorno CHATGPT_MINI4 no encontrada.")
         sys.exit(1)
 
-    from tools.db_multiconnect import get_targets
+    from shared.db_multiconnect import get_targets
     targets = get_targets()
     if not targets:
         print("ERROR: No se encontró ninguna BD configurada en .env")

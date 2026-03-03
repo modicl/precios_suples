@@ -8,7 +8,7 @@ from datetime import datetime
 
 # Add root to path to find tools
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from tools.db_multiconnect import get_targets
+from shared.db_multiconnect import get_targets
 
 
 # ---------------------------------------------------------------------------

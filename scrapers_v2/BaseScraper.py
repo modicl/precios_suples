@@ -10,7 +10,6 @@ import sys
 import os
 import json
 import time
-import ollama
 from datetime import datetime
 from playwright.sync_api import sync_playwright, Page, Playwright
 import boto3
@@ -18,14 +17,10 @@ from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 from rich import print
 
-# Ensure project root is in sys.path to allow importing data_processing
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, '..'))
-if project_root not in sys.path:
-    sys.path.append(project_root)
 
 from BrandClassifier import BrandClassifier
-from tools.categorizer import ProductCategorizer
 
 load_dotenv()
 
@@ -159,9 +154,8 @@ class BaseScraper:
         self.site_name = site_name # Nombre del sitio web
         self.output_suffix = output_suffix
         
-        # Inicializar BrandClassifier y ProductCategorizer (Offline Mode)
+        # Inicializar BrandClassifier
         self.brand_classifier = BrandClassifier()
-        self.categorizer = ProductCategorizer(enable_ai=False)
         self.seen_urls = set()  # For deduplication across categories
 
         # Configuración S3
@@ -214,85 +208,6 @@ class BaseScraper:
         if not self.valid_categories:
              # Fallback default list
              self.valid_categories = ["Proteinas", "Vitaminas", "Creatina", "Aminoacidos"]
-
-    def classify_batch(self, products):
-        """
-        Clasifica una lista de productos usando un LLM (Ollama).
-        """
-        if not products:
-            return []
-            
-        items_to_classify = []
-        for p in products:
-            # Truncate description to avoid massive prompts and timeouts
-            desc = p['description']
-            if desc and len(desc) > 300:
-                desc = desc[:300] + "..."
-                
-            items_to_classify.append({
-                "name": p['product_name'],
-                "description": desc
-            })
-            
-        system_prompt = "Eres un asistente de clasificación de datos experto. Tu tarea es asignar la categoría CORRECTA de la lista proporcionada."
-        user_prompt = f"""
-        INSTRUCCIONES:
-        1. Analiza cada producto (Nombre y Descripción).
-        2. Asigna UNA categoría de la lista de 'Valid Categories'.
-        3. Si es un accesorio (guantes, shaker, etc), usa 'Ofertas' o 'OTROS' si no encaja.
-        4. Responde SOLO con un JSON donde la llave es el nombre exacto del producto.
-
-        Valid Categories: {", ".join(self.valid_categories)}
-        
-        Items:
-        {json.dumps(items_to_classify, ensure_ascii=False)}
-        """
-        
-        try:
-            # Switch to robust model Qwen 2.5 14B and use Client with timeout
-            # Initialize client here or in __init__. initializing here is safer against connection issues if long running.
-            client = ollama.Client(timeout=45) 
-            
-            response = client.chat(model='qwen2.5:14b', messages=[
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': user_prompt},
-            ], format='json', options={'temperature': 0})
-            
-            content = response['message']['content']
-            result = json.loads(content)
-            
-            for p in products:
-                p_name = p['product_name']
-                
-                # Robust key search (Exact -> Case Insensitive -> Fuzzy)
-                val = result.get(p_name)
-                if not val:
-                     for k, v in result.items():
-                         if k.lower().strip() == p_name.lower().strip():
-                             val = v
-                             break
-                
-                cat = 'OTROS'
-                sub = 'OTROS'
-
-                if isinstance(val, str):
-                    cat = val
-                    sub = val # If string, assume category = subcategory
-                elif isinstance(val, dict):
-                    cat = val.get('category', 'OTROS')
-                    sub = val.get('subcategory', 'OTROS')
-                
-                p['category'] = cat
-                p['subcategory'] = sub
-                    
-        except Exception as e:
-            print(f"[red]Error in batch classification (Timeout or other): {e}[/red]")
-            # Fallback to OTROS
-            for p in products:
-                p['category'] = 'OTROS'
-                p['subcategory'] = 'OTROS'
-                
-        return products
 
     def enrich_brand(self, brand: str, product_name: str, scan_title: bool = False) -> str:
         """

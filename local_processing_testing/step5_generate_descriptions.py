@@ -309,7 +309,7 @@ def main():
                         help="Requests paralelos a OpenAI (default: 10)")
     args = parser.parse_args()
 
-    from tools.db_multiconnect import get_targets
+    from shared.db_multiconnect import get_targets
     targets = get_targets()
     print(f"Destinos de BD encontrados: {[t['name'] for t in targets]}")
 
