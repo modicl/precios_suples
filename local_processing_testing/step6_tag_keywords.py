@@ -145,7 +145,7 @@ def get_conn(url: str) -> psycopg2.extensions.connection:
 def fetch_products(conn, *, force: bool) -> list[dict]:
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     # array_length('{}', 1) retorna NULL en PG, cubre tanto NULL como array vacío
-    where = "" if force else "WHERE (p.tags IS NULL OR array_length(p.tags, 1) IS NULL)"
+    where = "WHERE p.nombre_producto != 'N/D'" if force else "WHERE (p.tags IS NULL OR array_length(p.tags, 1) IS NULL) AND p.nombre_producto != 'N/D'"
     cur.execute(f"""
         SELECT
             p.id_producto,

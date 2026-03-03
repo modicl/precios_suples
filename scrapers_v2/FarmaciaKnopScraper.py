@@ -27,8 +27,8 @@ class FarmaciaKnopScraper(BaseScraper):
         # Selectores identificados
         selectors = {
             "product_card": "div.product-item",
-            "name": "h3.product-name a", # Nombre dentro del link
-            "brand": "span.product-vendor", # Marca 
+            "name": "div.product-name a.product-title-link", # Nombre dentro del link
+            "brand": "div.product-brand", # Marca 
             "image": "a.product-link img", # Imagen dentro del link principal
             
             # Link del producto
@@ -150,8 +150,8 @@ class FarmaciaKnopScraper(BaseScraper):
                             raw_name = name_el.inner_text()
                             name = self.clean_text(raw_name)
                         else:
-                            # Fallback: title attribute or text inside h3 a
-                            name_backup = card.locator("h3.product-title a").first
+                            # Fallback: any link inside product-name div
+                            name_backup = card.locator("div.product-name a").first
                             if name_backup.count() > 0:
                                 raw_name = name_backup.get_attribute("title") or name_backup.inner_text()
                                 name = self.clean_text(raw_name)
@@ -170,6 +170,11 @@ class FarmaciaKnopScraper(BaseScraper):
                             href = link_el.get_attribute("href")
                             if href:
                                 link = self.base_url + href if href.startswith('/') else href
+
+                        # Skip productos sin nombre (no contaminan la BD con N/D)
+                        if name == "N/D":
+                            print(f"[yellow]  >> Producto sin nombre omitido (link: {link})[/yellow]")
+                            continue
 
                         # Deduplication Check
                         if link != "N/D" and link in self.seen_urls:

@@ -112,7 +112,7 @@ def get_conn(url: str):
 def fetch_products(conn, *, force: bool) -> list[dict]:
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    where = "" if force else "WHERE p.descripcion_llm IS NULL"
+    where = "WHERE p.nombre_producto != 'N/D'" if force else "WHERE p.descripcion_llm IS NULL AND p.nombre_producto != 'N/D'"
 
     cur.execute(f"""
         SELECT
