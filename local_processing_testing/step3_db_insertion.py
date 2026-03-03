@@ -584,10 +584,6 @@ def insert_data_bulk(engine, df, db_name="DB"):
             print(f"[WARNING] Fase 3: {miss_ptid_count} precios saltados — enlace no encontrado (fallo Fase 2 → 3).")
 
         if prices_batch:
-            print(f"[{db_name}] Eliminando precios del día de hoy antes de reinsertar...")
-            conn.execute(sa.text("DELETE FROM historia_precios WHERE fecha_precio::date = CURRENT_DATE"))
-            conn.commit()
-
             print(f"[{db_name}] Insertando {len(prices_batch)} precios...")
             try:
                 _bulk_execute_values(engine, """
