@@ -15,7 +15,11 @@
       "Bash(docker exec suples-db psql -U root -d suplementos -c \"SELECT schemaname, matviewname FROM pg_matviews;\")",
       "Bash(grep -n \"\\\\\\\\restrict\\\\|\\\\\\\\unrestrict\" migration_dump.sql)",
       "Bash(docker exec suples-db psql -U root -d suplementos -c \":*)",
-      "Bash(python -:*)"
+      "Bash(python -:*)",
+      "Bash(wc:*)",
+      "Bash(find C:\\\\Users\\\\Villa\\\\Documents\\\\proyectos_python\\\\precios_suples\\\\scrapers_v2:*)",
+      "Bash(find C:\\\\Users\\\\Villa\\\\Documents\\\\proyectos_python\\\\precios_suples\\\\local_processing_testing:*)",
+      "mcp__postgres__query"
     ]
   }
 }
