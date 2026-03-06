@@ -1,5 +1,9 @@
-# Scraper para la pagina web ChileSuplementos.cl (Parte 1 de 3)
-# Categorias: Proteinas (todas las subcategorias)
+# Scraper para la pagina web ChileSuplementos.cl (Parte 3 de 3)
+# Categorias: Aminoacidos, Perdida de Grasa, Snacks, Ofertas, Packs
+#
+# IMPORTANTE: Esta parte debe correr DESPUES de que Part1 y Part2 hayan
+# terminado, porque la categoria Ofertas usa SharedSeenUrls para deduplicar
+# contra todos los productos ya scrapeados por las partes anteriores.
 
 from BaseScraper import BaseScraper, SharedSeenUrls
 from CategoryClassifier import CategoryClassifier, normalize
@@ -8,20 +12,27 @@ from datetime import datetime
 import re
 import unicodedata
 
-class ChileSuplementosScraperPart1(BaseScraper):
+class ChileSuplementosScraperPart3(BaseScraper):
     def __init__(self, base_url="https://www.chilesuplementos.cl", headless=False):
 
-        # Parte 1: solo Proteinas (la categoria mas densa del sitio)
+        # Parte 3: Aminoacidos, Perdida de Grasa, Snacks, Ofertas, Packs
         self.category_urls = {
-            "Proteinas": [
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/whey-isolate/", "subcategory": "Whey Isolate"},
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/whey-protein/", "subcategory": "Whey Protein"},
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/hidrolizada/", "subcategory": "Hidrolizada"},
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/caseina/", "subcategory": "Caseina"},
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/clear-protein/", "subcategory": "Clear Protein"},
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/proteina-de-carne/", "subcategory": "Proteina De Carne"},
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/proteina-vegana/", "subcategory": "Proteina Vegana"},
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/tipo-de-proteina/reemplazante-de-comidas/", "subcategory": "Reemplazante De Comidas"}
+            "Aminoacidos y BCAA": [
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/aminoacidos-y-bcaa/", "subcategory": "Aminoacidos Y Bcaa"}
+            ],
+            "Perdida de Grasa": [
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/quemadores-de-grasa/", "subcategory": "Quemadores De Grasa"}
+            ],
+            "Snacks y Comida": [
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/barras-de-proteina/", "subcategory": "Barritas Y Snacks Proteicas"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/alimentos-y-snacks/chips-proteicos-y-otros/", "subcategory": "Chips Proteicos Y Otros"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/mantequilla-de-mani/", "subcategory": "Mantequilla De Mani"}
+            ],
+            "Ofertas": [
+                {"url": "https://www.chilesuplementos.cl/categoria/ofertas/", "subcategory": "Ofertas"}
+            ],
+            "Packs": [
+                {"url": "https://www.chilesuplementos.cl/categoria/packs/", "subcategory": "Packs"}
             ]
         }
 
@@ -36,14 +47,14 @@ class ChileSuplementosScraperPart1(BaseScraper):
             'thumbnail': '.porto-tb-featured-image img, .porto-tb-woo-link img'
         }
 
-        super().__init__(base_url, headless, self.category_urls, selectors, site_name="ChileSuplementos", output_suffix="_part1")
+        super().__init__(base_url, headless, self.category_urls, selectors, site_name="ChileSuplementos", output_suffix="_part3")
         self.classifier = CategoryClassifier()
-        # Registro compartido con Part2 y Part3: las URLs scrapeadas aqui
-        # quedan registradas para que Part3 las omita en la categoria Ofertas.
+        # Registro compartido con Part1 y Part2: lee las URLs ya scrapeadas
+        # para omitirlas en la categoria Ofertas.
         self.shared_ofertas = SharedSeenUrls("chilesuplementos_ofertas")
 
     def extract_process(self, page):
-        print(f"[green]Iniciando scraping ChileSuplementos Parte 1/3 (Proteinas)...[/green]")
+        print(f"[green]Iniciando scraping ChileSuplementos Parte 3/3 (Aminoacidos, Snacks, Ofertas, Packs)...[/green]")
         context = page.context
 
         for main_category, items in self.category_urls.items():
@@ -112,10 +123,17 @@ class ChileSuplementosScraperPart1(BaseScraper):
                                 if link != "N/D" and link in self.seen_urls:
                                     print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
                                     continue
-                                if link != "N/D":
+                                # Para la categoria Ofertas: verificar si Part1 o Part2 ya la scrapearon.
+                                # register() es atomico: check + insert bajo lock.
+                                # Retorna False si ya existia → omitir.
+                                if link != "N/D" and main_category == "Ofertas":
+                                    if not self.shared_ofertas.register(link):
+                                        print(f"[yellow]  >> Oferta ya scrapeada por Part1/Part2, omitida: {title}[/yellow]")
+                                        continue
                                     self.seen_urls.add(link)
-                                    # Registrar en el store compartido para que Part3
-                                    # omita este producto en la categoria Ofertas.
+                                elif link != "N/D":
+                                    self.seen_urls.add(link)
+                                    # Registrar en shared por si hubiera overlap interno
                                     self.shared_ofertas.register(link)
 
                                 # Thumbnail
@@ -367,5 +385,5 @@ class ChileSuplementosScraperPart1(BaseScraper):
                     print(f"[red]Error categoría {url}: {e}[/red]")
 
 if __name__ == "__main__":
-    scraper = ChileSuplementosScraperPart1(headless=True)
+    scraper = ChileSuplementosScraperPart3(headless=True)
     scraper.run()

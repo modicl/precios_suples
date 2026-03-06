@@ -1,5 +1,5 @@
-# Scraper para la pagina web ChileSuplementos.cl (Parte 2)
-# Contiene Infinite Scroll y a veces un boton "Cargar más"
+# Scraper para la pagina web ChileSuplementos.cl (Parte 2 de 3)
+# Categorias: Creatinas, Vitaminas y Minerales, Pre Entrenos, Ganadores de Peso
 
 from BaseScraper import BaseScraper, SharedSeenUrls
 from CategoryClassifier import CategoryClassifier, normalize
@@ -11,67 +11,79 @@ import unicodedata
 class ChileSuplementosScraperPart2(BaseScraper):
     def __init__(self, base_url="https://www.chilesuplementos.cl", headless=False):
 
-        # Categorias y sus URLs (Parte 2: Resto de categorías)
+        # Parte 2: Creatinas, Vitaminas, Pre Entrenos, Ganadores
         self.category_urls = {
-            "Aminoacidos y BCAA": [
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/aminoacidos-y-bcaa/", "subcategory": "Aminoacidos Y Bcaa"}
+            "Creatinas": [
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/monohidratada/", "subcategory": "Monohidratada"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/micronizada/", "subcategory": "Micronizada"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/con-sello-creapure/", "subcategory": "Con Sello Creapure"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/malato/", "subcategory": "Malato"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/creatinas/tipo-de-creatina/creatina-hcl/", "subcategory": "Creatina Hcl"}
             ],
-            "Perdida de Grasa": [
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/quemadores-de-grasa/", "subcategory": "Quemadores De Grasa"}
+            "Vitaminas y Minerales": [
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-b/", "subcategory": "Vitamina B"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-c/", "subcategory": "Vitamina C"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-d/", "subcategory": "Vitamina D"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/vitamina-k/", "subcategory": "Vitamina K"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/vitaminas-y-wellness/vitaminas/multivitaminicos/", "subcategory": "Multivitaminicos"}
             ],
-            "Snacks y Comida": [
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/barras-de-proteina/", "subcategory": "Barritas Y Snacks Proteicas"},
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/alimentos-y-snacks/chips-proteicos-y-otros/", "subcategory": "Chips Proteicos Y Otros"},
-                {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/mantequilla-de-mani/", "subcategory": "Mantequilla De Mani"}
+            "Pre Entrenos": [
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/cafeina/", "subcategory": "Cafeina"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/beta-alanina/", "subcategory": "Beta Alanina"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/arginina/", "subcategory": "Arginina"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/energeticas/", "subcategory": "Energeticas"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/snacks-y-comida/cafe/cafe-en-grano/", "subcategory": "Cafe En Grano"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/requerimientos-especiales-pre-entrenos/libre-de-estimulantes/", "subcategory": "Libre De Estimulantes"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/taurina/", "subcategory": "Taurina"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/guarana/", "subcategory": "Guarana"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/shots-y-geles/", "subcategory": "Shots Y Geles"},
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/pre-entrenos/requerimientos-especiales-pre-entrenos/alto-en-estimulantes/", "subcategory": "Alto En Estimulantes"}
             ],
-            "Ofertas": [
-                {"url": "https://www.chilesuplementos.cl/categoria/ofertas/", "subcategory": "Ofertas"}
-            ],
-            "Packs": [
-                {"url": "https://www.chilesuplementos.cl/categoria/packs/", "subcategory": "Packs"}
+            "Ganadores de Peso": [
+                {"url": "https://www.chilesuplementos.cl/categoria/productos/ganadores-de-peso/", "subcategory": "Ganadores De Peso"}
             ]
         }
-        
+
         selectors = {
-            'product_card': '.archive-products .porto-tb-item', 
+            'product_card': '.archive-products .porto-tb-item',
             'product_name': '.post-title',
             'price': '.price',
             'link': '.post-title a',
             'rating': '.star-rating',
             'active_discount': '.onsale',
             'next_button': '.archive-products .next.page-numbers',
-            'thumbnail': '.porto-tb-featured-image img, .porto-tb-woo-link img' # Better grid selectors
+            'thumbnail': '.porto-tb-featured-image img, .porto-tb-woo-link img'
         }
-        
+
         super().__init__(base_url, headless, self.category_urls, selectors, site_name="ChileSuplementos", output_suffix="_part2")
         self.classifier = CategoryClassifier()
-        # Registro compartido con Part1: mismo archivo JSON en disco
+        # Registro compartido con Part1 y Part3
         self.shared_ofertas = SharedSeenUrls("chilesuplementos_ofertas")
 
     def extract_process(self, page):
-        print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en ChileSuplementos (Parte 2)...[/green]")
+        print(f"[green]Iniciando scraping ChileSuplementos Parte 2/3 (Creatinas, Vitaminas, PreEntrenos, Ganadores)...[/green]")
         context = page.context
-        
+
         for main_category, items in self.category_urls.items():
             for item in items:
                 url = item['url']
                 deterministic_subcategory = item['subcategory']
-                
+
                 if not deterministic_subcategory or not deterministic_subcategory.strip():
                     deterministic_subcategory = "N/D"
 
                 print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {deterministic_subcategory} ({url})")
 
-                
+
                 try:
                     page.goto(url, wait_until="load", timeout=60000)
-                    
+
                     last_product_count = 0
                     no_change_counter = 0
-                    
+
                     while True:
                         try:
-                            if last_product_count == 0: 
+                            if last_product_count == 0:
                                 print("  > Esperando selector de productos...")
                                 page.wait_for_selector(self.selectors['product_card'], state="attached", timeout=30000)
                         except:
@@ -80,25 +92,22 @@ class ChileSuplementosScraperPart2(BaseScraper):
 
                         producto_cards = page.locator(self.selectors['product_card'])
                         current_product_count = producto_cards.count()
-                        
+
                         if current_product_count > last_product_count:
                             print(f"Indexando productos del {last_product_count + 1} al {current_product_count}...")
-                            
+
                             for i in range(last_product_count, current_product_count):
                                 producto = producto_cards.nth(i)
                                 current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                
+
                                 # Title
                                 title = "N/D"
-                                title_elem = producto.locator(self.selectors['product_name']) 
+                                title_elem = producto.locator(self.selectors['product_name'])
                                 if title_elem.count() > 0:
                                     raw_title = title_elem.first.inner_text()
                                     title = self.clean_text(raw_title)
-                                
+
                                 # Brand — extraída de las clases CSS del card (pwb-brand-<slug>)
-                                # El sitio no renderiza un elemento dedicado visible con el
-                                # selector '.tb-meta-pwb-brand'; la única fuente confiable
-                                # en la grilla es la clase del propio <div> del producto.
                                 brand = "N/D"
                                 card_classes = producto.get_attribute("class") or ""
                                 brand_slugs = [
@@ -109,7 +118,6 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                 if brand_slugs:
                                     brand = " / ".join(brand_slugs)
 
-                                    
                                 # Link
                                 link = "N/D"
                                 link_elem = producto.locator(self.selectors['link']).first
@@ -122,46 +130,33 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                 if link != "N/D" and link in self.seen_urls:
                                     print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
                                     continue
-                                # Para la categoría Ofertas, register() hace check + insert
-                                # de forma atómica. Si retorna False, Part1 ya lo scrapeó.
-                                if link != "N/D" and main_category == "Ofertas":
-                                    if not self.shared_ofertas.register(link):
-                                        print(f"[yellow]  >> Oferta ya scrapeada por Part1, omitida: {title}[/yellow]")
-                                        continue
-                                    # register() ya lo insertó, solo queda el seen_urls local
+                                if link != "N/D":
                                     self.seen_urls.add(link)
-                                elif link != "N/D":
-                                    self.seen_urls.add(link)
-                                    # También registrar en shared para que Ofertas no vea
-                                    # duplicados de las propias categorías de Part2
+                                    # Registrar en el store compartido para que Part3
+                                    # omita este producto en la categoria Ofertas.
                                     self.shared_ofertas.register(link)
 
                                 # Thumbnail
                                 thumbnail_url = ""
                                 thumb_elem = producto.locator(self.selectors['thumbnail']).first
                                 if thumb_elem.count() > 0:
-                                    # Prioritize lazy loading attributes
                                     possible_srcs = [
                                         thumb_elem.get_attribute("data-src"),
                                         thumb_elem.get_attribute("data-lazy-src"),
                                         thumb_elem.get_attribute("srcset"),
                                         thumb_elem.get_attribute("src")
                                     ]
-                                    
+
                                     for src in possible_srcs:
                                         if src:
-                                            # Handle srcset
                                             if "," in src:
                                                 src = src.split(",")[0].split(" ")[0]
-                                            
-                                            # Filter placeholders
                                             lower_src = src.lower()
                                             if "placeholder" in lower_src or "logo" in lower_src or ".svg" in lower_src or "data:image" in lower_src:
                                                 continue
-                                                
                                             thumbnail_url = src
                                             break
-                                
+
                                 # Price
                                 price = 0
                                 price_elem = producto.locator(self.selectors['price'])
@@ -171,7 +166,7 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                         price_text = amounts.last.inner_text()
                                     else:
                                         price_text = price_elem.first.inner_text()
-                                    
+
                                     if "-" in price_text:
                                         price_text = price_text.split("-")[0]
                                     try:
@@ -182,7 +177,7 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                         pass
 
                                 # Rating
-                                rating = "0" 
+                                rating = "0"
                                 rating_elem = producto.locator(self.selectors['rating'])
                                 if rating_elem.count() > 0:
                                     data_title = rating_elem.first.get_attribute("data-bs-original-title")
@@ -192,7 +187,7 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                         strong_rating = rating_elem.locator("strong.rating")
                                         if strong_rating.count() > 0:
                                             rating = strong_rating.first.inner_text().strip()
-                                
+
                                 # Active Discount
                                 active_discount = False
                                 if producto.locator(self.selectors['active_discount']).count() > 0:
@@ -202,19 +197,13 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                 image_url = ""
                                 sku = ""
                                 description = ""
-                                
+
                                 if link != "N/D":
                                     detail_page = None
                                     try:
                                         detail_page = context.new_page()
                                         detail_page.goto(link, wait_until="load", timeout=40000)
-                                        
-                                        # 1. Main Image
-                                        # Priority: Open Graph > JSON-LD > DOM
-                                        
-                                        # Open Graph
-                                        # Filtramos el favicon/logo del sitio que WooCommerce usa como fallback
-                                        # cuando el producto no tiene imagen o la pagina no cargó del todo
+
                                         SITE_LOGO_PATTERNS = ("cropped-favicon", "cropped-logo", "/favicon")
                                         try:
                                             og_img = detail_page.locator('meta[property="og:image"]').first.get_attribute('content')
@@ -222,7 +211,6 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                                 image_url = og_img
                                         except: pass
 
-                                        # JSON-LD (if OG failed)
                                         if not image_url:
                                             try:
                                                 json_img = detail_page.evaluate('''() => {
@@ -243,20 +231,17 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                                     image_url = json_img
                                             except: pass
 
-                                        # DOM Fallback
                                         if not image_url:
                                             img_selectors = ['.woocommerce-product-gallery__image img', '.porto-product-main-image img', '.product-images img']
                                             for sel in img_selectors:
                                                 img_el = detail_page.locator(sel).first
                                                 if img_el.count() > 0:
-                                                    # Prioritize high-res attributes
                                                     possible_srcs = [
                                                         img_el.get_attribute("data-large_image"),
                                                         img_el.get_attribute("data-src"),
                                                         img_el.get_attribute("href"),
                                                         img_el.get_attribute("src")
                                                     ]
-                                                    
                                                     for src in possible_srcs:
                                                         if src:
                                                             lower_src = src.lower()
@@ -266,25 +251,20 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                                             break
                                                     if image_url:
                                                         break
-                                        
-                                        # 2. SKU
+
                                         sku_el = detail_page.locator('.sku, [itemprop="sku"]').first
                                         if sku_el.count() > 0:
                                             sku = sku_el.inner_text().strip()
-                                        
-                                        # 3. Description
-                                        # Prioridad: short-description (resumen) → tab-description (contenido completo)
+
                                         short_desc_el = detail_page.locator('.woocommerce-product-details__short-description').first
                                         if short_desc_el.count() > 0:
                                             description = short_desc_el.inner_text().strip()
-                                        
-                                        # Si short-description está vacío, intentar con el tab completo
+
                                         if not description:
                                             tab_desc_el = detail_page.locator('#tab-description').first
                                             if tab_desc_el.count() > 0:
                                                 description = tab_desc_el.inner_text().strip()
-                                        
-                                        # Último recurso: JSON-LD description
+
                                         if not description:
                                             try:
                                                 jsonld_desc = detail_page.evaluate('''() => {
@@ -307,33 +287,25 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                         try: detail_page.close()
                                         except: pass
 
-                                # --- IMPLEMENTACIÓN DE DESCARGA ---
-                                # Definir una subcarpeta limpia basada en el nombre del sitio
                                 site_folder = self.site_name.replace(" ", "_").lower()
 
-                                # Descargar Thumbnail
                                 if thumbnail_url:
                                     local_thumb = self.download_image(thumbnail_url, subfolder=site_folder)
                                     if local_thumb:
                                         thumbnail_url = local_thumb
 
-                                # Descargar Imagen Principal
                                 if image_url:
                                     local_img = self.download_image(image_url, subfolder=site_folder)
                                     if local_img:
                                         image_url = local_img
 
-                                # Clasificación heurística via CategoryClassifier
                                 final_category, final_subcategory = self.classifier.classify(
                                     title, description, main_category, deterministic_subcategory, brand
                                 )
 
-                                # ── Overrides específicos ChileSuplementos Part2 ─────────────────
                                 title_lower_cs = title.lower()
                                 title_norm_cs = normalize(title_lower_cs)
 
-                                # 1. "+Shaker" pegado: typo del sitio, el shaker va incluido en el
-                                #    envase. Reclasificamos según el contenido real del título limpio.
                                 if re.search(r'\+shaker', title_lower_cs):
                                     clean_title = re.sub(r'\+shaker\b', '', title, flags=re.IGNORECASE).strip()
                                     clean_norm = normalize(clean_title.lower())
@@ -348,13 +320,9 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                     if inferred_cat != "Packs":
                                         final_category, final_subcategory = inferred_cat, inferred_sub
 
-                                # 2. Bebidas energéticas en Ofertas: el sitio las mezcla con
-                                #    cualquier categoría; el classifier no puede redirigirlas
-                                #    porque "Ofertas" no tiene rama en el paso 4.
                                 elif self.classifier._any(title_norm_cs, self.classifier._bebidas["bebidas_energeticas"]):
                                     final_category, final_subcategory = "Bebidas Nutricionales", "Bebidas Energéticas"
 
-                                # 3. Gainers publicados en Snacks por error del sitio.
                                 elif self.classifier._any(title_norm_cs, self.classifier._ganadores["ganadores"]):
                                     final_category, final_subcategory = "Ganadores de Peso", "Ganadores De Peso"
 
@@ -375,21 +343,19 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                     'sku': sku,
                                     'description': description
                                 }
-                            
+
                             last_product_count = current_product_count
-                            no_change_counter = 0 
+                            no_change_counter = 0
                         else:
                             no_change_counter += 1
-                        
-                        # Check if we should stop before trying to load more
+
                         if no_change_counter >= 2:
                             print("Se ha llegado al final del scroll.")
                             break
 
-                        # Pagination logic
                         load_more_btn = page.locator(self.selectors['next_button'])
                         clicked = False
-                        
+
                         if load_more_btn.count() > 0 and load_more_btn.first.is_visible():
                             print(f"  > Botón 'Cargar más' detectado.")
                             try:
@@ -402,24 +368,19 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                     clicked = True
                                 except Exception as e_js:
                                     print(f"[red]  > Falló click JS también: {e_js}[/red]")
-                        
+
                         if not clicked:
-                            # Scroll if button wasn't clicked
                             print(f"  > Buscando scroll...")
                             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                        
-                        # Smart wait for products to increase
+
                         try:
-                            # Wait up to 3 seconds for new products to appear
-                            # This is much faster than static sleep(5) or sleep(2)
                             page.wait_for_function(
                                 f"document.querySelectorAll('{self.selectors['product_card']}').length > {last_product_count}",
                                 timeout=3000
                             )
                         except:
-                            # Timeout is expected when we reach the end
                             pass
-                    
+
                 except Exception as e:
                     print(f"[red]Error categoría {url}: {e}[/red]")
 
