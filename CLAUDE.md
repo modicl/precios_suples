@@ -88,11 +88,35 @@ Step 7: Refresh materialized views
 
 - **`main.py`** — Cloud Run entrypoint; reads `START_INDEX`/`END_INDEX` env vars to shard scrapers across containers
 - **`scrapers_v2/BaseScraper.py`** — Playwright-based base class; all store scrapers extend this
+- **`scrapers_v2/RunAll.py`** — Launches all scrapers in parallel, streams logs, generates post-run report with anomaly detection
 - **`scrapers_v2/BrandClassifier.py`** / **`CategoryClassifier.py`** — Keyword-based auto-classification
 - **`scrapers_v2/diccionarios/`** — JSON keyword files used by classifiers during scraping
 - **`shared/normalize_products.py`** — Core text normalization: size/flavor/packaging extraction, clustering helpers
 - **`shared/db_multiconnect.py`** — Returns SQLAlchemy engine for local or production DB based on target arg
 - **`local_processing_testing/dictionaries/`** — Keyword JSON files used by Step 6 for LLM tag selection
+
+### Scraper Architecture: Runners y Partes Paralelas
+
+Las tiendas con mayor volumen están divididas en partes que corren en paralelo dentro de su Runner. Cada parte cubre un subconjunto de categorías y escribe su propio CSV (`site_name_partN.csv`).
+
+| Runner | Partes | Estrategia |
+|--------|--------|------------|
+| `ChileSuplementosScraperRunner.py` | Part1 + Part2 + Part3 | Part1+Part2 paralelo → Part3 secuencial (Ofertas dedup via `SharedSeenUrls`) |
+| `SportNutriShopScraperRunner.py` | Part1 + Part2 + Part3 | Paralelo total |
+| `AllNutritionScraperRunner.py` | Part1 + Part2 | Paralelo total |
+| `BYONScraperRunner.py` | Part1 + Part2 | Paralelo total |
+| `SuplesScraperRunner.py` | Part1 + Part2 | Paralelo total |
+
+**Regla:** Todos los runners aceptan `--headless` como argumento CLI y están declarados en `RUNNER_SCRIPTS` dentro de `RunAll.py`. Los scrapers monolíticos tienen `headless=True` hardcodeado en su `__main__`.
+
+### RunAll — Reporte Post-Scrapeo
+
+Al finalizar todos los scrapers, `RunAll.py` genera automáticamente `logs/reporte_total/reporte_YYYY-MM-DD_HH-MM-SS.txt` con:
+
+- Productos encontrados por tienda (contando filas en `raw_data/*.csv` modificados durante el run)
+- Comparación contra promedio diario de los últimos 14 días (desde `historia_precios` vía psycopg2 local)
+- **Anomalía** si `count < 70%` del promedio histórico → advertencia en consola y en el reporte
+- Duración total y estado (OK/FALLO) por scraper
 
 ### Database Schema (PostgreSQL + Prisma)
 
@@ -106,10 +130,6 @@ Schema defined in `bd/prisma/schema.prisma`. Core tables:
 - **`usuarios`**, **`favoritos`**, **`alertas`** — User features
 - **`click_analytics`**, **`search_analytics`** — Frontend analytics
 
-### Cross-Process Deduplication
-
-`SharedSeenUrls` in `BaseScraper.py` uses a file-based lock to deduplicate URLs across parallel scraper processes without race conditions.
-
 ### Normalization Logic
 
 Step 2 uses `token_set_ratio` fuzzy matching with hard blockers to prevent false merges:
@@ -118,9 +138,15 @@ Step 2 uses `token_set_ratio` fuzzy matching with hard blockers to prevent false
 - Keyword mismatches (e.g., "hidrolizada" vs. standard whey) block pairing
 - Products with different cacao percentages are kept separate
 
+### Cross-Process URL Deduplication
+
+`SharedSeenUrls` en `BaseScraper.py` usa un lock basado en archivo para deduplicar URLs entre procesos paralelos sin race conditions. Crítico en `ChileSuplementos`: la categoría Ofertas (Part3) espera a que Part1+Part2 registren sus URLs antes de ejecutarse.
+
 ### Performance Notes
 
 Step 3 was rewritten (Feb 2026) from Python loops to SQL bulk operations (`psycopg2.execute_values` + temp tables), reducing runtime from ~15 min to ~2 sec.
+
+Scrapers divididos en partes paralelas (Mar 2026): ChileSuplementos (3 partes), SportNutriShop (3 partes), AllNutrition (2), BYON (2), Suples.cl (2). Reduce el tiempo total de scraping al paralelizar las categorías más voluminosas.
 
 ## Configuration (`.env`)
 

@@ -29,29 +29,43 @@ timeout /t 1 >nul
 goto menu
 
 :paralelo_total
-cls
-echo.
-echo  Iniciando todos los scrapers en paralelo...
-echo.
-"%VENV_PYTHON%" "%SCRIPT%"
-goto resultado
+set "EXEC_ARGS="
+goto ask_api_mode
 
 :paralelo_limitado
 cls
 echo.
 set /p "workers=  Cuantos scrapers en paralelo? [ej: 4]: "
-echo.
-echo  Iniciando %workers% scrapers en paralelo...
-echo.
-"%VENV_PYTHON%" "%SCRIPT%" --workers %workers%
-goto resultado
+set "EXEC_ARGS=--workers %workers%"
+goto ask_api_mode
 
 :secuencial
+set "EXEC_ARGS=--seq"
+goto ask_api_mode
+
+:ask_api_mode
 cls
 echo.
-echo  Iniciando scrapers en modo secuencial...
+echo  ===================================================
+echo   Modo de scraping para tiendas VTEX
+echo   (SupleTech + SuplementosMayoristas)
+echo  ===================================================
 echo.
-"%VENV_PYTHON%" "%SCRIPT%" --seq
+echo   S. API directa   (sin browser, ~10x mas rapido)
+echo   N. Tradicional   (Playwright, mismo modo que el resto)
+echo.
+set /p "api_opcion=  Usar modo API para VTEX? [S/N]: "
+
+if /i "%api_opcion%"=="S" set "EXEC_ARGS=%EXEC_ARGS% --api_mode"
+goto ejecutar
+
+:ejecutar
+cls
+echo.
+echo  Iniciando scrapers...
+if not "%EXEC_ARGS%"=="" echo  Argumentos: %EXEC_ARGS%
+echo.
+"%VENV_PYTHON%" "%SCRIPT%" %EXEC_ARGS%
 goto resultado
 
 :resultado

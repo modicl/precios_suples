@@ -31,4 +31,8 @@ bd/
 .opencode/
 img_debugging/
 .obsidian/
+docs/
+.playwright-mcp/
+aws/
+
 

@@ -19,7 +19,19 @@
       "Bash(wc:*)",
       "Bash(find C:\\\\Users\\\\Villa\\\\Documents\\\\proyectos_python\\\\precios_suples\\\\scrapers_v2:*)",
       "Bash(find C:\\\\Users\\\\Villa\\\\Documents\\\\proyectos_python\\\\precios_suples\\\\local_processing_testing:*)",
-      "mcp__postgres__query"
+      "mcp__postgres__query",
+      "mcp__jcodemunch__index_folder",
+      "mcp__jcodemunch__search_symbols",
+      "mcp__jcodemunch__get_file_outline",
+      "mcp__jcodemunch__get_symbols",
+      "mcp__jcodemunch__search_text",
+      "Bash(PGPASSWORD=root psql:*)",
+      "Bash(docker exec:*)",
+      "Bash(ls:*)",
+      "Read(//c/Users/Villa/**)",
+      "Bash(python:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_evaluate"
     ]
   }
 }

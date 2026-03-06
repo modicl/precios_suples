@@ -281,7 +281,7 @@ class BaseScraper:
         log_dir = os.path.join("logs", site_folder)
         os.makedirs(log_dir, exist_ok=True)
 
-        log_file = os.path.join(log_dir, f"execution_{datetime.now().strftime('%Y-%m-%d')}.log")
+        log_file = os.path.join(log_dir, f"execution_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
 
         # Configurar logger
         logger_name = f"Scraper_{self.site_name}"
@@ -518,7 +518,7 @@ class BaseScraper:
             os.makedirs(output_dir, exist_ok=True)
             
             # Nombre del archivo CSV estandarizado dentro de raw_data
-            csv_filename = f"productos_{self.site_name.replace(' ', '_').lower()}{self.output_suffix}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+            csv_filename = f"productos_{self.site_name.replace(' ', '_').lower()}{self.output_suffix}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv"
             csv_file = os.path.join(output_dir, csv_filename)
             
             csv_headers = ['date', 'site_name', 'category', 'subcategory', 'product_name', 'brand', 'price', 'link', 'rating', 'reviews', 'active_discount', 'thumbnail_image_url', 'image_url', 'sku', 'description']

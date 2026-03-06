@@ -147,14 +147,18 @@ class FarmaciaKnopScraper(BaseScraper):
                         name = "N/D"
                         name_el = card.locator(self.selectors['name']).first
                         if name_el.count() > 0:
-                            raw_name = name_el.inner_text()
+                            # title attr es HTML estático (no depende de render JS, más fiable en headless)
+                            raw_name = name_el.get_attribute("title") or name_el.inner_text()
                             name = self.clean_text(raw_name)
-                        else:
-                            # Fallback: any link inside product-name div
-                            name_backup = card.locator("div.product-name a").first
-                            if name_backup.count() > 0:
-                                raw_name = name_backup.get_attribute("title") or name_backup.inner_text()
-                                name = self.clean_text(raw_name)
+
+                        # Fallback: aria-label del link de imagen ("Ver detalles del producto {name}")
+                        if not name or name == "N/D":
+                            img_link = card.locator("a.product-link[aria-label]").first
+                            if img_link.count() > 0:
+                                aria = img_link.get_attribute("aria-label") or ""
+                                prefix = "Ver detalles del producto "
+                                if aria.startswith(prefix):
+                                    name = self.clean_text(aria[len(prefix):])
 
                         brand = "N/D"
                         brand_el = card.locator(self.selectors['brand']).first
@@ -171,8 +175,8 @@ class FarmaciaKnopScraper(BaseScraper):
                             if href:
                                 link = self.base_url + href if href.startswith('/') else href
 
-                        # Skip productos sin nombre (no contaminan la BD con N/D)
-                        if name == "N/D":
+                        # Skip productos sin nombre (no contaminan la BD con N/D ni strings vacios)
+                        if not name or name == "N/D":
                             print(f"[yellow]  >> Producto sin nombre omitido (link: {link})[/yellow]")
                             continue
 

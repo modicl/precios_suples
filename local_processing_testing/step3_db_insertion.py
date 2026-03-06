@@ -267,11 +267,23 @@ def insert_data_bulk(engine, df, db_name="DB"):
                     INSERT INTO productos (nombre_producto, url_imagen, url_thumb_imagen, id_marca, id_subcategoria)
                     VALUES %s
                     ON CONFLICT (nombre_producto, id_marca, id_subcategoria)
-                    DO UPDATE SET url_imagen = CASE
-                        WHEN EXCLUDED.url_imagen IS NOT NULL AND EXCLUDED.url_imagen != ''
-                        THEN EXCLUDED.url_imagen
-                        ELSE productos.url_imagen
-                    END
+                    DO UPDATE SET
+                        url_imagen = CASE
+                            WHEN EXCLUDED.url_imagen LIKE '%%suplescrapper-images%%'
+                                THEN EXCLUDED.url_imagen
+                            WHEN (productos.url_imagen IS NULL OR productos.url_imagen = '')
+                                AND EXCLUDED.url_imagen IS NOT NULL AND EXCLUDED.url_imagen != ''
+                                THEN EXCLUDED.url_imagen
+                            ELSE productos.url_imagen
+                        END,
+                        url_thumb_imagen = CASE
+                            WHEN EXCLUDED.url_thumb_imagen LIKE '%%suplescrapper-images%%'
+                                THEN EXCLUDED.url_thumb_imagen
+                            WHEN (productos.url_thumb_imagen IS NULL OR productos.url_thumb_imagen = '')
+                                AND EXCLUDED.url_thumb_imagen IS NOT NULL AND EXCLUDED.url_thumb_imagen != ''
+                                THEN EXCLUDED.url_thumb_imagen
+                            ELSE productos.url_thumb_imagen
+                        END
                 """, [
                     (p["nombre_producto"], p["url_imagen"], p["url_thumb_imagen"], p["id_marca"], p["id_subcategoria"])
                     for p in batch_products
