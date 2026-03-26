@@ -23,11 +23,12 @@ class DrSimiScraper(BaseScraper):
         # Selectores VTEX identification
         selectors = {
             "product_card": ".vtex-product-summary-2-x-container",
-            "product_name": ".vtex-product-summary-2-x-brandName",
+            "product_name": ".vtex-product-summary-2-x-productNameContainer",
             "price_container": ".vtex-product-price-1-x-sellingPriceValue--summary",
             "link": "a.vtex-product-summary-2-x-clearLink",
             "image": "img.vtex-product-summary-2-x-image",
-            
+            "brand": ".vtex-product-summary-2-x-productBrandName",
+
             # Selectores de página de detalle
             "detail_image": ".vtex-store-components-3-x-productImageTag",
             "description": ".vtex-store-components-3-x-productDescriptionText"
@@ -262,14 +263,12 @@ class DrSimiScraper(BaseScraper):
                         if card.locator(self.selectors['image']).count() > 0:
                             image_url = card.locator(self.selectors['image']).first.get_attribute("src")
 
-                        # Brand Logic: 
-                        # - If category is "Pronutrition", brand is "Pronutrition"
-                        # - Otherwise, Dr Simi doesn't show brand in list. 
-                        # - We could check the name for "Simi" or just "Dr Simi" as default or "N/D"
+                        # Brand Logic: extraer directamente del grid (Dr Simi ahora muestra marca en listing)
                         brand = "N/D"
-                        if main_category == "Pronutrition":
-                            brand = "Pronutrition"
-                        elif "simi" in name.lower():
+                        if card.locator(self.selectors['brand']).count() > 0:
+                            raw_brand = card.locator(self.selectors['brand']).first.inner_text()
+                            brand = self.clean_text(raw_brand)
+                        if brand in ["N/D", "ND", ""] and "simi" in name.lower():
                             brand = "Dr Simi"
                         
                         brand = self.clean_text(brand)
