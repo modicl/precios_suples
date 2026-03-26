@@ -2,6 +2,97 @@
 
 ---
 
+## [2026-03-26] - Nuevo scraper OutletFit, migración Winkler a Shopify, step8 notificaciones y fix DrSimi
+
+### Nuevas funcionalidades
+
+#### `scrapers_v2/OutletFitScraper.py` — nuevo scraper Jumpseller
+- Tienda OutletFit agregada al pipeline completo.
+- Extracción via JSON-LD en página de detalle de producto (~73 productos, 10 categorías).
+- `CategoryClassifier.classify()` retorna tupla `(cat, subcat)`, adaptado correctamente.
+- Registrado en `RUNNER_SCRIPTS` dentro de `RunAll.py`.
+
+#### `local_processing_testing/step8_trigger_notificaciones.py` — trigger de alertas de precio
+- Nuevo paso final del pipeline: dispara notificaciones de precio en producción tras completar el ciclo de procesamiento.
+- Integrado en `main.py` (Cloud Run) y `run_pipeline.bat`.
+
+### Migraciones
+
+#### `scrapers_v2/WinklerNutritionScraper.py` — WooCommerce → Shopify
+- Winkler Nutrition migró su tienda a Shopify en 2026.
+- El scraper ahora apunta a la colección única `/collections/nuestros-productos`.
+- Eliminadas las categorías hardcodeadas por URL; se delega clasificación completa a `CategoryClassifier`.
+
+### Correcciones
+
+#### `scrapers_v2/DrSimiScraper.py` — selector de nombre y extracción de marca desde el grid
+- **Bug**: selector `product_name` apuntaba a `.vtex-product-summary-2-x-brandName` (devolvía solo la marca, ej. "Pronutrition"), en lugar del nombre completo del producto.
+- **Fix**: cambiado a `.vtex-product-summary-2-x-productNameContainer` (el `<h3>` con el nombre completo).
+- **Mejora**: Dr Simi ahora expone la marca en el grid. Se agrega selector `brand: .vtex-product-summary-2-x-productBrandName` y se reemplaza el hardcode de marca por categoría (`main_category == "Pronutrition"` → `"Pronutrition"`) por extracción DOM directa.
+
+### Otros
+- `scrapers_v2/diccionarios/keywords_marcas.json`: nuevas marcas incorporadas.
+- `RunAll.py`: función `_count_products_from_csvs_detailed` para reporte granular por CSV.
+- README reescrito completamente reflejando el estado actual del proyecto.
+
+---
+
+## [2026-03-06] - Scrapers paralelos, VTEX API, QA pre-carga, reporte RunAll y fixes varios
+
+### Nuevas funcionalidades
+
+#### División de scrapers en partes paralelas
+- Tiendas de alto volumen divididas en `Part1`, `Part2`, `Part3` con runners dedicados que las lanzan en paralelo.
+- **ChileSuplementos**: Part1 + Part2 en paralelo → Part3 secuencial (Part3 tiene Ofertas con `SharedSeenUrls`).
+- **SportNutriShop**: Part1 + Part2 + Part3 paralelo total.
+- **AllNutrition**, **BYON**, **Suples.cl**, **FarmaciaKnopp**, **CruzVerde**: Part1 + Part2 paralelo total.
+- Reduce el tiempo total de scraping al paralelizar las categorías más voluminosas.
+
+#### Scrapers VTEX API — `SupleTechApiScraper.py` y `SuplementosMayoristasApiScraper.py`
+- Nuevos scrapers que consultan la VTEX Catalog API directamente, sin Playwright (~10x más rápido).
+- SupleTech: 21 categorías, ~1-2 min (vs ~21 min browser).
+- SuplementosMayoristas: 15 categorías, ~1-2 min.
+- Activar con `--api_mode` en `RunAll.py` o seleccionando `S` en `run_scrapers.bat`.
+
+#### `check_data_quality.py` — sistema QA pre-carga
+- Script a ejecutar después de `run_scrapers.bat` y antes de `run_pipeline.bat`.
+- Analiza todos los CSVs en `raw_data/` sin modificar datos ni detener el flujo.
+- Checks: schema/tipos, nulos en campos obligatorios, precios inválidos/outliers, basura HTML, URLs duplicadas.
+- Genera reporte HTML interactivo en `logs/reporte_calidad/reporte_calidad_YYYY-MM-DD.html`.
+
+#### `RunAll.py` — reporte post-scrapeo con detección de anomalías
+- Al finalizar todos los scrapers genera `logs/reporte_total/reporte_YYYY-MM-DD_HH-MM-SS.txt`.
+- Cuenta filas por `site_name` en CSVs de `raw_data/` modificados durante el run.
+- Consulta promedio 14 días desde `historia_precios` via psycopg2 local.
+- **Anomalía** detectada si `count < 70%` del promedio histórico → advertencia en consola y en el reporte.
+- Muestra duración total y estado OK/FALLO por scraper.
+
+### Correcciones
+
+#### Bugs FarmaciaKnopp
+- Correcciones de parsing en productos con formatos de nombre no estándar.
+
+#### Protección de imágenes S3 en `step3_db_insertion.py`
+- `DO UPDATE SET` ahora protege `url_imagen` y `url_thumb_imagen` de ser sobreescritas por hotlinks.
+- Solo URLs del bucket S3 (`%suplescrapper-images%`) pueden sobreescribir valores existentes.
+- Hotlinks solo rellenan campos NULL.
+
+#### Eliminación de infraestructura Cloud
+- Removidos archivos de configuración e infraestructura Cloud Run que ya no se usan activamente.
+
+---
+
+## [2026-03-03] - Protección contra productos con marca "N/D"
+
+### Contexto
+Productos scrapeados sin marca detectable llegaban a la BD con `brand = "N/D"`, corrompiendo el catálogo con entradas sin identidad de marca.
+
+### Cambios Implementados
+- Filtro en el pipeline: cualquier producto con `brand == "N/D"` es descartado antes de la inserción en BD.
+- Aplica tanto al scraping nuevo como al procesamiento de CSVs históricos.
+
+---
+
 ## [2026-03-02] - Robustez y performance en step3: dedup de URLs, remap bulk y fix de packs
 
 ### Contexto
