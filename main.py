@@ -84,8 +84,9 @@ PIPELINE_STEPS = [
     ("step3_db_insertion",       "step3_db_insertion.py"),
     ("step4_deduplication",      "step4_deduplication.py"),
     ("step5_descriptions",       "step5_generate_descriptions.py"),
-    ("step6_tag_keywords",       "step6_tag_keywords.py"),
-    ("step7_refresh_views",      "step7_refresh_views.py"),
+    ("step6_tag_keywords",           "step6_tag_keywords.py"),
+    ("step7_refresh_views",          "step7_refresh_views.py"),
+    ("step8_trigger_notificaciones", "step8_trigger_notificaciones.py"),
 ]
 
 

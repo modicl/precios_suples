@@ -34,5 +34,8 @@ img_debugging/
 docs/
 .playwright-mcp/
 aws/
+logs/
+old/
+.claude/
 
 
