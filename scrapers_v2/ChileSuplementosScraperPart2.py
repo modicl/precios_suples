@@ -326,6 +326,11 @@ class ChileSuplementosScraperPart2(BaseScraper):
                                 elif self.classifier._any(title_norm_cs, self.classifier._ganadores["ganadores"]):
                                     final_category, final_subcategory = "Ganadores de Peso", "Ganadores De Peso"
 
+                                # Skip products without essential data (discontinued/unavailable)
+                                if price == 0 or title == "N/D":
+                                    print(f"[yellow]  >> Producto sin datos esenciales omitido (precio={price}, título='{title}'): {link}[/yellow]")
+                                    continue
+
                                 yield {
                                     'date': current_date,
                                     'site_name': self.site_name,
