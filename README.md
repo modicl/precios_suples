@@ -201,6 +201,72 @@ python scrapers_v2/ChileSuplementosScraperRunner.py --headless
 
 ---
 
+## Deploy en Google Cloud Run
+
+El proyecto incluye un `Dockerfile` listo para construir y desplegar como **Cloud Run Job** en Google Cloud.
+
+### Requisitos de plataforma
+
+La imagen debe compilarse para **Linux x86-64 (`linux/amd64`)**, que es el único target soportado por Cloud Run. Si compilas desde macOS (Apple Silicon) o Windows ARM, el flag `--platform` es obligatorio.
+
+### Build y push
+
+```bash
+docker build --platform linux/amd64 \
+  -t us-central1-docker.pkg.dev/comparafit/comparafit/scraper:latest .
+
+docker push us-central1-docker.pkg.dev/comparafit/comparafit/scraper:latest
+```
+
+### Actualizar y ejecutar el job
+
+```bash
+gcloud run jobs update comparafit-scraper \
+  --image=us-central1-docker.pkg.dev/comparafit/comparafit/scraper:latest \
+  --region=us-central1 \
+  --set-env-vars="START_INDEX=0,END_INDEX=19,MAX_SCRAPER_WORKERS=4"
+
+gcloud run jobs execute comparafit-scraper --region=us-central1
+```
+
+### Sharding horizontal
+
+`main.py` lee `START_INDEX` y `END_INDEX` para ejecutar solo un subconjunto de los 20 scrapers. Esto permite distribuir la carga en múltiples tareas paralelas:
+
+| Tarea | START_INDEX | END_INDEX |
+|-------|-------------|-----------|
+| 0 | 0 | 6 |
+| 1 | 7 | 13 |
+| 2 | 14 | 19 |
+
+### Variables de entorno requeridas en Cloud Run
+
+No incluir en la imagen; pasarlas vía `--set-env-vars` o Secret Manager:
+
+| Variable | Descripción |
+|----------|-------------|
+| `START_INDEX` / `END_INDEX` | Rango del shard de scrapers |
+| `MAX_SCRAPER_WORKERS` | Paralelismo de scrapers (default: `4`) |
+| `DB_HOST_PROD` | Connection string Neon (producción) |
+| `CHATGPT_MINI4` | API key OpenAI (steps 5 y 6) |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Credenciales S3 para imágenes |
+| `AWS_DEFAULT_REGION` | Región S3 (`us-east-2`) |
+| `BACKEND_URL` / `INTERNAL_API_SECRET` | Backend para step 8 (notificaciones) |
+
+### Ver logs
+
+```bash
+gcloud logging read \
+  "resource.type=cloud_run_job AND resource.labels.job_name=comparafit-scraper" \
+  --limit=200
+```
+
+### Imagen base
+
+Usa `mcr.microsoft.com/playwright/python:v1.57.0-jammy` (Ubuntu Jammy, amd64), que incluye Chromium preinstalado con todas sus dependencias de sistema. Coincide exactamente con `playwright==1.57.0` del `requirements.txt`.
+
+---
+
 ## Funcionalidades destacadas
 
 - **RunAll post-scraping report**: al finalizar genera `logs/reporte_total/reporte_YYYY-MM-DD.txt` con conteo de productos por tienda, comparación contra promedio histórico 14 días, y alertas de anomalía si un scraper captura < 70% de su promedio.

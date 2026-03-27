@@ -34,7 +34,9 @@
       "mcp__playwright__browser_evaluate",
       "mcp__playwright__browser_snapshot",
       "mcp__playwright__browser_click",
-      "mcp__jcodemunch__get_symbol"
+      "mcp__jcodemunch__get_symbol",
+      "Bash(find C:UsersVillaDocumentsproyectos_pythonprecios_suples -maxdepth 1 -type f -name *)",
+      "Bash(grep -E \"\\\\.py$\")"
     ]
   }
 }

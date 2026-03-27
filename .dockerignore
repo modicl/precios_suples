@@ -1,0 +1,28 @@
+# Secretos — nunca en la imagen
+.env
+.env.*
+
+# Datos generados en tiempo de ejecución
+raw_data/
+logs/
+
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Control de versiones
+.git/
+.gitignore
+
+# Documentación interna (no necesaria en runtime)
+obsidian/
+bd/
+README.md
+CLAUDE.md
+CHANGELOG.md
+
+# Scripts solo de Windows / desarrollo local
+*.bat
+skills-lock.json
