@@ -145,28 +145,106 @@ DB_HOST_PROD=postgresql://...   (en .env)
 
 ---
 
+## Servicios externos
+
+El pipeline depende de tres servicios externos que deben estar configurados antes de correr cualquier paso. Sin ellos el proceso falla parcial o totalmente.
+
+### PostgreSQL — Neon (producción)
+
+**Qué es:** base de datos serverless PostgreSQL en la nube ([neon.tech](https://neon.tech)). Es donde viven todos los datos en producción: catálogo de productos, precios históricos, tiendas, usuarios, alertas.
+
+**Por qué se usa:** permite connections pooling, branching de base de datos y escala a cero cuando no hay tráfico, sin necesidad de administrar instancias.
+
+**Cómo funciona en el pipeline:** `shared/db_multiconnect.py` decide qué conexión abrir según el argumento `target`. Los steps 3–8 y los scrapers en Cloud Run siempre usan la conexión de producción (`DB_HOST_PROD`).
+
+**Variable requerida:**
+```env
+DB_HOST_PROD=postgresql://user:password@host/db?sslmode=require&channel_binding=require
+```
+> Solicitar la cadena de conexión al administrador del proyecto. En Cloud Run se inyecta vía Secret Manager o `--set-env-vars`.
+
+---
+
+### OpenAI API (GPT-4o-mini)
+
+**Qué es:** API de OpenAI para modelos de lenguaje.
+
+**Dónde se usa:**
+- **Step 5** (`step5_generate_descriptions.py`): genera descripciones comerciales para cada producto del catálogo.
+- **Step 6** (`step6_tag_keywords.py`): asigna keywords por categoría a cada producto para búsqueda y filtrado.
+
+Ambos steps son async con concurrencia configurable (`--concurrencia N`, default 10) e incrementales (solo procesan productos sin descripción/keywords, salvo `--forzar`).
+
+**Variable requerida:**
+```env
+CHATGPT_MINI4=sk-proj-...   # API key de OpenAI
+```
+
+---
+
+### Google Gemini API (alternativa a OpenAI)
+
+**Qué es:** API de Google para modelos Gemini, usada como proveedor LLM alternativo.
+
+**Dónde se usa:** mismos steps 5 y 6. El proveedor activo se controla con la variable `AI_PROVIDER`.
+
+**Variables requeridas:**
+```env
+GOOGLE_API_KEY=AIza...
+AI_PROVIDER=google   # o "openai" para usar CHATGPT_MINI4
+```
+
+---
+
+### AWS S3 (imágenes de productos)
+
+**Qué es:** bucket S3 `suplescrapper-images` (región `us-east-2`) donde se almacenan imágenes de productos descargadas desde las tiendas.
+
+**Por qué se usa:** las URLs de imagen de los scrapers son hotlinks directos a las tiendas; son inestables y pueden romperse o bloquearse. Las imágenes se descargan y re-hospedan en S3 para tener URLs propias y estables.
+
+**Cómo funciona:** `step3_db_insertion.py` distingue entre URLs de S3 (`%suplescrapper-images%`) y hotlinks. Solo una URL de S3 puede sobreescribir una imagen ya guardada; un hotlink solo rellena valores `NULL`. Esto evita degradar imágenes ya procesadas.
+
+**Variables requeridas:**
+```env
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_DEFAULT_REGION=us-east-2
+```
+
+---
+
 ## Configuración
 
 ### Variables de entorno (`.env`)
 
+Crear un archivo `.env` en la raíz del proyecto con los siguientes valores. Las variables marcadas con `*` son obligatorias para correr el pipeline completo.
+
 ```env
-# BD local
+# BD local (Docker: contenedor suples-db)
 DB_HOST=localhost
 DB_NAME=suplementos
 DB_USER=root
 DB_PASSWORD=root
 DB_PORT=5432
 
-# BD producción (Neon)
-DB_HOST_PROD=postgresql://user:pass@host:port/db?sslmode=require
+# BD producción (Neon) *
+DB_HOST_PROD=postgresql://user:password@host/db?sslmode=require&channel_binding=require
 
-# LLM
+# LLM — OpenAI *
 CHATGPT_MINI4=sk-proj-...
 
-# AWS S3 (imágenes)
+# LLM — Google Gemini (alternativa a OpenAI)
+GOOGLE_API_KEY=AIza...
+AI_PROVIDER=openai   # "openai" | "google"
+
+# AWS S3 (imágenes de productos) *
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 AWS_DEFAULT_REGION=us-east-2
+
+# Backend (step 8 — notificaciones de precio)
+BACKEND_URL=https://...run.app
+INTERNAL_API_SECRET=...
 ```
 
 ### Instalación
