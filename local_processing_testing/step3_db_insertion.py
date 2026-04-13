@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 import unicodedata
 import sqlalchemy as sa
 import pandas as pd
@@ -429,7 +430,30 @@ def insert_data_bulk(engine, df, db_name="DB"):
                     """)
                     hp_migrated = cur.rowcount
 
-                    # 3. A2: eliminar huérfanos cuyo destino ya existe
+                    # 3a. A2: nullificar URL de huérfanos que aún tienen historia_precios
+                    # (caso swap circular: la migración del paso 2 movió historia de ambos
+                    # lados simultáneamente, dejando a ambos con registros. No se puede
+                    # borrar sin violar la FK. Se pone url_link=NULL para liberar el slot
+                    # de uq_tienda_url y que el paso B asigne la URL correcta.)
+                    cur.execute("""
+                        UPDATE producto_tienda orphan
+                        SET url_link  = NULL,
+                            is_active = false
+                        FROM _batch_links b
+                        JOIN producto_tienda winner
+                          ON winner.id_producto = b.id_producto
+                         AND winner.id_tienda   = b.id_tienda
+                        WHERE orphan.id_tienda    = b.id_tienda
+                          AND orphan.url_link     = b.url_link
+                          AND orphan.id_producto != b.id_producto
+                          AND EXISTS (
+                            SELECT 1 FROM historia_precios hp
+                            WHERE hp.id_producto_tienda = orphan.id_producto_tienda
+                          )
+                    """)
+                    url_nullified = cur.rowcount
+
+                    # 3b. A2: eliminar huérfanos que no tienen historia_precios
                     cur.execute("""
                         DELETE FROM producto_tienda orphan
                         USING _batch_links b
@@ -439,6 +463,10 @@ def insert_data_bulk(engine, df, db_name="DB"):
                         WHERE orphan.id_tienda    = b.id_tienda
                           AND orphan.url_link     = b.url_link
                           AND orphan.id_producto != b.id_producto
+                          AND NOT EXISTS (
+                            SELECT 1 FROM historia_precios hp
+                            WHERE hp.id_producto_tienda = orphan.id_producto_tienda
+                          )
                     """)
                     url_deleted = cur.rowcount
 
@@ -466,8 +494,10 @@ def insert_data_bulk(engine, df, db_name="DB"):
 
             if url_updated:
                 print(f"[{db_name}] [URL remap] {url_updated} enlace(s) reasignados a nuevo producto (URL reutilizada por la tienda).")
+            if url_nullified:
+                print(f"[{db_name}] [URL remap] {url_nullified} enlace(s) huérfanos con historial: URL nullificada (swap circular detectado).")
             if url_deleted:
-                print(f"[{db_name}] [URL remap] {url_deleted} enlace(s) huérfanos eliminados ({hp_migrated} precios reasignados al winner).")
+                print(f"[{db_name}] [URL remap] {url_deleted} enlace(s) huérfanos sin historial eliminados ({hp_migrated} precios reasignados al winner).")
 
             # ── Paso B: INSERT / UPDATE por (id_producto, id_tienda) ─────────
             # Después del remap ya no hay riesgo de colisión en uq_tienda_url.
@@ -634,6 +664,7 @@ def main():
     targets = get_targets()
     print(f"Destinos de BD encontrados: {[t['name'] for t in targets]}")
 
+    fatal_errors = []
     for target in targets:
         db_name = target['name']
         try:
@@ -641,6 +672,32 @@ def main():
             insert_data_bulk(engine, df, db_name=db_name)
         except Exception as e:
             print(f"[ERROR FATAL] {db_name}: {e}")
+            fatal_errors.append(db_name)
+
+    # Mover CSVs procesados a raw_data/used/ para mantener raw_data limpio
+    if not fatal_errors:
+        project_root = os.path.abspath(os.path.join(current_dir, ".."))
+        raw_data_dir = os.path.join(project_root, "raw_data")
+        used_dir     = os.path.join(raw_data_dir, "used")
+        os.makedirs(used_dir, exist_ok=True)
+
+        moved = 0
+        for fname in os.listdir(raw_data_dir):
+            if not fname.endswith(".csv"):
+                continue
+            src = os.path.join(raw_data_dir, fname)
+            dst = os.path.join(used_dir, fname)
+            if os.path.exists(dst):
+                # Si ya existe (mismo nombre), agregar sufijo para no perderlo
+                base, ext = os.path.splitext(fname)
+                dst = os.path.join(used_dir, f"{base}_dup{ext}")
+            shutil.move(src, dst)
+            moved += 1
+
+        if moved:
+            print(f"\n[raw_data] {moved} CSV(s) movidos a raw_data/used/")
+    else:
+        print(f"\n[raw_data] CSVs NO movidos — hubo errores en: {', '.join(fatal_errors)}")
 
 
 if __name__ == "__main__":

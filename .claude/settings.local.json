@@ -36,7 +36,15 @@
       "mcp__playwright__browser_click",
       "mcp__jcodemunch__get_symbol",
       "Bash(find C:UsersVillaDocumentsproyectos_pythonprecios_suples -maxdepth 1 -type f -name *)",
-      "Bash(grep -E \"\\\\.py$\")"
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(./venv/Scripts/python.exe local_processing_testing/step3_db_insertion.py)",
+      "Bash(./venv/Scripts/python.exe local_processing_testing/step7_refresh_views.py)",
+      "Bash(./venv/Scripts/python.exe local_processing_testing/step1_clean_names.py)",
+      "Bash(./venv/Scripts/python.exe local_processing_testing/step2_normalization.py)",
+      "Bash(./venv/Scripts/python.exe local_processing_testing/step4_deduplication.py)",
+      "Bash(./venv/Scripts/python.exe local_processing_testing/step5_generate_descriptions.py)",
+      "Bash(./venv/Scripts/python.exe local_processing_testing/step6_tag_keywords.py)",
+      "Bash(./venv/Scripts/python.exe local_processing_testing/step8_trigger_notificaciones.py)"
     ]
   }
 }
