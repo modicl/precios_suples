@@ -159,9 +159,6 @@ class SuplementosMayoristasApiScraper(BaseScraper):
         rprint(f"[bold cyan][{self.site_name}][/bold cyan] Modo API — {csv_filename}")
         self._log_info(f"Iniciando API scraping. Archivo: {csv_filename}")
 
-        # Pre-cargar inventario S3 una sola vez
-        self._ensure_s3_cache(self.subfolder)
-
         seen = set()
         total_count = 0
 
