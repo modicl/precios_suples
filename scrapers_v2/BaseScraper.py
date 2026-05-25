@@ -299,37 +299,27 @@ class BaseScraper:
         if self.logger:
             self.logger.info(message)
 
-    def _ensure_s3_cache(self, subfolder: str, prefix: str = None):
+    def _image_exists_in_resized(self, subfolder: str, filename: str, s3_resized_key: str) -> bool:
         """
-        Carga la lista de objetos de S3 para una subcarpeta específica en memoria (una sola vez).
-        Por defecto apunta a la carpeta 'assets/img/resized/'.
+        Verifica si la imagen ya fue procesada por Lambda (existe en resized/).
+        Usa caché en memoria para URLs ya comprobadas en esta sesión.
+        Usa HeadObject para el resto — no requiere s3:ListBucket.
         """
-        if not self.s3_client or subfolder in self.s3_cache:
-            return
+        # Cache hit: misma URL ya verificada en esta sesión
+        if filename in self.s3_cache.get(subfolder, set()):
+            return True
 
-        # Si no se especifica prefix, usamos 'assets/img/resized/{subfolder}'
-        target_prefix = prefix if prefix else f"assets/img/resized/{subfolder}"
-
-        print(f"Cargando inventario S3 para: {target_prefix} ...")
-        self._log_info(f"Cargando inventario S3 para subcarpeta: {subfolder} (Prefix: {target_prefix})")
-        
-        self.s3_cache[subfolder] = set()
-        
-        paginator = self.s3_client.get_paginator('list_objects_v2')
+        # HeadObject: check exacto de la key, sin necesidad de ListBucket
         try:
-            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=target_prefix):
-                if 'Contents' in page:
-                    for obj in page['Contents']:
-                        # Guardamos solo el nombre del archivo (ej: 'assets/img/resized/strongest/abc.jpg' -> 'abc.jpg')
-                        key = obj['Key']
-                        filename = os.path.basename(key)
-                        self.s3_cache[subfolder].add(filename)
-            self._log_info(f"Inventario cargado. Total archivos en {subfolder}: {len(self.s3_cache[subfolder])}")
-            
-        except Exception as e:
-            msg = f"Advertencia: No se pudo cargar caché S3 para {subfolder}: {e}"
-            print(f"[yellow]{msg}[/yellow]")
-            self._log_info(msg)
+            self.s3_client.head_object(Bucket=self.bucket_name, Key=s3_resized_key)
+            self.s3_cache.setdefault(subfolder, set()).add(filename)
+            return True
+        except ClientError as e:
+            code = e.response['Error']['Code']
+            if code in ('404', 'NoSuchKey'):
+                return False
+            self._log_info(f"Error HeadObject para {s3_resized_key}: {e}")
+            return False
 
     def download_image(self, url: str, subfolder: str = "") -> str:
         """
@@ -363,12 +353,8 @@ class BaseScraper:
 
         # --- Lógica S3 ---
         if self.s3_client:
-            # 1. Carga Lazy del inventario (busca en resized por defecto)
-            self._ensure_s3_cache(subfolder)
-            
-            # 2. Verificación en Memoria (Zero Latency)
-            if filename in self.s3_cache.get(subfolder, set()):
-                # LOG REQUERIDO: Imagen encontrada en resized
+            # Verificar si ya existe en resized/ (caché en memoria + HeadObject)
+            if self._image_exists_in_resized(subfolder, filename, s3_resized_key):
                 self._log_info(f"Imagen encontrada en resized: {filename} (URL: {url}) - SKIP DOWNLOAD")
                 print(f"[green]   [S3 CACHE] Imagen ya existe (resized): {filename}[/green]")
                 return s3_resized_url
@@ -406,12 +392,13 @@ class BaseScraper:
                     self._log_info(f"Imagen no encontrada en resized, subiendo a originals: {filename}")
                     print(f"[yellow]   [S3 UPLOAD] Subiendo original: {filename}[/yellow]")
                     self.s3_client.upload_fileobj(
-                        image_data, 
-                        self.bucket_name, 
-                        s3_original_key, 
+                        image_data,
+                        self.bucket_name,
+                        s3_original_key,
                         ExtraArgs={
                             'ContentType': content_type,
-                            'CacheControl': 'max-age=2592000' # 30 días
+                            'CacheControl': 'max-age=2592000', # 30 días
+                            'StorageClass': 'INTELLIGENT_TIERING'
                         }
                     )
                     
@@ -477,13 +464,14 @@ class BaseScraper:
             )
 
             # User-Agent de Chrome real en Windows 11.
+            # Chrome 124 — versión que no es bloqueada por ChileSuplementos (403 con 131).
             # 1366x768 es la resolución más frecuente en Chile (StatCounter 2024),
             # evita el perfil "pantalla fullscreen headless" de 1920x1080.
             context = browser.new_context(
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/131.0.0.0 Safari/537.36"
+                    "Chrome/124.0.0.0 Safari/537.36"
                 ),
                 locale="es-CL",
                 timezone_id="America/Santiago",

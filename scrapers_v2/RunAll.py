@@ -288,6 +288,7 @@ def _get_historical_averages() -> dict:
             host="localhost", port=5432,
             dbname="suplementos", user="root", password="root",
             connect_timeout=5,
+            options="-c statement_timeout=8000",
         )
         cur = conn.cursor()
         cur.execute("""
