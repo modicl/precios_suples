@@ -145,6 +145,15 @@ class SharedSeenUrls:
 
 
 class BaseScraper:
+    # User-Agent del contexto. Un scraper puede sobrescribirlo a nivel de clase.
+    # None = usar la versión real del Chromium de Playwright (coherente con los
+    # headers sec-ch-ua que envía el navegador).
+    USER_AGENT = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
+
     # Constructor que recibe la URL base, el modo headless, urls de categorías y selectores
     def __init__(self, base_url: str, headless: bool = False, category_urls: list = None, selectors: dict = None, site_name: str = "N/D", output_suffix: str = ""):
         self.base_url = base_url # URL base del sitio web
@@ -463,16 +472,18 @@ class BaseScraper:
                 args=launch_args,
             )
 
-            # User-Agent de Chrome real en Windows 11.
-            # Chrome 124 — versión que no es bloqueada por ChileSuplementos (403 con 131).
+            # User-Agent de Chrome real en Windows 11 (ver USER_AGENT).
+            # ChileSuplementos bloquea con 403 los UA Chrome/124.0.0.0 y 131.0.0.0
+            # (sep 2026), por eso sobrescribe USER_AGENT = None.
             # 1366x768 es la resolución más frecuente en Chile (StatCounter 2024),
             # evita el perfil "pantalla fullscreen headless" de 1920x1080.
+            user_agent = self.USER_AGENT or (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                f"Chrome/{browser.version.split('.')[0]}.0.0.0 Safari/537.36"
+            )
             context = browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                ),
+                user_agent=user_agent,
                 locale="es-CL",
                 timezone_id="America/Santiago",
                 viewport={"width": 1366, "height": 768},

@@ -13,6 +13,9 @@ import re
 import unicodedata
 
 class ChileSuplementosScraperPart3(BaseScraper):
+    # El sitio bloquea con 403 el UA por defecto (Chrome/124); usar la versión real de Chromium.
+    USER_AGENT = None
+
     def __init__(self, base_url="https://www.chilesuplementos.cl", headless=False):
 
         # Parte 3: Aminoacidos, Perdida de Grasa, Snacks, Ofertas, Packs
