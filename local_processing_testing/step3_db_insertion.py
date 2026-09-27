@@ -674,8 +674,21 @@ def main():
             print(f"[ERROR FATAL] {db_name}: {e}")
             fatal_errors.append(db_name)
 
-    # Mover CSVs procesados a raw_data/used/ para mantener raw_data limpio
-    if not fatal_errors:
+    # Mover CSVs procesados a raw_data/used/ para mantener raw_data limpio.
+    # Producción es el destino de referencia: si solo falla la BD local (p.ej.
+    # contenedor apagado) los CSV igual se archivan. Si no se movieran, el
+    # próximo run los volvería a leer y reinsertaría precios de runs anteriores.
+    target_names = [t['name'] for t in targets]
+    if "Production" in target_names:
+        archive_ok = "Production" not in fatal_errors
+    else:
+        archive_ok = bool(targets) and not fatal_errors
+
+    if archive_ok and fatal_errors:
+        print(f"\n[raw_data] Aviso: {', '.join(fatal_errors)} falló, pero Producción OK — "
+              f"se archivan los CSV igual (esa BD quedará desfasada).")
+
+    if archive_ok:
         project_root = os.path.abspath(os.path.join(current_dir, ".."))
         raw_data_dir = os.path.join(project_root, "raw_data")
         used_dir     = os.path.join(raw_data_dir, "used")
