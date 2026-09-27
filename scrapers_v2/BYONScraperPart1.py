@@ -138,7 +138,7 @@ class BYONScraperPart1(BaseScraper):
                                     clean_p = re.sub(r'[^\d]', '', sale_el.first.inner_text())
                                     if clean_p: price = int(clean_p)
                             else:
-                                reg_el = producto.locator('.price-item--regular')
+                                reg_el = producto.locator('.price__regular .price-item--regular')
                                 if reg_el.count() > 0:
                                     clean_p = re.sub(r'[^\d]', '', reg_el.first.inner_text())
                                     if clean_p: price = int(clean_p)
@@ -215,14 +215,18 @@ class BYONScraperPart1(BaseScraper):
                                                         const d = JSON.parse(s.innerText);
                                                         const offers = d.offers ? (Array.isArray(d.offers) ? d.offers : [d.offers]) : [];
                                                         for (const o of offers) {
-                                                            if (o.price && parseFloat(o.price) > 0) return parseFloat(o.price);
+                                                            if (o.price && parseFloat(o.price) > 0) return String(o.price);
                                                         }
                                                     } catch(e) {}
                                                 }
                                                 return null;
                                             }''')
-                                            if jsonld_price and float(jsonld_price) > 0:
-                                                price = int(float(jsonld_price))
+                                            # El JSON-LD de BYON usa formato CLP ("81.990"): el punto es separador de miles
+                                            p_str = str(jsonld_price or '').strip()
+                                            if re.fullmatch(r'\d{1,3}(\.\d{3})+', p_str):
+                                                p_str = p_str.replace('.', '')
+                                            if p_str and float(p_str) > 0:
+                                                price = int(float(p_str))
                                         except Exception: pass
 
                                     detail_page.close()
