@@ -11,6 +11,7 @@ set "STEP5=%ROOT%local_processing_testing\step5_generate_descriptions.py"
 set "STEP6=%ROOT%local_processing_testing\step6_tag_keywords.py"
 set "STEP7=%ROOT%local_processing_testing\step7_refresh_views.py"
 set "STEP8=%ROOT%local_processing_testing\step8_trigger_notificaciones.py"
+set "STEP9=%ROOT%local_processing_testing\step9_cleanup_originals.py"
 set "LOGS_DIR=%ROOT%logs"
 
 :: Crear carpeta logs si no existe
@@ -44,6 +45,7 @@ echo    Paso 5 - Generacion de descripciones LLM
 echo    Paso 6 - Tagging de keywords
 echo    Paso 7 - Refresh de vistas materializadas
 echo    Paso 8 - Trigger notificaciones de precio (produccion)
+echo    Paso 9 - Limpieza de imagenes originales en S3
 echo.
 pause
 
@@ -191,6 +193,24 @@ if !errorlevel! neq 0 (
     echo.
     echo  [ERROR] Paso 8 fallo.
     echo  [ERROR] Paso 8 fallo. >> "%LOGFILE%"
+    goto fin_error
+)
+
+:: -----------------------------------------------------------
+:: PASO 9
+:: -----------------------------------------------------------
+echo.
+echo  [9/9] Limpieza de imagenes originales en S3...
+echo. >> "%LOGFILE%"
+echo  [9/9] Limpieza de imagenes originales en S3... >> "%LOGFILE%"
+echo  -------------------------------------------------- >> "%LOGFILE%"
+
+"%PYTHON%" "%STEP9%" 2>&1 | powershell -NoProfile -Command "$input | Tee-Object -FilePath '%LOGFILE%' -Append"
+
+if !errorlevel! neq 0 (
+    echo.
+    echo  [ERROR] Paso 9 fallo.
+    echo  [ERROR] Paso 9 fallo. >> "%LOGFILE%"
     goto fin_error
 )
 
