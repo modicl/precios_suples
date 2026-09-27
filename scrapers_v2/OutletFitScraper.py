@@ -11,65 +11,78 @@ class OutletFitScraper(BaseScraper):
     def __init__(self, headless=False):
 
         # Taxonomía determinista basada en las categorías del menú de outletfit.cl
-        # Excluimos "Ropa y Accesorios" y "Packs Ofertas" (packs se clasifican vía CategoryClassifier)
+        # (reestructurado en sep 2026: las URLs /catalogo/... ahora dan 404).
+        # Excluimos equipamiento/accesorios y packs (packs se clasifican vía CategoryClassifier).
+        # Las subcategorías específicas van antes que la raíz: la deduplicación por
+        # URL hace que la raíz /proteinas solo aporte lo que no calzó antes.
         category_urls = {
             "Proteinas": [
                 {
-                    "url": "https://www.outletfit.cl/catalogo/proteinas",
+                    "url": "https://www.outletfit.cl/proteinas/whey-protein",
                     "subcategory": "Proteína de Whey"
+                },
+                {
+                    "url": "https://www.outletfit.cl/proteinas/isolate-protein",
+                    "subcategory": "Proteína Aislada"
+                },
+                {
+                    "url": "https://www.outletfit.cl/proteinas",
+                    "subcategory": "Proteína de Whey"
+                }
+            ],
+            "Ganadores de Peso": [
+                {
+                    "url": "https://www.outletfit.cl/proteinas/ganadores-de-masa",
+                    "subcategory": "Ganadores de Peso"
                 }
             ],
             "Creatinas": [
                 {
-                    "url": "https://www.outletfit.cl/catalogo/creatinas",
+                    "url": "https://www.outletfit.cl/creatinas",
                     "subcategory": "Creatina Monohidrato"
                 }
             ],
             "Pre Entrenos": [
                 {
-                    "url": "https://www.outletfit.cl/catalogo/pre-entrenos",
+                    "url": "https://www.outletfit.cl/pre-entrenos-y-energia/pre-entrenos",
                     "subcategory": "Otros Pre Entrenos"
+                },
+                {
+                    "url": "https://www.outletfit.cl/pre-entrenos-y-energia/cafeina",
+                    "subcategory": "Cafeína"
                 }
             ],
             "Vitaminas y Minerales": [
                 {
-                    "url": "https://www.outletfit.cl/catalogo/vitaminas",
+                    "url": "https://www.outletfit.cl/salud-y-bienestar",
                     "subcategory": "Multivitamínicos"
                 }
             ],
             "Snacks y Comida": [
                 {
-                    "url": "https://www.outletfit.cl/catalogo/snack-proteico",
+                    "url": "https://www.outletfit.cl/snack-saludables/barritas-de-proteina",
+                    "subcategory": "Barritas Y Snacks Proteicas"
+                },
+                {
+                    "url": "https://www.outletfit.cl/dieta-y-control-de-peso/snack-proteicos",
                     "subcategory": "Barritas Y Snacks Proteicas"
                 }
             ],
             "Aminoácidos": [
                 {
-                    "url": "https://www.outletfit.cl/aminoacidos/bcaa",
+                    "url": "https://www.outletfit.cl/recuperacion-muscular/amionacidos",
                     "subcategory": "BCAAs"
-                }
-            ],
-            "Ganadores de Peso": [
-                {
-                    "url": "https://www.outletfit.cl/catalogo/ganadores-de-peso",
-                    "subcategory": "Ganadores de Peso"
-                }
-            ],
-            "Pro-Hormonales": [
-                {
-                    "url": "https://www.outletfit.cl/catalogo/pro-hormonales",
-                    "subcategory": "Pro-Hormonales"
                 }
             ],
             "Bebidas Nutricionales": [
                 {
-                    "url": "https://www.outletfit.cl/catalogo/bebida-energetica",
+                    "url": "https://www.outletfit.cl/pre-entrenos-y-energia/energeticas",
                     "subcategory": "Bebidas Energéticas"
                 }
             ],
             "Pérdida de Grasa": [
                 {
-                    "url": "https://www.outletfit.cl/catalogo/termogenicos",
+                    "url": "https://www.outletfit.cl/dieta-y-control-de-peso/quemadores-y-control-de-apetito",
                     "subcategory": "Termogénicos / Quemadores"
                 }
             ]
@@ -198,11 +211,16 @@ class OutletFitScraper(BaseScraper):
                 print(f"  URL: {url}")
 
                 try:
-                    page.goto(url, wait_until="domcontentloaded", timeout=60000)
-                    time.sleep(1.5)
-
-                    # Extraer links de productos desde el listado
-                    product_links = self._extract_product_links(page)
+                    # Extraer links de productos desde el listado, recorriendo ?page=N
+                    # hasta que una página no aporte links nuevos.
+                    product_links = []
+                    for page_num in range(1, 30):
+                        page.goto(f"{url}?page={page_num}", wait_until="domcontentloaded", timeout=60000)
+                        time.sleep(1.5)
+                        new_links = [l for l in self._extract_product_links(page) if l not in product_links]
+                        if not new_links:
+                            break
+                        product_links.extend(new_links)
                     print(f"  > Encontrados {len(product_links)} productos en listado")
 
                     if not product_links:
