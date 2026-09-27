@@ -1,9 +1,64 @@
-# Scraper para la pagina web OneNutrition.cl
+"""
+OneNutritionScraper.py
+======================
+Scraper para OneNutrition.cl vía la API JSON pública de Shopify (sin Playwright).
+
+La tienda migró de PrestaShop a Shopify en sep 2026: las URLs /tienda/<cat>
+redirigen a /collections/<cat> y la grilla #js-product-list ya no existe.
+Shopify expone /collections/<handle>/products.json con título, marca (vendor),
+variantes con precio e imágenes, así que no hace falta un navegador.
+
+Uso:
+    python OneNutritionScraper.py
+    python OneNutritionScraper.py --headless   # ignorado, solo para compat con RunAll
+"""
+import argparse
+import csv
+import html
+import os
+import re
+import sys
+import time
+from datetime import datetime
+
+import requests
+from rich import print
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+sys.path.insert(0, current_dir)
+
 from BaseScraper import BaseScraper
 from CategoryClassifier import CategoryClassifier
-from rich import print
-from datetime import datetime
-import re
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json",
+}
+PAGE_SIZE = 250   # máximo que acepta products.json
+DELAY_S   = 0.5   # entre páginas (ser amigable con el servidor)
+
+# (main_category, subcategoría determinista, handle de la colección Shopify)
+# La subcategoría final la refina CategoryClassifier.
+CATEGORIES = [
+    ("Proteinas",             "Proteína de Whey",         "proteinas"),
+    ("Creatinas",             "Creatina Monohidrato",     "creatinas"),
+    ("Vitaminas y Minerales", "Vitaminas y Minerales",    "vitaminas-salud"),
+    ("Pre Entrenos",          "Pre Entreno",              "energia-resistencia"),
+    ("Ganadores de Peso",     "Ganadores De Peso",        "ganadores-de-masa"),
+    ("Aminoacidos y BCAA",    "Otros Aminoacidos y BCAA", "aminoacidos-1"),
+    ("Perdida de Grasa",      "Dieta Quemadores",         "dieta-quemadores"),
+    ("Snacks y Comida",       "Barras Snack",             "barras-snack"),
+]
+
+CSV_HEADERS = [
+    "date", "site_name", "category", "subcategory", "product_name",
+    "brand", "price", "link", "rating", "reviews", "active_discount",
+    "thumbnail_image_url", "image_url", "sku", "description",
+]
 
 # Patrones de sufijos de bundle que OneNutrition agrega al nombre del producto.
 # Cuando la tienda regala un accesorio/suplemento, lo concatena con " + " al nombre
@@ -119,206 +174,165 @@ def _strip_bundle_suffix(title: str) -> str:
 
 
 class OneNutritionScraper(BaseScraper):
-    def __init__(self, base_url, headless=False):
-        
-        category_urls = {
-            "Proteinas": [
-                {"url": "https://onenutrition.cl/tienda/proteinas", "subcategory": "Proteína de Whey"}
-            ],
-            "Creatinas": [
-                {"url": "https://onenutrition.cl/tienda/creatinas", "subcategory": "Creatina Monohidrato"}
-            ],
-            "Vitaminas y Minerales": [
-                {"url": "https://onenutrition.cl/tienda/vitaminas-salud", "subcategory": "Vitaminas y Minerales"}
-            ],
-            "Pre Entrenos": [
-                {"url": "https://onenutrition.cl/tienda/energia-resistencia", "subcategory": "Pre Entreno"}
-            ],
-            "Ganadores de Peso": [
-                {"url": "https://onenutrition.cl/tienda/ganadores-de-masa-", "subcategory": "Ganadores De Peso"}
-            ],
-            "Aminoacidos y BCAA": [
-                {"url": "https://onenutrition.cl/tienda/aminoacidos", "subcategory": "Otros Aminoacidos y BCAA"},
-            ],
-            "Perdida de Grasa": [
-                {"url": "https://onenutrition.cl/tienda/dieta-quemadores", "subcategory": "Dieta Quemadores"}
-            ],
-            "Snacks y Comida": [
-                {"url": "https://onenutrition.cl/tienda/barras-snack", "subcategory": "Barras Snack"}
-            ]
-        }
-        
-        selectors = {
-            "product_grid": "#js-product-list", 
-            'product_card': '#js-product-list .product-miniature', 
-            'product_name': '.product-title a',
-            'brand': '.product-title a', 
-            'price_container': '.product-price-and-shipping', 
-            'price_current': '.price', 
-            'price_regular': '.regular-price', 
-            'link': '.product-title a', 
-            'next_button': '.pagination .next',
-            'thumbnail': 'a.thumbnail.product-thumbnail img'
-        }
-        
-        super().__init__(base_url, headless, category_urls, selectors, site_name="OneNutrition")
+    def __init__(self):
+        super().__init__(
+            base_url="https://onenutrition.cl",
+            headless=True,
+            site_name="OneNutrition",
+        )
+        self.subfolder = "onenutrition"
         self.classifier = CategoryClassifier()
 
-    def _classify_product(self, title, description, main_category, deterministic_subcategory, brand):
-        """
-        Clasificación de productos para OneNutrition.
-        Delega completamente en CategoryClassifier (sin lógica extra específica).
-        """
-        return self.classifier.classify(title, description, main_category, deterministic_subcategory, brand)
+    # ------------------------------------------------------------------
+    # Shopify API helpers
+    # ------------------------------------------------------------------
+
+    def _get_page(self, handle: str, page: int) -> list:
+        """Retorna la lista de productos de una página de la colección."""
+        url = f"{self.base_url}/collections/{handle}/products.json?limit={PAGE_SIZE}&page={page}"
+        r = requests.get(url, headers=HEADERS, timeout=20)
+        r.raise_for_status()
+        return r.json().get("products", [])
+
+    @staticmethod
+    def _to_int_price(value) -> int:
+        try:
+            return int(float(value or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _html_to_text(body_html: str) -> str:
+        text = re.sub(r"<(br|/p|/li|/h\d)[^>]*>", "\n", body_html or "", flags=re.IGNORECASE)
+        text = re.sub(r"<[^>]+>", " ", text)
+        return html.unescape(text)
+
+    def _build_product(self, raw: dict, main_cat: str, subcategory: str) -> dict | None:
+        """Transforma un producto Shopify al formato CSV del pipeline."""
+        raw_title = (raw.get("title") or "").strip()
+        if not raw_title:
+            return None
+        title = _strip_bundle_suffix(self.clean_text(raw_title))
+
+        brand = self.enrich_brand(self.clean_text(raw.get("vendor") or "N/D"), title, scan_title=True)
+        if not brand or brand == "N/D":
+            return None
+
+        # Precio: variante disponible más barata (lo que muestra la grilla);
+        # si ninguna está disponible, se usan todas las variantes.
+        variants = raw.get("variants") or []
+        if not variants:
+            return None
+        available = [v for v in variants if v.get("available")] or variants
+        variant = min(available, key=lambda v: self._to_int_price(v.get("price")))
+        price = self._to_int_price(variant.get("price"))
+        if price <= 0:
+            return None
+        active_discount = self._to_int_price(variant.get("compare_at_price")) > price
+
+        description = self.clean_description(self._html_to_text(raw.get("body_html", "")))
+        final_category, final_subcategory = self.classifier.classify(
+            title, description, main_cat, subcategory, brand
+        )
+
+        images = raw.get("images") or []
+        image_url_raw = images[0].get("src", "") if images else ""
+        image_url = self.download_image(image_url_raw, self.subfolder) if image_url_raw else ""
+
+        return {
+            "date":                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "site_name":           self.site_name,
+            "category":            self.clean_text(final_category),
+            "subcategory":         final_subcategory,
+            "product_name":        title,
+            "brand":               brand,
+            "price":               price,
+            "link":                f"{self.base_url}/products/{raw.get('handle', '')}",
+            "rating":              "0",
+            "reviews":             "0",
+            "active_discount":     str(active_discount),
+            "thumbnail_image_url": image_url,
+            "image_url":           image_url,
+            "sku":                 variant.get("sku") or "",
+            "description":         description,
+        }
+
+    # ------------------------------------------------------------------
+    # Override run(): no Playwright, puro requests
+    # ------------------------------------------------------------------
+
+    def run(self):
+        output_dir = os.path.join(project_root, "raw_data")
+        os.makedirs(output_dir, exist_ok=True)
+        csv_filename = (
+            f"productos_{self.site_name.lower()}_"
+            f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv"
+        )
+        csv_file = os.path.join(output_dir, csv_filename)
+
+        print(f"[bold cyan][{self.site_name}][/bold cyan] Modo API Shopify — {csv_filename}")
+        self._log_info(f"Iniciando API scraping. Archivo: {csv_filename}")
+
+        total_count = 0
+
+        try:
+            with open(csv_file, mode="w", newline="", encoding="utf-8-sig") as f:
+                writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
+                writer.writeheader()
+
+                for main_cat, subcategory, handle in CATEGORIES:
+                    page = 1
+                    cat_count = 0
+
+                    while True:
+                        try:
+                            data = self._get_page(handle, page)
+                        except Exception as e:
+                            print(f"[red][{self.site_name}] ERROR {handle} p{page}: {e}[/red]")
+                            self._log_info(f"ERROR {handle} p{page}: {e}")
+                            break
+
+                        if not data:
+                            break
+
+                        for raw in data:
+                            # Deduplicación entre colecciones (un producto puede estar en varias)
+                            product_handle = raw.get("handle", "")
+                            if product_handle in self.seen_urls:
+                                continue
+                            self.seen_urls.add(product_handle)
+
+                            prod = self._build_product(raw, main_cat, subcategory)
+                            if not prod:
+                                continue
+
+                            writer.writerow(prod)
+                            f.flush()
+                            cat_count += 1
+                            total_count += 1
+
+                        if len(data) < PAGE_SIZE:
+                            break
+                        page += 1
+                        time.sleep(DELAY_S)
+
+                    print(f"  [{main_cat}] {handle}: {cat_count} productos")
+                    self._log_info(f"{handle}: {cat_count} productos")
+
+        except Exception as e:
+            print(f"[red][{self.site_name}] Error crítico: {e}[/red]")
+            self._log_info(f"ERROR CRÍTICO: {e}")
+            raise
+
+        print(f"[bold green][{self.site_name}] TOTAL: {total_count} productos únicos[/bold green]")
+        self._log_info(f"Finalizado. Total: {total_count} productos.")
 
     def extract_process(self, page):
-        print(f"[green]Iniciando scraping de {len(self.category_urls)} categorías principales en OneNutrition...[/green]")
-        
-        context = page.context
+        raise NotImplementedError("OneNutritionScraper usa run() directo, no Playwright.")
 
-        for main_category, items in self.category_urls.items():
-            for item in items:
-                url = item['url']
-                deterministic_subcategory = item['subcategory']
-                
-                print(f"\n[bold blue]Procesando categoría:[/bold blue] {main_category} -> {deterministic_subcategory} ({url})")
-
-                
-                try:
-                    page.goto(url, wait_until="domcontentloaded", timeout=60000)
-                    
-                    page_number = 1
-                    while True:
-                        print(f"--- Página {page_number} ---")
-                        try:
-                            page.wait_for_selector(self.selectors['product_grid'], timeout=10000)
-                        except:
-                            print(f"[red]No se encontraron productos en la grilla principal (#js-product-list) de {url}.[/red]")
-                            break
-
-                        producto_cards = page.locator(self.selectors['product_card'])
-                        count = producto_cards.count()
-                        print(f"  > Encontrados {count} productos en esta página.")
-                        
-                        for i in range(count):
-                            producto = producto_cards.nth(i)
-                            current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            
-                            # --- Grid Extraction ---
-                            
-                            # Link
-                            link = "N/D"
-                            if producto.locator(self.selectors['link']).count() > 0:
-                                href = producto.locator(self.selectors['link']).first.get_attribute("href")
-                                if href:
-                                    link = href 
-                                    if not link.startswith('http'):
-                                         link = self.base_url + link
-
-                            # Deduplication Check
-                            if link != "N/D" and link in self.seen_urls:
-                                print(f"[yellow]  >> Producto duplicado omitido: {title}[/yellow]")
-                                continue
-                            if link != "N/D":
-                                self.seen_urls.add(link)
-
-                            # Title
-                            title = "N/D"
-                            if producto.locator(self.selectors['product_name']).count() > 0:
-                                raw_title = producto.locator(self.selectors['product_name']).first.inner_text()
-                                title = _strip_bundle_suffix(self.clean_text(raw_title))
-                            
-                            # Brand (inferred)
-                            brand = "N/D"
-
-                            
-                            # Thumbnail
-                            thumbnail_url = ""
-                            if producto.locator(self.selectors['thumbnail']).count() > 0:
-                                t_src = producto.locator(self.selectors['thumbnail']).first.get_attribute("src")
-                                if t_src:
-                                    thumbnail_url = t_src
-                                    
-                            # Price
-                            price = 0
-                            active_discount = False
-                            
-                            price_container = producto.locator(self.selectors['price_container'])
-                            if price_container.count() > 0:
-                                regular = price_container.locator(self.selectors['price_regular'])
-                                if regular.count() > 0:
-                                    active_discount = True
-                                    current = price_container.locator(self.selectors['price_current'])
-                                    price_text = current.first.inner_text() if current.count() > 0 else "0"
-                                else:
-                                    current = price_container.locator(self.selectors['price_current'])
-                                    price_text = current.first.inner_text() if current.count() > 0 else "0"
-                            else:
-                                price_text = "0"
-                                
-                            clean_price = re.sub(r'[^\d]', '', price_text)
-                            if clean_price:
-                                price = int(clean_price)
-
-                            # Detail page skipped: opening one tab per product triggers
-                            # soft rate-limiting on the PrestaShop site (grid renders without
-                            # #js-product-list after ~100 requests). image_url falls back to
-                            # thumbnail; description is generated by the LLM step from the title.
-                            image_url = thumbnail_url
-                            description = ""
-
-                            # New Categorization Logic
-                            # Use Heuristic specifically for "CATEGORIZAR_PROTEINA" as requested
-                            final_category, final_subcategory = self._classify_product(title, description, main_category, deterministic_subcategory, brand)
-
-                            site_folder = self.site_name.replace(" ", "_").lower()
-                            if thumbnail_url:
-                                local_thumb = self.download_image(thumbnail_url, subfolder=site_folder)
-                                if local_thumb: thumbnail_url = local_thumb
-                            if image_url:
-                                local_img = self.download_image(image_url, subfolder=site_folder)
-                                if local_img: image_url = local_img
-
-                            yield {
-                                'date': current_date,
-                                'site_name': self.site_name,
-                                'category': self.clean_text(final_category),
-                                'subcategory': final_subcategory,
-                                'product_name': title,
-                                'brand': self.enrich_brand(self.clean_text(brand), title, scan_title=True),
-                                'price': price,
-
-                                'link': link,
-                                'rating': "0",
-                                'reviews': "0",
-                                'active_discount': active_discount,
-                                'thumbnail_image_url': thumbnail_url,
-                                'image_url': image_url,
-                                'description': description
-                            }
-                        
-                        # Paginación
-                        next_btn = page.locator(self.selectors['next_button'])
-                        if next_btn.count() > 0 and next_btn.first.is_visible():
-                            href = next_btn.first.get_attribute("href")
-                            if href:
-                                print(f"  > Avanzando a página {page_number + 1}...")
-                                page.goto(href)
-                                page_number += 1
-                                page.wait_for_timeout(2000)
-                            else:
-                                print("  > Click en botón Siguiente...")
-                                next_btn.first.click()
-                                page.wait_for_timeout(3000)
-                                page_number += 1
-                        else:
-                            print("  > No hay más páginas.")
-                            break
-                            
-                except Exception as e:
-                    print(f"[red]Error procesando {url}: {e}[/red]")
 
 if __name__ == "__main__":
-    base_url = "https://onenutrition.cl"
-    scraper = OneNutritionScraper(base_url=base_url, headless=True)
-    scraper.run()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--headless", action="store_true", help="Ignorado (sin browser)")
+    parser.parse_args()
+    OneNutritionScraper().run()
