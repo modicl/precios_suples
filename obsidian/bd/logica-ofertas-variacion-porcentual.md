@@ -25,7 +25,10 @@ fecha: 2026-09-27
 2. **Outlier único como referencia.** Ej.: Barrita Whey Protein 45g (Winkler): 1190 → 22170 (un run capturó el precio de la caja) → 1380 = -93,78% desde el 10/09. Gel Boost (SportNutriShop): caja 24990 → unidad 1290 = -94,84%.
 3. **Precio 0 = "-100%".** 51 filas de la vista tienen `ultimo_precio = 0`. Además, `rn_mejor_precio` ordena por `precio_actual ASC`: un 0 le ganaría al precio real de otra tienda para el mismo producto (hoy no ocurre, pero la lógica lo permite).
 4. **`showstockless` invertido.** `true` (valor por defecto) aplica `ultimo_precio > 0`, o sea que *oculta* los productos sin stock. El nombre dice lo contrario. Funciona por accidente; revisar el frontend antes de corregirlo.
-5. **Alertas.** Step 8 hace POST a `/api/v1/notificaciones/process`, pero ese módulo no existe en `src/`. Cuando se implemente, debe ignorar precios 0 y outliers, o disparará alertas falsas.
+5. **Notificaciones.** *(Corregido: el análisis inicial se hizo sobre una copia local del backend desactualizada 22 commits.)*
+   - El módulo existe: `src/notificaciones/notificaciones.service.ts`, en `procesarDescuentos`.
+   - Compara `MIN(precio)` de hoy vs ayer por producto, pero **no excluye precio 0 ni enlaces inactivos**.
+   - Resultado: una tienda sin stock (0) dispararía un email "bajó a $0". Hoy no hay notificaciones enviadas.
 6. Los duplicados por reinserción de CSV ([[byon-precios-truncados]]) inflan `historia_precios` y el gráfico de `findHistoricPrices`.
 
 ## Solución propuesta (validada solo en modo lectura contra prod)
