@@ -54,7 +54,7 @@ SCRAPERS = [
     ("AllNutrition",          "AllNutritionScraperRunner.py"),
     ("Byon",                  "BYONScraperRunner.py"),
     ("CruzVerde",             "CruzVerdeScraperRunner.py"),
-    ("Decathlon",             "DecathlonScraper.py"),
+    # Decathlon desactivado (sep 2026): Cloudflare bloquea todo decathlon.cl (403).
     ("DrSimi",                "DrSimiScraper.py"),
     ("FarmaciaKnop",          "FarmaciaKnopScraperRunner.py"),
     ("KoteSport",             "KoteSportScraper.py"),

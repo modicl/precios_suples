@@ -59,7 +59,7 @@ SCRAPERS = [
     ("AllNutrition",           "AllNutritionScraper.py"),
     ("Byon",                   "BYONScraper.py"),
     ("CruzVerde",              "CruzVerdeScraper.py"),
-    ("Decathlon",              "DecathlonScraper.py"),
+    # Decathlon desactivado (sep 2026): Cloudflare bloquea todo decathlon.cl (403).
     ("DrSimi",                 "DrSimiScraper.py"),
     ("FarmaciaKnop",           "FarmaciaKnopScraper.py"),
     ("KoteSport",              "KoteSportScraper.py"),
@@ -179,6 +179,8 @@ def main():
     # ── Leer variables de sharding ──────────────────────────────────────────
     start_idx = int(os.environ.get("START_INDEX", "0"))
     end_idx   = int(os.environ.get("END_INDEX",   str(len(SCRAPERS) - 1)))
+    # Tolerar END_INDEX de configuraciones antiguas tras quitar scrapers de la lista
+    end_idx   = min(end_idx, len(SCRAPERS) - 1)
 
     # Validar rango
     if start_idx < 0 or end_idx >= len(SCRAPERS) or start_idx > end_idx:
