@@ -10,6 +10,7 @@ from datetime import datetime
 # Add root to path to find tools
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared.db_multiconnect import get_targets
+from shared.step3_logic import latest_scrape_mask, dedup_links, dedup_prices
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +106,18 @@ def _bulk_execute_values(engine, query, values, page_size=1000):
 
 def insert_data_bulk(engine, df, db_name="DB"):
     print(f"\n--- [{db_name}] Insertando {len(df)} registros (MODO BATCH OPTIMIZADO) ---")
+
+    # El CSV puede traer varios días de scraping por tienda (runs anteriores sin
+    # archivar). Estado actual (productos, enlaces, URLs vistas) = solo el scrapeo
+    # más reciente de cada tienda; los días anteriores únicamente rellenan
+    # historia_precios (Fase 3). Ver shared/step3_logic.py.
+    df_all      = df
+    latest_mask = latest_scrape_mask(df_all)
+    df          = df_all[latest_mask]
+    n_older     = len(df_all) - len(df)
+    if n_older:
+        print(f"[{db_name}] {n_older} fila(s) de scrapeos anteriores: solo rellenan historia_precios; "
+              f"estado actual y desactivación usan {len(df)} fila(s) del scrapeo más reciente por tienda.")
 
     with engine.connect() as conn:
 
@@ -309,14 +322,8 @@ def insert_data_bulk(engine, df, db_name="DB"):
         # ------------------------------------------------------------------ #
         print("Preparando lote de Producto-Tienda...")
 
-        links_dedup    = {}   # (pid, tid)      → link dict  — un link por producto+tienda
-        url_dedup      = {}   # (tid, url)       → pid        — para detectar misma URL con distinto producto
-        url_conflict_count = 0
+        link_rows      = []   # filas candidatas, en orden del CSV; el dedup está en shared/step3_logic.py
         miss_pid_count = 0
-
-        # Categorías de menor prioridad: si la misma URL aparece en dos categorías,
-        # se prefiere la fila cuya subcategoría NO sea de baja prioridad.
-        LOW_PRIORITY_SUBCATS = {"packs", "ofertas", "promo", "bundle", "outlet"}
 
         for _, row in df.iterrows():
             p_display = row.get('normalized_name', row['product_name'])
@@ -343,37 +350,20 @@ def insert_data_bulk(engine, df, db_name="DB"):
                     print(f"  [DEBUG MISS] PID no encontrado para: '{p_display}', BrandID={b_id}, SubID={s_id}")
                 continue
 
-            url  = row['link']
-            lnk  = {
+            link_rows.append({
                 "id_producto": pid,
                 "id_tienda":   t_id,
-                "url_link":    url,
+                "url_link":    row['link'],
                 "descripcion": row.get('description', ''),
-            }
+                "subcategory": row.get('subcategory', ''),
+            })
 
-            # ── Dedup por (tid, url): misma URL en la misma tienda con distinto pid ──
-            # Ocurre cuando el scraper recoge el mismo producto desde dos categorías
-            # distintas (ej. Proteinas y Packs). Preferir la categoría más específica
-            # (no-pack, no-oferta). Si ambas son igual de prioritarias, queda la primera.
-            url_key = (t_id, make_key(url))
-            existing_pid = url_dedup.get(url_key)
-            if existing_pid is not None and existing_pid != pid:
-                url_conflict_count += 1
-                subcat_lower = make_key(str(row.get('subcategory', '')))
-                is_low = any(kw in subcat_lower for kw in LOW_PRIORITY_SUBCATS)
-                if is_low:
-                    # La fila actual es de baja prioridad → ignorar, la anterior gana
-                    continue
-                else:
-                    # La fila actual es más específica → reemplaza la anterior
-                    old_pid = existing_pid
-                    old_key = (old_pid, t_id)
-                    links_dedup.pop(old_key, None)
-
-            url_dedup[url_key] = pid
-
-            # ── Dedup por (pid, tid): mismo producto+tienda, quedarse con este link ──
-            links_dedup[(pid, t_id)] = lnk
+        # ── Dedup por (tid, url) y por (pid, tid) ──
+        # Misma URL en la misma tienda con distinto pid ocurre cuando el scraper recoge el
+        # mismo producto desde dos categorías (ej. Proteinas y Packs): gana la categoría más
+        # específica (no-pack, no-oferta); con igual prioridad queda la primera.
+        # url_winner se reutiliza en la Fase 3 para que el precio vaya al enlace ganador.
+        links_dedup, url_winner, url_conflict_count = dedup_links(link_rows)
 
         if url_conflict_count > 0:
             print(f"[WARNING] Fase 2: {url_conflict_count} URL(s) duplicada(s) en el CSV (misma URL, distinto producto) — se conservó la categoría más específica.")
@@ -563,22 +553,29 @@ def insert_data_bulk(engine, df, db_name="DB"):
         # ------------------------------------------------------------------ #
         print("Preparando lote de Precios...")
 
-        # Sites where duplicate URLs for the same product can exist with
-        # different prices (site-side data issue). For these, keep the lowest
-        # price seen across all rows for the same id_producto_tienda.
+        # Tiendas donde la misma URL puede venir duplicada con precios distintos
+        # (problema del sitio): por (enlace, día) se conserva el precio menor.
+        # El dedup es por día, nunca entre días (si no, se pierde el precio más nuevo).
         LOWEST_PRICE_SITES = {"allnutrition"}
 
-        # ptid -> {precio, fecha_precio}  — used only for LOWEST_PRICE_SITES
-        prices_dedup: dict = {}
-        prices_batch: list = []
+        price_rows: list = []
         miss_ptid_count = 0
 
-        for _, row in df.iterrows():
+        # Se recorren TODOS los días: el scrapeo más reciente define el estado actual y
+        # los anteriores rellenan historial (la inserción es idempotente, ver más abajo).
+        for idx, row in df_all.iterrows():
+            is_latest = bool(latest_mask.loc[idx])
+
             p_display = row.get('normalized_name', row['product_name'])
             if pd.isna(p_display):
                 p_display = row['product_name']
             p_display = clean_display_text(p_display)
             if not p_display:
+                continue
+
+            # Marca ausente en el mapa: solo puede ocurrir en filas de días anteriores
+            # (Fase 0 crea las marcas del scrapeo reciente). Se salta para no caer en N/D.
+            if not is_latest and make_key(row['brand']) not in brand_map:
                 continue
 
             b_id, s_id, c_id = _resolve_row_ids(
@@ -595,51 +592,77 @@ def insert_data_bulk(engine, df, db_name="DB"):
             if not pid:
                 continue
 
+            # Misma URL en dos categorías el mismo día: el precio va al enlace ganador
+            # de la Fase 2 (si no, la fila "Ofertas" buscaba un enlace que no existe y
+            # el precio se perdía). Solo para el scrapeo reciente: en días anteriores una
+            # URL reutilizada por la tienda podría pertenecer a otro producto.
+            if is_latest:
+                winner = url_winner.get((t_id, make_key(row['link'])))
+                if winner is not None:
+                    pid = winner
+
             ptid = link_id_map.get((pid, t_id))
             if not ptid:
-                miss_ptid_count += 1
-                if miss_ptid_count <= 3:
-                    print(f"  [DEBUG MISS PTID] PID={pid}, TID={t_id} no encontrado en mapa de enlaces.")
+                # En días anteriores es normal que el enlace ya no exista (producto retirado);
+                # solo se avisa por filas del scrapeo reciente, donde sí sería un fallo Fase 2 → 3.
+                if is_latest:
+                    miss_ptid_count += 1
+                    if miss_ptid_count <= 3:
+                        print(f"  [DEBUG MISS PTID] PID={pid}, TID={t_id} no encontrado en mapa de enlaces.")
                 continue
 
-            fecha = row['date'] if pd.notna(row.get('date')) else datetime.now()
-            site_key = make_key(str(row.get('site_name', '')))
+            price_rows.append({
+                "id_producto_tienda": ptid,
+                "precio":             row['price'],
+                "fecha_precio":       row['date'] if pd.notna(row.get('date')) else datetime.now(),
+                "site_key":           make_key(str(row.get('site_name', ''))),
+            })
 
-            if site_key in LOWEST_PRICE_SITES:
-                # Accumulate: keep only the lowest price for this ptid
-                existing = prices_dedup.get(ptid)
-                if existing is None or row['price'] < existing['precio']:
-                    prices_dedup[ptid] = {
-                        "id_producto_tienda": ptid,
-                        "precio":             row['price'],
-                        "fecha_precio":       fecha,
-                    }
-            else:
-                prices_batch.append({
-                    "id_producto_tienda": ptid,
-                    "precio":             row['price'],
-                    "fecha_precio":       fecha,
-                })
-
-        # Merge deduped lowest-price entries into the main batch
-        if prices_dedup:
-            print(f"  [{', '.join(LOWEST_PRICE_SITES)}] deduplicados por precio mínimo: {len(prices_dedup)} entradas.")
-            prices_batch.extend(prices_dedup.values())
+        prices_batch = dedup_prices(price_rows, LOWEST_PRICE_SITES)
+        if len(prices_batch) != len(price_rows):
+            print(f"  Precios deduplicados por (enlace, día): {len(price_rows)} -> {len(prices_batch)}.")
 
         if miss_ptid_count > 0:
             print(f"[WARNING] Fase 3: {miss_ptid_count} precios saltados — enlace no encontrado (fallo Fase 2 → 3).")
 
         if prices_batch:
-            print(f"[{db_name}] Insertando {len(prices_batch)} precios...")
+            print(f"[{db_name}] Insertando hasta {len(prices_batch)} precios (se omiten los ya existentes)...")
             try:
-                _bulk_execute_values(engine, """
-                    INSERT INTO historia_precios (id_producto_tienda, precio, fecha_precio)
-                    VALUES %s
-                """, [
-                    (hp["id_producto_tienda"], hp["precio"], hp["fecha_precio"])
-                    for hp in prices_batch
-                ])
-                print(f"[{db_name}] Historial de precios insertado correctamente.")
+                raw_conn_hp = engine.raw_connection()
+                try:
+                    with raw_conn_hp.cursor() as cur:
+                        cur.execute("""
+                            CREATE TEMP TABLE _batch_prices (
+                                id_producto_tienda INTEGER,
+                                precio             INTEGER,
+                                fecha_precio       TIMESTAMP
+                            ) ON COMMIT DROP
+                        """)
+                        psycopg2.extras.execute_values(cur, """
+                            INSERT INTO _batch_prices (id_producto_tienda, precio, fecha_precio)
+                            VALUES %s
+                        """, [
+                            (hp["id_producto_tienda"], hp["precio"], hp["fecha_precio"])
+                            for hp in prices_batch
+                        ], page_size=1000)
+                        # Idempotente: reprocesar un CSV (o rellenar días anteriores) no
+                        # duplica filas ya guardadas para el mismo enlace y fecha.
+                        cur.execute("""
+                            INSERT INTO historia_precios (id_producto_tienda, precio, fecha_precio)
+                            SELECT b.id_producto_tienda, b.precio, b.fecha_precio
+                            FROM _batch_prices b
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM historia_precios h
+                                WHERE h.id_producto_tienda = b.id_producto_tienda
+                                  AND h.fecha_precio       = b.fecha_precio
+                            )
+                        """)
+                        inserted_hp = cur.rowcount
+                    raw_conn_hp.commit()
+                finally:
+                    raw_conn_hp.close()
+                print(f"[{db_name}] Historial de precios insertado correctamente "
+                      f"({inserted_hp} nuevos, {len(prices_batch) - inserted_hp} ya existían).")
             except Exception as e:
                 print(f"[{db_name}] [ERROR] Fallo en bulk insert historia_precios: {e}")
 
