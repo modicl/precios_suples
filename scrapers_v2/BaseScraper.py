@@ -10,6 +10,8 @@ import sys
 import os
 import json
 import time
+import random
+import tempfile
 from datetime import datetime
 from playwright.sync_api import sync_playwright, Page, Playwright
 import boto3
@@ -142,6 +144,122 @@ class SharedSeenUrls:
 
     def count(self) -> int:
         return len(self._load()["urls"])
+
+
+class BrowserSlots:
+    """
+    Límite global de navegadores Chromium simultáneos entre TODOS los procesos
+    (scrapers sueltos y partes de los runners).
+
+    Cada slot es un archivo bloqueado a nivel de SO (msvcrt en Windows, fcntl en
+    Unix). Si un proceso muere, el SO libera el lock solo: no quedan slots
+    huérfanos. Se configura con la variable de entorno MAX_BROWSERS (la define
+    RunAll con --max-browsers). Sin la variable, o con 0, no hay límite.
+    """
+
+    POLL_SECONDS = 2.0
+
+    def __init__(self, max_slots: int):
+        self.max_slots = max_slots
+        self._dir = os.path.join(tempfile.gettempdir(), "precios_suples_browser_slots")
+        os.makedirs(self._dir, exist_ok=True)
+        self._fh = None
+
+    @classmethod
+    def from_env(cls):
+        try:
+            n = int(os.environ.get("MAX_BROWSERS", "0"))
+        except ValueError:
+            n = 0
+        return cls(n) if n > 0 else None
+
+    @staticmethod
+    def _try_lock(fh) -> bool:
+        try:
+            if os.name == "nt":
+                import msvcrt
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except OSError:
+            return False
+
+    def acquire(self, label: str = ""):
+        """Bloquea hasta conseguir un slot libre. Mantiene el lock hasta release()."""
+        waited = False
+        while True:
+            for i in range(self.max_slots):
+                fh = open(os.path.join(self._dir, f"slot_{i}.lock"), "a+b")
+                if self._try_lock(fh):
+                    self._fh = fh
+                    if waited:
+                        print(f"[green]{label} obtuvo slot de navegador {i + 1}/{self.max_slots}[/green]")
+                    return
+                fh.close()
+            if not waited:
+                print(f"[yellow]{label} esperando slot de navegador (máx {self.max_slots} simultáneos)...[/yellow]")
+                waited = True
+            time.sleep(self.POLL_SECONDS + random.random())
+
+    def release(self):
+        fh, self._fh = self._fh, None
+        if fh is None:
+            return
+        try:
+            if os.name == "nt":
+                import msvcrt
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+        except OSError:
+            pass
+        finally:
+            fh.close()
+
+
+# Pixel GIF transparente 1x1: se entrega en lugar de cada imagen para no descargar
+# ni decodificar nada, pero sin disparar eventos `error` (algunos sitios cambian el
+# src por un placeholder en onerror y contaminarían las URLs de imagen scrapeadas).
+_BLANK_GIF = bytes.fromhex("47494638396101000100800000000000ffffff21f90401000000002c00000000010001000002024401003b")
+
+# Dominios de analytics/publicidad/píxeles: ningún scraper depende de ellos.
+_TRACKER_HOSTS = (
+    "google-analytics.com", "googletagmanager.com", "googletagservices.com",
+    "googlesyndication.com", "doubleclick.net", "googleadservices.com",
+    "connect.facebook.net", "facebook.com/tr", "analytics.tiktok.com",
+    "hotjar.com", "clarity.ms", "criteo.", "pinterest.com/ct", "snap.licdn.com",
+    "bat.bing.com", "newrelic.com",
+    "nr-data.net", "sentry.io", "segment.com", "mixpanel.com", "klaviyo.com",
+    "onesignal.com", "tawk.to", "smartsuppchat.com", "jivosite.com",
+)
+
+
+def _install_resource_blocking(context):
+    """
+    Reduce CPU/red: los scrapers solo leen atributos del DOM (src, data-src, href...)
+    y texto, nunca píxeles. Se mantienen HTML, CSS, JS y XHR/fetch intactos.
+      - image        -> GIF 1x1 (sin descarga ni decodificación)
+      - media / font -> abortados
+      - trackers     -> abortados
+    """
+    def _handler(route):
+        req = route.request
+        rtype = req.resource_type
+        if rtype == "image":
+            route.fulfill(status=200, content_type="image/gif", body=_BLANK_GIF)
+        elif rtype in ("media", "font"):
+            route.abort()
+        elif any(host in req.url for host in _TRACKER_HOSTS):
+            route.abort()
+        else:
+            route.continue_()
+
+    context.route("**/*", _handler)
 
 
 class BaseScraper:
@@ -456,6 +574,19 @@ class BaseScraper:
     # Metodo que inicia el navegador y el proceso de scraping
     def run(self):
         """
+        Espera un slot global de navegador (si MAX_BROWSERS está definido) y ejecuta el scraping.
+        """
+        slots = BrowserSlots.from_env()
+        if slots is not None:
+            slots.acquire(f"{self.site_name}{self.output_suffix}")
+        try:
+            self._run_browser()
+        finally:
+            if slots is not None:
+                slots.release()
+
+    def _run_browser(self):
+        """
         Inicia el navegador y el proceso de scraping.
         """
         with sync_playwright() as playwright:
@@ -510,8 +641,12 @@ class BaseScraper:
                 window.chrome = { runtime: {} };
             """)
 
+            # Bloqueo de recursos (imágenes, fuentes, media, trackers) — opt-in vía .bat
+            if os.environ.get("BLOCK_RESOURCES", "0") == "1":
+                _install_resource_blocking(context)
+
             page = context.new_page()
-            
+
             # Crear directorio raw_data en la raíz del proyecto
             output_dir = os.path.join(project_root, "raw_data")
             os.makedirs(output_dir, exist_ok=True)

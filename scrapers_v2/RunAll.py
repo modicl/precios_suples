@@ -125,11 +125,15 @@ def _run_one(name: str, script: str, headless: bool) -> dict:
     )
 
     log_file = open(log_path, "w", encoding="utf-8")
+    # Prioridad baja en Windows: los hijos (runners, partes, node y Chromium) la heredan,
+    # así el PC sigue fluido aunque el scraping use toda la CPU.
+    creationflags = subprocess.BELOW_NORMAL_PRIORITY_CLASS if os.name == "nt" else 0
     proc = subprocess.Popen(
         cmd,
         cwd=SCRAPERS_DIR,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        creationflags=creationflags,
     )
 
     t_start = time.monotonic()
@@ -754,7 +758,19 @@ def main():
         "--api_mode", action="store_true",
         help="Usar scrapers API para tiendas VTEX (SupleTech + SuplementosMayoristas). Sin browser, ~10x más rápido."
     )
+    parser.add_argument(
+        "--max-browsers", type=int, default=None,
+        help="Máximo de navegadores Chromium simultáneos en TODO el sistema, incluyendo las "
+             "partes de los runners (por defecto: mitad de los hilos de la CPU; 0 = sin límite)."
+    )
     args = parser.parse_args()
+
+    # Límite global de navegadores: lo leen BaseScraper.BrowserSlots en cada subproceso (env heredado)
+    max_browsers = args.max_browsers if args.max_browsers is not None else max(2, (os.cpu_count() or 4) // 2)
+    if max_browsers > 0:
+        os.environ["MAX_BROWSERS"] = str(max_browsers)
+    else:
+        os.environ.pop("MAX_BROWSERS", None)
 
     headless = not args.visible
 
@@ -782,6 +798,8 @@ def main():
         f"{api_label}"
         f"Modo:     {mode_label}\n"
         f"Headless: {headless}\n"
+        f"Navegadores simultáneos (máx): {max_browsers if max_browsers > 0 else 'sin límite'}\n"
+        f"Bloqueo de recursos: {'activo' if os.environ.get('BLOCK_RESOURCES') == '1' else 'inactivo'}\n"
         f"Scrapers: {len(scrapers)}\n"
         f"Inicio:   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )

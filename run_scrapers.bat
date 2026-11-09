@@ -57,11 +57,29 @@ echo.
 set /p "api_opcion=  Usar modo API para VTEX? [S/N]: "
 
 if /i "%api_opcion%"=="S" set "EXEC_ARGS=%EXEC_ARGS% --api_mode"
+goto ask_browsers
+
+:ask_browsers
+cls
+echo.
+echo  ===================================================
+echo   Limite global de navegadores Chromium simultaneos
+echo   (cuenta tambien las partes de cada runner)
+echo  ===================================================
+echo.
+set "maxb="
+set /p "maxb=  Maximo de navegadores [Enter = 8, 0 = sin limite]: "
+if not "%maxb%"=="" set "EXEC_ARGS=%EXEC_ARGS% --max-browsers %maxb%"
 goto ejecutar
 
 :ejecutar
 cls
 echo.
+rem --- Rama optimizada (limite de navegadores, prioridad baja, bloqueo de recursos) ---
+git -C "%~dp0." checkout optimizado-v1 >nul 2>&1
+for /f "delims=" %%b in ('git -C "%~dp0." branch --show-current') do echo  Rama actual: %%b
+rem Bloqueo de imagenes/fuentes/media/trackers (los scrapers solo leen atributos del DOM)
+set "BLOCK_RESOURCES=1"
 echo  Iniciando scrapers...
 if not "%EXEC_ARGS%"=="" echo  Argumentos: %EXEC_ARGS%
 echo.
