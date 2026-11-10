@@ -366,6 +366,9 @@ def _generate_report(results: list, start_time: float, total_elapsed: float):
 
         if count == 0:
             statuses.append("zero")
+            if hist:
+                # Tienda que antes traía productos y ahora 0: debe verse en la consola como anomalía
+                anomalies.append((site, 0, hist, 0.0))
         elif hist is not None and hist > 0:
             pct = count / hist
             if pct < 0.70:

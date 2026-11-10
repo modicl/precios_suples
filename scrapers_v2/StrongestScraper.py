@@ -4,6 +4,7 @@ from rich import print
 from datetime import datetime
 import re
 import unicodedata
+from urllib.parse import urljoin
 
 class StrongestScraper(BaseScraper):
     def __init__(self):
@@ -15,24 +16,26 @@ class StrongestScraper(BaseScraper):
         
         # URLs Categorias - Subcategorias
         self.category_urls = {
-            "Proteinas": [{"url": "https://www.strongest.cl/collection/proteinas", "subcategory": "Proteinas"}],
-            "Creatinas": [{"url": "https://www.strongest.cl/collection/creatinas", "subcategory": "Creatinas"}],
-            "Vitaminas y Minerales": [{"url": "https://www.strongest.cl/collection/salud-y-bienestar", "subcategory": "Bienestar General"}],
-            "Pre Entrenos": [{"url": "https://www.strongest.cl/collection/pre-entrenos", "subcategory": "Pre Entrenos"}],
-            "Ganadores de Peso": [{"url": "https://www.strongest.cl/collection/ganadores-de-masa", "subcategory": "Ganadores De Peso"}],
-            "Aminoacidos y BCAA": [{"url": "https://www.strongest.cl/collection/aminoacidos-bcaa", "subcategory": "Otros Aminoacidos y BCAA"}],
-            "Perdida de Grasa": [{"url": "https://www.strongest.cl/collection/termogenicos", "subcategory": "Quemadores Termogenicos"}],
-            "Snacks y Comida": [{"url": "https://www.strongest.cl/collection/snacks", "subcategory": "Otros Snacks y Comida"}]
+            # Rediseño del sitio (oct 2026): /collection/<slug> -> /tienda/categoria/<slug>/
+            "Proteinas": [{"url": "https://www.strongest.cl/tienda/categoria/proteinas/", "subcategory": "Proteinas"}],
+            "Creatinas": [{"url": "https://www.strongest.cl/tienda/categoria/creatinas/", "subcategory": "Creatinas"}],
+            "Vitaminas y Minerales": [{"url": "https://www.strongest.cl/tienda/categoria/salud-y-vitalidad/", "subcategory": "Bienestar General"}],
+            "Pre Entrenos": [{"url": "https://www.strongest.cl/tienda/categoria/pre-entrenos/", "subcategory": "Pre Entrenos"}],
+            "Ganadores de Peso": [{"url": "https://www.strongest.cl/tienda/categoria/ganadores-de-masa/", "subcategory": "Ganadores De Peso"}],
+            "Aminoacidos y BCAA": [{"url": "https://www.strongest.cl/tienda/categoria/aminoacidos/", "subcategory": "Otros Aminoacidos y BCAA"}],
+            "Perdida de Grasa": [{"url": "https://www.strongest.cl/tienda/categoria/termogenicos/", "subcategory": "Quemadores Termogenicos"}],
+            "Snacks y Comida": [{"url": "https://www.strongest.cl/tienda/categoria/bebidas-y-snacks/", "subcategory": "Otros Snacks y Comida"}]
         }
-        
+
+        # Markup nuevo (SSR): article.p-card con .p-card__name/.p-card__brand/.price__now
         self.selectors = {
-            "product_card": ".bs-collection__product",
-            "product_name": ".bs-collection__product-title",
-            "price": ".bs-collection__product-final-price", 
-            "old_price": ".bs-collection__old-price", 
-            "link": "a.bs-collection__product-info",
-            "thumbnail": ".bs-collection__product__img img, .bs-collection__product-image img",
-            "brand": ".bs-collection__product-brand"
+            "product_card": "article.p-card",
+            "product_name": ".p-card__name",
+            "price": ".price__now",
+            "old_price": ".price s",
+            "link": ".p-card__name a",
+            "thumbnail": ".p-card__media img",
+            "brand": ".p-card__brand"
         }
 
     def extract_process(self, page):
@@ -100,7 +103,7 @@ class StrongestScraper(BaseScraper):
                         if card.locator(self.selectors['thumbnail']).count() > 0:
                             t_src = card.locator(self.selectors['thumbnail']).first.get_attribute("src")
                             if t_src:
-                                thumbnail_url = t_src if t_src.startswith('http') else f"https:{t_src}"
+                                thumbnail_url = urljoin(self.base_url + "/", t_src)
 
                         # Price
                         price = 0
@@ -141,48 +144,35 @@ class StrongestScraper(BaseScraper):
                                         image_url = og_img
                                 except: pass
 
-                                # JSON-LD
-                                if not image_url:
-                                    try:
-                                        json_img = detail_page.evaluate('''() => {
-                                            const scripts = document.querySelectorAll('script[type="application/ld+json"]');
-                                            for (const s of scripts) {
-                                                try {
-                                                    const d = JSON.parse(s.innerText);
-                                                    if ((d['@type'] === 'Product' || d['@type'] === 'ProductGroup') && d.image) 
-                                                        return Array.isArray(d.image) ? d.image[0] : d.image;
-                                                } catch(e){}
-                                            }
-                                            return null;
-                                        }''')
-                                        if json_img:
-                                            image_url = json_img
-                                    except: pass
-
-                                # DOM Fallback
-                                if not image_url:
-                                    img_el = detail_page.locator('.bs-product-gallery__img img, .bs-product__image img, .bs-img-square img').first
-                                    if img_el.count() > 0:
-                                        src = img_el.get_attribute("src")
-                                        if src:
-                                            image_url = src if src.startswith('http') else f"https:{src}"
-                                
-                                # 2. SKU
-                                sku_el = detail_page.locator('.bs-product__sku').first
-                                if sku_el.count() > 0:
-                                    sku_raw = sku_el.inner_text().strip()
-                                    sku = sku_raw.replace("SKU:", "").strip()
-                                
-                                # 3. Description
-                                # Try to wait for description, it might be lazy loaded
+                                # JSON-LD: el nodo Product viene dentro de un @graph (sitio nuevo)
+                                ld = {}
                                 try:
-                                    detail_page.wait_for_selector('.bs-product-description, .product-description, #description', timeout=2000)
+                                    ld = detail_page.evaluate('''() => {
+                                        for (const s of document.querySelectorAll('script[type="application/ld+json"]')) {
+                                            try {
+                                                const d = JSON.parse(s.textContent);
+                                                const nodes = d['@graph'] || [d];
+                                                for (const n of nodes) {
+                                                    if (n['@type'] === 'Product' || n['@type'] === 'ProductGroup') {
+                                                        const img = Array.isArray(n.image) ? n.image[0] : n.image;
+                                                        return {image: img || '', sku: n.sku || '', description: n.description || ''};
+                                                    }
+                                                }
+                                            } catch(e){}
+                                        }
+                                        return {};
+                                    }''') or {}
                                 except: pass
 
-                                desc_el = detail_page.locator('.bs-product-description, .product-description, #description').first
-                                if desc_el.count() > 0:
-                                    description = desc_el.inner_text().strip()
-                                    
+                                if not image_url and ld.get('image'):
+                                    image_url = urljoin(self.base_url + "/", ld['image'])
+
+                                # 2. SKU
+                                sku = (ld.get('sku') or "").strip()
+
+                                # 3. Description
+                                description = (ld.get('description') or "").strip()
+
                                 detail_page.close()
                                 
                             except Exception as e:
@@ -225,7 +215,7 @@ class StrongestScraper(BaseScraper):
                     # Strongest uses ?page=N
                     # We can click next if exists or just navigate URL
                     
-                    next_btn = page.locator('a[aria-label="Next page"], .pagination .next, a:has-text("Siguiente")')
+                    next_btn = page.locator('a[rel="next"]')
                     # Or simpler: check if we just processed less than expected or check button
                     
                     # Safer: Construct next URL or look for next button href
@@ -239,9 +229,9 @@ class StrongestScraper(BaseScraper):
                     
                     if next_href:
                         print(f"  > Avanzando a página {page_num + 1}...")
-                        page.goto(self.base_url + next_href if next_href.startswith('/') else next_href)
+                        # href relativo tipo "?page=2#resultados": se resuelve contra la URL actual
+                        page.goto(urljoin(page.url, next_href), wait_until='domcontentloaded')
                         page_num += 1
-                        page.wait_for_timeout(2000)
                     else:
                         # Fallback to URL increment if no button found but maybe it's infinite scroll or js?
                         # Strongest is usually paginated. If no next button, we assume end.

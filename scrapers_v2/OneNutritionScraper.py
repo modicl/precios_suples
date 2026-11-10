@@ -39,7 +39,10 @@ HEADERS = {
     "Accept": "application/json",
 }
 PAGE_SIZE = 250   # máximo que acepta products.json
-DELAY_S   = 0.5   # entre páginas (ser amigable con el servidor)
+DELAY_S   = 1.5   # entre páginas (ser amigable con el servidor; Cloudflare devuelve 429 si se abusa)
+COLLECTION_DELAY_S = 3.0  # pausa entre colecciones
+MAX_RETRIES   = 3         # intentos por petición ante 429/503 (esperas de 60s y 120s)
+MAX_BACKOFF_S = 180       # espera máxima entre reintentos
 
 # (main_category, subcategoría determinista, handle de la colección Shopify)
 # La subcategoría final la refina CategoryClassifier.
@@ -190,9 +193,21 @@ class OneNutritionScraper(BaseScraper):
     def _get_page(self, handle: str, page: int) -> list:
         """Retorna la lista de productos de una página de la colección."""
         url = f"{self.base_url}/collections/{handle}/products.json?limit={PAGE_SIZE}&page={page}"
-        r = requests.get(url, headers=HEADERS, timeout=20)
-        r.raise_for_status()
-        return r.json().get("products", [])
+        for attempt in range(1, MAX_RETRIES + 1):
+            r = requests.get(url, headers=HEADERS, timeout=20)
+            if r.status_code in (429, 503) and attempt < MAX_RETRIES:
+                # Cloudflare/Shopify rate limit: respetar Retry-After (acotado) con backoff creciente
+                try:
+                    retry_after = int(r.headers.get("Retry-After", ""))
+                except ValueError:
+                    retry_after = 0
+                wait = min(max(retry_after, 30) * attempt, MAX_BACKOFF_S)
+                print(f"[yellow][{self.site_name}] {r.status_code} en {handle} p{page}; "
+                      f"reintento {attempt}/{MAX_RETRIES - 1} en {wait}s[/yellow]")
+                time.sleep(wait)
+                continue
+            r.raise_for_status()
+            return r.json().get("products", [])
 
     @staticmethod
     def _to_int_price(value) -> int:
@@ -274,6 +289,8 @@ class OneNutritionScraper(BaseScraper):
         self._log_info(f"Iniciando API scraping. Archivo: {csv_filename}")
 
         total_count = 0
+        failed_collections = []
+        rate_limited = False
 
         try:
             with open(csv_file, mode="w", newline="", encoding="utf-8-sig") as f:
@@ -290,6 +307,11 @@ class OneNutritionScraper(BaseScraper):
                         except Exception as e:
                             print(f"[red][{self.site_name}] ERROR {handle} p{page}: {e}[/red]")
                             self._log_info(f"ERROR {handle} p{page}: {e}")
+                            failed_collections.append(handle)
+                            # 429/503 que persiste tras los reintentos = IP bloqueada: las demás
+                            # colecciones fallarían igual, así que se corta (evita esperar minutos por cada una).
+                            if "429" in str(e) or "503" in str(e):
+                                rate_limited = True
                             break
 
                         if not data:
@@ -318,6 +340,11 @@ class OneNutritionScraper(BaseScraper):
 
                     print(f"  [{main_cat}] {handle}: {cat_count} productos")
                     self._log_info(f"{handle}: {cat_count} productos")
+                    if rate_limited:
+                        print(f"[bold red][{self.site_name}] Rate limit persistente: se aborta el resto de colecciones.[/bold red]")
+                        self._log_info("Rate limit persistente: aborta colecciones restantes.")
+                        break
+                    time.sleep(COLLECTION_DELAY_S)
 
         except Exception as e:
             print(f"[red][{self.site_name}] Error crítico: {e}[/red]")
@@ -326,6 +353,14 @@ class OneNutritionScraper(BaseScraper):
 
         print(f"[bold green][{self.site_name}] TOTAL: {total_count} productos únicos[/bold green]")
         self._log_info(f"Finalizado. Total: {total_count} productos.")
+
+        # Que RunAll lo marque FALLO en vez de [OK] cuando faltan datos
+        if total_count == 0 or failed_collections:
+            msg = (f"{len(failed_collections)} colección(es) fallaron: {', '.join(failed_collections)}"
+                   if failed_collections else "0 productos extraídos")
+            print(f"[bold red][{self.site_name}] {msg}[/bold red]")
+            self._log_info(f"FALLO: {msg}")
+            sys.exit(1)
 
     def extract_process(self, page):
         raise NotImplementedError("OneNutritionScraper usa run() directo, no Playwright.")
