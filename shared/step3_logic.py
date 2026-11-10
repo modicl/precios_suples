@@ -47,6 +47,28 @@ def latest_scrape_mask(df):
     return ~dated | latest.isna() | (days == latest)
 
 
+# Protección de la desactivación (Fase 2b del step 3).
+# Una corrida parcial (ej: 53 de 395 productos) haría creer que el resto "ya no existe"
+# y lo desactivaría. Si la corrida trae menos de MIN_RATIO de los productos hoy activos
+# de la tienda, se omite la desactivación de esa tienda.
+DEACTIVATION_MIN_RATIO = 0.5
+DEACTIVATION_MIN_BASE = 10   # tiendas con menos activos que esto: sin protección (muestra chica)
+
+
+def should_skip_deactivation(seen_count, active_count,
+                             min_ratio=DEACTIVATION_MIN_RATIO,
+                             min_base=DEACTIVATION_MIN_BASE):
+    """
+    True si NO se debe desactivar a la tienda en este run.
+
+    seen_count:   URLs distintas de la tienda que llegaron en esta corrida.
+    active_count: productos hoy activos (is_active = true) de esa tienda en la BD.
+    """
+    if active_count < min_base:
+        return False
+    return seen_count < active_count * min_ratio
+
+
 def dedup_links(rows):
     """
     Un enlace por (producto, tienda) y una sola fila ganadora por (tienda, URL).

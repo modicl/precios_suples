@@ -10,7 +10,8 @@ from datetime import datetime
 # Add root to path to find tools
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared.db_multiconnect import get_targets
-from shared.step3_logic import latest_scrape_mask, dedup_links, dedup_prices
+from shared.step3_logic import (latest_scrape_mask, dedup_links, dedup_prices,
+                                should_skip_deactivation, DEACTIVATION_MIN_RATIO)
 
 
 # ---------------------------------------------------------------------------
@@ -519,8 +520,23 @@ def insert_data_bulk(engine, df, db_name="DB"):
             raw_conn = engine.raw_connection()
             try:
                 deactivated_total = 0
+                force_deactivation = os.getenv("STEP3_FORCE_DEACTIVATION") == "1"
                 with raw_conn.cursor() as cur:
                     for tid, active_urls in urls_by_tienda.items():
+                        # Protección contra corridas parciales: si esta corrida trae mucho menos
+                        # de lo que la tienda tiene activo, no se desactiva nada de esa tienda.
+                        cur.execute(
+                            "SELECT count(*), max(t.nombre_tienda) FROM producto_tienda pt "
+                            "JOIN tiendas t USING (id_tienda) "
+                            "WHERE pt.id_tienda = %s AND pt.is_active = true", (tid,))
+                        active_now, store_name = cur.fetchone()
+                        seen_now = len(set(active_urls))
+                        if not force_deactivation and should_skip_deactivation(seen_now, active_now):
+                            print(f"[{db_name}] [is_active] ⚠ {store_name}: corrida parcial "
+                                  f"({seen_now} URLs vs {active_now} activos, < {DEACTIVATION_MIN_RATIO:.0%}). "
+                                  f"NO se desactiva nada de esta tienda. "
+                                  f"(Si la tienda realmente redujo su catálogo: STEP3_FORCE_DEACTIVATION=1)")
+                            continue
                         cur.execute("""
                             UPDATE producto_tienda
                             SET is_active = false

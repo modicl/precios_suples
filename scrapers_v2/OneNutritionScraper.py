@@ -21,23 +21,16 @@ import sys
 import time
 from datetime import datetime
 
-import requests
+from playwright.sync_api import sync_playwright
 from rich import print
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, ".."))
 sys.path.insert(0, current_dir)
 
-from BaseScraper import BaseScraper
+from BaseScraper import BaseScraper, BrowserSlots, _install_resource_blocking
 from CategoryClassifier import CategoryClassifier
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
-    ),
-    "Accept": "application/json",
-}
 PAGE_SIZE = 250   # máximo que acepta products.json
 DELAY_S   = 1.5   # entre páginas (ser amigable con el servidor; Cloudflare devuelve 429 si se abusa)
 COLLECTION_DELAY_S = 3.0  # pausa entre colecciones
@@ -191,23 +184,31 @@ class OneNutritionScraper(BaseScraper):
     # ------------------------------------------------------------------
 
     def _get_page(self, handle: str, page: int) -> list:
-        """Retorna la lista de productos de una página de la colección."""
+        """
+        Retorna la lista de productos de una página de la colección.
+
+        Se pide con un navegador real (Playwright), no con `requests`: Cloudflare responde 429
+        a clientes no-navegador (huella TLS / sin cookies) aunque la IP esté bien, mientras que
+        un Chromium obtiene 200 sobre la misma URL (verificado nov 2026).
+        """
         url = f"{self.base_url}/collections/{handle}/products.json?limit={PAGE_SIZE}&page={page}"
         for attempt in range(1, MAX_RETRIES + 1):
-            r = requests.get(url, headers=HEADERS, timeout=20)
-            if r.status_code in (429, 503) and attempt < MAX_RETRIES:
-                # Cloudflare/Shopify rate limit: respetar Retry-After (acotado) con backoff creciente
+            resp = self._browser_page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            status = resp.status if resp else 0
+            if status in (429, 503) and attempt < MAX_RETRIES:
+                # Rate limit real: respetar Retry-After (acotado) con backoff creciente
                 try:
-                    retry_after = int(r.headers.get("Retry-After", ""))
+                    retry_after = int(resp.headers.get("retry-after", ""))
                 except ValueError:
                     retry_after = 0
                 wait = min(max(retry_after, 30) * attempt, MAX_BACKOFF_S)
-                print(f"[yellow][{self.site_name}] {r.status_code} en {handle} p{page}; "
+                print(f"[yellow][{self.site_name}] {status} en {handle} p{page}; "
                       f"reintento {attempt}/{MAX_RETRIES - 1} en {wait}s[/yellow]")
                 time.sleep(wait)
                 continue
-            r.raise_for_status()
-            return r.json().get("products", [])
+            if status >= 400 or status == 0:
+                raise RuntimeError(f"{status} Client Error en {url}")
+            return resp.json().get("products", [])
 
     @staticmethod
     def _to_int_price(value) -> int:
@@ -273,10 +274,46 @@ class OneNutritionScraper(BaseScraper):
         }
 
     # ------------------------------------------------------------------
-    # Override run(): no Playwright, puro requests
+    # Override run(): API JSON de Shopify, pedida desde un Chromium real (un solo navegador)
     # ------------------------------------------------------------------
 
     def run(self):
+        """Espera un slot global de navegador, abre Chromium y delega en _scrape()."""
+        slots = BrowserSlots.from_env()
+        if slots is not None:
+            slots.acquire(self.site_name)
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(
+                    headless=self.headless,
+                    args=["--disable-blink-features=AutomationControlled", "--no-sandbox",
+                          "--disable-dev-shm-usage"],
+                )
+                try:
+                    major = browser.version.split(".")[0]
+                    context = browser.new_context(
+                        user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                                    f"(KHTML, like Gecko) Chrome/{major}.0.0.0 Safari/537.36"),
+                        locale="es-CL",
+                        timezone_id="America/Santiago",
+                        viewport={"width": 1366, "height": 768},
+                    )
+                    if os.environ.get("BLOCK_RESOURCES", "0") == "1":
+                        _install_resource_blocking(context)
+                    self._browser_page = context.new_page()
+                    # Cookies de Cloudflare: se visita el sitio una vez antes de pedir los JSON
+                    try:
+                        self._browser_page.goto(self.base_url, wait_until="domcontentloaded", timeout=45000)
+                    except Exception as e:
+                        print(f"[yellow][{self.site_name}] No se pudo precargar la portada: {e}[/yellow]")
+                    self._scrape()
+                finally:
+                    browser.close()
+        finally:
+            if slots is not None:
+                slots.release()
+
+    def _scrape(self):
         output_dir = os.path.join(project_root, "raw_data")
         os.makedirs(output_dir, exist_ok=True)
         csv_filename = (

@@ -80,7 +80,9 @@ Cuando la tienda reutiliza una URL para un producto diferente (cambio de product
 
 Implementado con una tabla `TEMP TABLE _batch_links ON COMMIT DROP` + CTEs para resolver en una sola ida a la BD.
 
-**Desactivación de productos:** Al final de Fase 2, para cada tienda en el batch, todos los `producto_tienda` con URLs que NO aparecieron en este run se marcan `is_active = false`.
+**Desactivación de productos:** Al final de Fase 2, para cada tienda en el batch, todos los `producto_tienda` con URLs que NO aparecieron en este run se marcan `is_active = false`. Cuando la URL reaparece en un scrapeo posterior, el upsert la vuelve a poner `is_active = true`. Una tienda sin filas en el CSV (0 productos) no entra al bucle: sus productos no se tocan.
+
+**Protección contra corridas parciales** (`should_skip_deactivation` en `shared/step3_logic.py`): si la corrida trae menos del 50% de los productos hoy activos de la tienda (y la tienda tiene ≥10 activos), NO se desactiva nada de esa tienda y se imprime una advertencia. Caso real: OneNutrition trajo 53 de ~395 productos el 2026-10-23 y habría desactivado ~340. Para forzar la desactivación cuando una tienda realmente redujo su catálogo: `STEP3_FORCE_DEACTIVATION=1`. Umbrales ajustables en `DEACTIVATION_MIN_RATIO` / `DEACTIVATION_MIN_BASE`. Ver [[bug-strongest-onenutrition-0-filas-2026-11]].
 
 ---
 

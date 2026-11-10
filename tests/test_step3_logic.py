@@ -18,6 +18,7 @@ from shared.step3_logic import (  # noqa: E402
     latest_scrape_mask,
     dedup_links,
     dedup_prices,
+    should_skip_deactivation,
 )
 
 
@@ -140,6 +141,31 @@ class DedupPricesTests(unittest.TestCase):
                 self._p(1, 90, datetime(2026, 10, 5, 11, 0))]
         out = dedup_prices(rows, {"allnutrition"})
         self.assertEqual([r["precio"] for r in out], [90])
+
+
+class ShouldSkipDeactivationTests(unittest.TestCase):
+    """Casos reales de OneNutrition (~395 productos activos)."""
+
+    def test_corrida_parcial_del_23_oct_no_desactiva(self):
+        self.assertTrue(should_skip_deactivation(seen_count=53, active_count=395))
+
+    def test_corrida_del_2_nov_con_78_por_ciento_pasa_el_umbral(self):
+        # 309 de 395 (78%) supera el 50%: la protección NO la frena (se desactiva lo no visto)
+        self.assertFalse(should_skip_deactivation(seen_count=309, active_count=395))
+
+    def test_corrida_completa_si_desactiva(self):
+        self.assertFalse(should_skip_deactivation(seen_count=397, active_count=395))
+
+    def test_justo_en_el_umbral_si_desactiva(self):
+        self.assertFalse(should_skip_deactivation(seen_count=50, active_count=100))
+        self.assertTrue(should_skip_deactivation(seen_count=49, active_count=100))
+
+    def test_tienda_chica_sin_proteccion(self):
+        # menos de 10 activos: una caída grande es plausible (muestra chica)
+        self.assertFalse(should_skip_deactivation(seen_count=1, active_count=9))
+
+    def test_tienda_nueva_sin_activos(self):
+        self.assertFalse(should_skip_deactivation(seen_count=50, active_count=0))
 
 
 if __name__ == "__main__":
