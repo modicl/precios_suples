@@ -32,7 +32,7 @@ from dotenv import load_dotenv
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from shared.llm_client import GeminiClient, MISSING_KEY_MSG, get_api_key, get_model
+from shared.llm_client import GeminiClient, MISSING_KEY_MSG, get_api_key, get_model, setup_llm_logger
 
 # ---------------------------------------------------------------------------
 # Config
@@ -178,6 +178,7 @@ async def generate_one(
                     user_prompt,
                     max_tokens=MAX_OUTPUT_TOKENS,
                     temperature=TEMPERATURE,
+                    tag=f'id={pid} intento={attempt} producto="{row["nombre_producto"]}"',
                 )
 
                 if dry_run:
@@ -187,8 +188,11 @@ async def generate_one(
 
             except Exception as e:
                 if attempt < RETRY_ATTEMPTS:
-                    await asyncio.sleep(RETRY_DELAY * attempt)
+                    wait = RETRY_DELAY * attempt
+                    client.logger.warning(f"REINTENTO id={pid} intento {attempt}/{RETRY_ATTEMPTS} fallido; reintenta en {wait}s")
+                    await asyncio.sleep(wait)
                 else:
+                    client.logger.error(f'FALLO id={pid} producto="{row["nombre_producto"]}" tras {RETRY_ATTEMPTS} intentos: {str(e)[:300]}')
                     return (pid, None, str(e))
 
     return (pid, None, "semaphore never released")  # unreachable
@@ -228,7 +232,13 @@ async def run(args, targets: list):
     print()
 
     # 2. Generar descripciones con LLM (una sola vez)
-    client    = GeminiClient()
+    logger, log_path = setup_llm_logger("step5_descripciones")
+    logger.info(f"INICIO step5 modelo={MODEL} productos={total} concurrencia={args.concurrencia} "
+                f"modo={'dry-run' if args.dry_run else 'escritura'} forzar={args.forzar} "
+                f"destinos={target_names}")
+    print(f"Log LLM                       : {log_path}")
+
+    client    = GeminiClient(logger=logger)
     semaphore = asyncio.Semaphore(args.concurrencia)
 
     tasks = [
@@ -288,8 +298,16 @@ async def run(args, targets: list):
                     save_description(conn, pid, desc)
                 conn.close()
                 print(f"    [{target['name']}] OK")
+                logger.info(f"BD [{target['name']}] OK: {len(results)} descripciones guardadas")
             except Exception as e:
                 print(f"    [{target['name']}] ERROR: {e}")
+                logger.error(f"BD [{target['name']}] ERROR guardando descripciones: {e}")
+
+    client.log_summary(
+        f"productos={total} generados={ok_count} fallidos={error_count} "
+        f"duracion={elapsed_total:.1f}s ids_fallidos={[p for p, _ in errors][:50]}"
+    )
+    print(f"  Log LLM: {log_path}")
 
     if error_count > 0:
         sys.exit(1)

@@ -41,7 +41,7 @@ from dotenv import load_dotenv
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from shared.llm_client import GeminiClient, MISSING_KEY_MSG, get_api_key, get_model
+from shared.llm_client import GeminiClient, MISSING_KEY_MSG, get_api_key, get_model, setup_llm_logger
 
 load_dotenv()
 
@@ -217,6 +217,7 @@ async def generate_tags(
                     max_tokens=MAX_OUTPUT_TOKENS,
                     temperature=TEMPERATURE,
                     json_output=True,   # Gemini devuelve JSON válido (sin ```json)
+                    tag=f'id={pid} intento={attempt} producto="{row["nombre_producto"]}"',
                 )
 
                 # Parsear JSON array
@@ -228,6 +229,12 @@ async def generate_tags(
                 allowed_set = set(available_keywords)
                 tags = [t for t in tags if t in allowed_set][:5]
 
+                # Aviso útil para auditar calidad: el LLM respondió pero ningún tag era válido
+                dropped = [t for t in json.loads(raw) if t not in allowed_set]
+                if dropped:
+                    client.logger.warning(f"TAGS_DESCARTADOS id={pid} fuera_del_diccionario={dropped}")
+                client.logger.info(f"TAGS id={pid} asignados={tags}")
+
                 if dry_run:
                     print(f"TAGS ASIGNADOS: {tags}")
 
@@ -235,8 +242,11 @@ async def generate_tags(
 
             except Exception as e:
                 if attempt < RETRY_ATTEMPTS:
-                    await asyncio.sleep(RETRY_DELAY * attempt)
+                    wait = RETRY_DELAY * attempt
+                    client.logger.warning(f"REINTENTO id={pid} intento {attempt}/{RETRY_ATTEMPTS} fallido ({str(e)[:120]}); reintenta en {wait}s")
+                    await asyncio.sleep(wait)
                 else:
+                    client.logger.error(f'FALLO id={pid} producto="{row["nombre_producto"]}" tras {RETRY_ATTEMPTS} intentos: {str(e)[:300]}')
                     return (pid, None, str(e))
 
     return (pid, None, "semaphore never released")  # unreachable
@@ -347,7 +357,13 @@ async def run(args):
         print("  Nada que procesar (ningún producto tiene categoría mapeada).")
         return
 
-    client    = GeminiClient()
+    logger, log_path = setup_llm_logger("step6_tags")
+    logger.info(f"INICIO step6 modelo={MODEL} productos={total} concurrencia={args.concurrencia} "
+                f"modo={'dry-run' if args.dry_run else 'escritura'} forzar={args.forzar} "
+                f"muestra={args.muestra} destinos={target_names}")
+    print(f"Log LLM                        : {log_path}")
+
+    client    = GeminiClient(logger=logger)
     semaphore = asyncio.Semaphore(args.concurrencia)
 
     tasks = [
@@ -405,6 +421,13 @@ async def run(args):
         print(f"\n  IDs con error:")
         for pid, err in errors:
             print(f"    id={pid}: {err[:120]}")
+
+    sin_tags = sum(1 for r in all_results if not r["tags"])
+    client.log_summary(
+        f"productos={total} asignados={ok_count} fallidos={error_count} sin_tags={sin_tags} "
+        f"duracion={elapsed_total:.1f}s ids_fallidos={[p for p, _ in errors][:50]}"
+    )
+    print(f"  Log LLM: {log_path}")
 
     # Reporte CSV siempre que haya resultados
     if all_results:

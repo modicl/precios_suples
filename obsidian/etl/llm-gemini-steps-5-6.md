@@ -17,4 +17,16 @@ Los pasos de IA del pipeline (ver [[Flujo de Datos]]) dejaron de usar GPT-4o-min
 - **Claves `AQ.`**: formato nuevo de AI Studio. Hay reportes de `401 ACCESS_TOKEN_TYPE_UNSUPPORTED` con algunas cuentas; Google indica que es soportado y que el error suele deberse a clave truncada, proyecto sin la API habilitada o un modelo antiguo. Por eso existe `--probar`.
 - **429**: el plan gratuito tiene límites por minuto; si aparecen errores, bajar `--concurrencia`.
 
+## Logs (`logs/llm/`)
+Cada ejecución crea `logs/llm/<step>_<timestamp>.log` (`step5_descripciones_…`, `step6_tags_…`, `probar_…`; la carpeta está en `.gitignore`). Lo escribe `GeminiClient` en cada llamada, así que cubre ambos steps:
+- `OK` por llamada: id y nombre del producto, intento, latencia, tokens (entrada/salida/pensando), `finish_reason` y la respuesta.
+- `ERROR` (excepción de la API, ej. 429 o 403), `VACIA` y `INCOMPLETA` (cortada por `MAX_TOKENS`), seguidos de `REINTENTO n/3` y, si se agotan, `FALLO`.
+- Step 6 además: `TAGS` asignados y `TAGS_DESCARTADOS` (keywords que el LLM inventó fuera del diccionario).
+- `RESUMEN` final: llamadas, ok/errores, latencia media, tokens totales, ids fallidos.
+- La API key nunca se escribe.
+
+Cómo revisarlo rápido: `grep -c " OK " <log>`, `grep -E "FALLO|INCOMPLETA|VACIA" <log>` y mirar la línea `RESUMEN`.
+
+Una respuesta con `finish_reason` distinto de `STOP` (ej. `MAX_TOKENS`) se trata como error y se reintenta: antes habría guardado descripciones cortadas en la BD.
+
 Relacionado: [[optimizacion-cpu-scraping-v1]] (misma rama `optimizado-v1`).
