@@ -13,9 +13,9 @@ Scrapers (scrapers_v2/)  →  raw_data/*.csv
          ↓
    Step 4: deduplication  (limpieza residual en DB)
          ↓
-   Step 5: descriptions   (GPT-4o-mini, async, incremental)
+   Step 5: descriptions   (Gemini, async, incremental)
          ↓
-   Step 6: tag_keywords   (GPT-4o-mini, diccionarios por categoría)
+   Step 6: tag_keywords   (Gemini, diccionarios por categoría)
          ↓
    Step 7: refresh_views  (vistas materializadas PostgreSQL)
 ```

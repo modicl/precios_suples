@@ -40,7 +40,7 @@ Catálogo maestro. Unique constraint: `(nombre_producto, id_marca, id_subcategor
 | `url_imagen` | VarChar(500)? | URL S3 versión resized |
 | `url_thumb_imagen` | VarChar(500)? | URL S3 thumbnail |
 | `descripcion` | String? | Descripción scrapeada |
-| `descripcion_llm` | String? | Generada por GPT-4o-mini (Step 5) |
+| `descripcion_llm` | String? | Generada por Gemini (Step 5) |
 | `tags` | String[] | Tags por Step 6 |
 | `id_marca` | Int? | FK → marcas |
 | `id_subcategoria` | Int? | FK → subcategorias |

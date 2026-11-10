@@ -2,7 +2,7 @@
 step6_generate_descriptions.py
 -------------------------------
 Genera descripciones LLM para productos que aún no tienen `descripcion_llm`.
-Usa GPT-4o mini y escribe en `productos.descripcion_llm`.
+Usa Google Gemini (ver shared/llm_client.py) y escribe en `productos.descripcion_llm`.
 
 Diseñado para correr después del pipeline (steps 1-5): solo procesa productos
 nuevos o sin descripción, por lo que es rápido en ejecuciones incrementales.
@@ -16,7 +16,7 @@ Uso directo:
 Flags:
     --dry-run         Muestra prompts y respuestas sin escribir en BD
     --forzar          Regenera también productos que ya tienen descripcion_llm
-    --concurrencia N  Requests paralelos a OpenAI (default: 10)
+    --concurrencia N  Requests paralelos a Gemini (default: 10)
 """
 
 import argparse
@@ -29,18 +29,20 @@ from typing import Optional
 import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from shared.llm_client import GeminiClient, MISSING_KEY_MSG, get_api_key, get_model
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 load_dotenv()
 
-OPENAI_API_KEY    = os.getenv("CHATGPT_MINI4")
-MODEL             = "gpt-4o-mini"
-MAX_OUTPUT_TOKENS = 200
+MODEL             = get_model()   # GEMINI_MODEL del .env (default gemini-3.5-flash-lite)
+# Holgado a propósito: los modelos Gemini 3 gastan tokens "pensando" y esos tokens cuentan
+# contra el límite. La longitud real (máx. 60 palabras) la impone el SYSTEM_PROMPT.
+MAX_OUTPUT_TOKENS = 1024
 TEMPERATURE       = 0.3
 RETRY_ATTEMPTS    = 3
 RETRY_DELAY       = 5      # segundos base entre reintentos (backoff exponencial)
@@ -152,7 +154,7 @@ def save_description(conn, producto_id: int, descripcion: str):
 # LLM call (async, with retry + exponential backoff)
 # ---------------------------------------------------------------------------
 async def generate_one(
-    client: AsyncOpenAI,
+    client: GeminiClient,
     row: dict,
     semaphore: asyncio.Semaphore,
     dry_run: bool,
@@ -171,16 +173,12 @@ async def generate_one(
     async with semaphore:
         for attempt in range(1, RETRY_ATTEMPTS + 1):
             try:
-                response = await client.chat.completions.create(
-                    model=MODEL,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user",   "content": user_prompt},
-                    ],
+                desc = await client.generate(
+                    SYSTEM_PROMPT,
+                    user_prompt,
                     max_tokens=MAX_OUTPUT_TOKENS,
                     temperature=TEMPERATURE,
                 )
-                desc = response.choices[0].message.content.strip()
 
                 if dry_run:
                     print(f"RESPUESTA:\n{desc}")
@@ -204,8 +202,8 @@ async def run(args, targets: list):
     Genera descripciones LLM UNA sola vez (usando el primer target como fuente)
     y guarda los resultados en TODOS los targets.
     """
-    if not OPENAI_API_KEY:
-        print("ERROR: Variable de entorno CHATGPT_MINI4 no encontrada.")
+    if not get_api_key():
+        print(MISSING_KEY_MSG)
         sys.exit(1)
 
     # 1. Fetch desde el primer target (Local)
@@ -230,7 +228,7 @@ async def run(args, targets: list):
     print()
 
     # 2. Generar descripciones con LLM (una sola vez)
-    client    = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    client    = GeminiClient()
     semaphore = asyncio.Semaphore(args.concurrencia)
 
     tasks = [
@@ -306,7 +304,7 @@ def main():
     parser.add_argument("--forzar",       action="store_true",
                         help="Regenera también productos que ya tienen descripcion_llm")
     parser.add_argument("--concurrencia", type=int, default=10,
-                        help="Requests paralelos a OpenAI (default: 10)")
+                        help="Requests paralelos a Gemini (default: 10; bájalo si ves errores 429)")
     args = parser.parse_args()
 
     from shared.db_multiconnect import get_targets

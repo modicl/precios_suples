@@ -77,9 +77,9 @@ Step 3: Bulk DB insertion (dedup URLs, brand inheritance, deactivate stale recor
     ↓
 Step 4: DB deduplication cleanup
     ↓
-Step 5: LLM descriptions (GPT-4o-mini, async, incremental)
+Step 5: LLM descriptions (Gemini, async, incremental)
     ↓
-Step 6: LLM keyword tagging (GPT-4o-mini, async, category-specific dictionaries)
+Step 6: LLM keyword tagging (Gemini, async, category-specific dictionaries)
     ↓
 Step 7: Refresh materialized views
 ```
@@ -162,7 +162,8 @@ DB_PORT=5432
 DB_HOST_PROD=postgresql://user:pass@host:port/db?sslmode=require
 
 # LLM
-CHATGPT_MINI4=sk-proj-...
+GOOGLE_API_KEY=AQ...   # Gemini (steps 5 y 6). Validar: python shared/llm_client.py --probar
+GEMINI_MODEL=gemini-3.5-flash-lite   # opcional
 
 # AWS S3 (backups)
 AWS_ACCESS_KEY_ID=...

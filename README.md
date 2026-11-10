@@ -103,8 +103,8 @@ link, rating, reviews, active_discount, thumbnail_image_url, image_url, sku, des
 | 2 | `step2_normalization.py` | Fuzzy matching RapidFuzz (`token_set_ratio ≥ 83`), clustering de productos equivalentes |
 | 3 | `step3_db_insertion.py` | Bulk insert via `psycopg2` + tablas temporales (~2 seg) |
 | 4 | `step4_deduplication.py` | Limpieza de duplicados en BD |
-| 5 | `step5_generate_descriptions.py` | Descripciones comerciales con GPT-4o-mini (async) |
-| 6 | `step6_tag_keywords.py` | Tagging de keywords por categoría con GPT-4o-mini (async) |
+| 5 | `step5_generate_descriptions.py` | Descripciones comerciales con Gemini (async) |
+| 6 | `step6_tag_keywords.py` | Tagging de keywords por categoría con Gemini (async) |
 | 7 | `step7_refresh_views.py` | Refresca vistas materializadas PostgreSQL |
 | 8 | `step8_trigger_notificaciones.py` | Dispara alertas de precio en producción |
 
@@ -165,34 +165,27 @@ DB_HOST_PROD=postgresql://user:password@host/db?sslmode=require&channel_binding=
 
 ---
 
-### OpenAI API (GPT-4o-mini)
+### Google Gemini API
 
-**Qué es:** API de OpenAI para modelos de lenguaje.
+**Qué es:** API de Google para modelos Gemini, usada por los steps de IA. El cliente compartido está en `shared/llm_client.py` (SDK `google-genai`).
 
 **Dónde se usa:**
 - **Step 5** (`step5_generate_descriptions.py`): genera descripciones comerciales para cada producto del catálogo.
 - **Step 6** (`step6_tag_keywords.py`): asigna keywords por categoría a cada producto para búsqueda y filtrado.
 
-Ambos steps son async con concurrencia configurable (`--concurrencia N`, default 10) e incrementales (solo procesan productos sin descripción/keywords, salvo `--forzar`).
+Ambos steps son async con concurrencia configurable (`--concurrencia N`, default 10; bájala si aparecen errores 429) e incrementales (solo procesan productos sin descripción/keywords, salvo `--forzar`).
 
-**Variable requerida:**
+**Variables:**
 ```env
-CHATGPT_MINI4=sk-proj-...   # API key de OpenAI
+GOOGLE_API_KEY=AQ...                  # también se acepta GEMINI_API_KEY
+GEMINI_MODEL=gemini-3.5-flash-lite    # opcional
 ```
 
----
-
-### Google Gemini API (alternativa a OpenAI)
-
-**Qué es:** API de Google para modelos Gemini, usada como proveedor LLM alternativo.
-
-**Dónde se usa:** mismos steps 5 y 6. El proveedor activo se controla con la variable `AI_PROVIDER`.
-
-**Variables requeridas:**
-```env
-GOOGLE_API_KEY=AIza...
-AI_PROVIDER=google   # o "openai" para usar CHATGPT_MINI4
+**Verificar la clave** (no toca la BD):
+```bash
+python shared/llm_client.py --probar
 ```
+> Si responde `401 ACCESS_TOKEN_TYPE_UNSUPPORTED`: copia la clave completa sin comillas, prueba otro modelo vigente en `GEMINI_MODEL` y revisa que el proyecto tenga la Gemini API habilitada.
 
 ---
 
@@ -230,12 +223,9 @@ DB_PORT=5432
 # BD producción (Neon) *
 DB_HOST_PROD=postgresql://user:password@host/db?sslmode=require&channel_binding=require
 
-# LLM — OpenAI *
-CHATGPT_MINI4=sk-proj-...
-
-# LLM — Google Gemini (alternativa a OpenAI)
-GOOGLE_API_KEY=AIza...
-AI_PROVIDER=openai   # "openai" | "google"
+# LLM — Google Gemini *  (clave "AQ..." o "AIza...")
+GOOGLE_API_KEY=AQ...
+GEMINI_MODEL=gemini-3.5-flash-lite   # opcional
 
 # AWS S3 (imágenes de productos) *
 AWS_ACCESS_KEY_ID=...
@@ -326,7 +316,8 @@ No incluir en la imagen; pasarlas vía `--set-env-vars` o Secret Manager:
 | `START_INDEX` / `END_INDEX` | Rango del shard de scrapers |
 | `MAX_SCRAPER_WORKERS` | Paralelismo de scrapers (default: `4`) |
 | `DB_HOST_PROD` | Connection string Neon (producción) |
-| `CHATGPT_MINI4` | API key OpenAI (steps 5 y 6) |
+| `GOOGLE_API_KEY` | API key de Gemini (steps 5 y 6) |
+| `GEMINI_MODEL` | Modelo Gemini (opcional, default `gemini-3.5-flash-lite`) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Credenciales S3 para imágenes |
 | `AWS_DEFAULT_REGION` | Región S3 (`us-east-2`) |
 | `BACKEND_URL` / `INTERNAL_API_SECRET` | Backend para step 8 (notificaciones) |

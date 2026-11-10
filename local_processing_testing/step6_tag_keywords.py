@@ -7,7 +7,7 @@ Lógica:
   - Fetch de productos desde la BD Local (sin tags, a menos que --forzar)
   - Por cada producto, toma las keywords disponibles del diccionario JSON
     usando nombre_categoria como clave directa (coincide exactamente con la BD)
-  - Llama a GPT-4o-mini para que elija máximo 5 keywords del listado
+  - Llama a Gemini (shared/llm_client.py) para que elija máximo 5 keywords del listado
   - Guarda el array en productos.tags (text[] en PostgreSQL) en Local y Producción
   - Genera siempre un reporte CSV con muestra de 50 productos
 
@@ -20,7 +20,7 @@ Uso:
 Flags:
     --dry-run         Muestra prompts/respuestas sin escribir en BD
     --forzar          Regenera tags incluso para productos que ya los tienen
-    --concurrencia N  Requests paralelos a OpenAI (default: 10)
+    --concurrencia N  Requests paralelos a Gemini (default: 10)
 """
 
 import argparse
@@ -38,15 +38,17 @@ from typing import Optional
 import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from shared.llm_client import GeminiClient, MISSING_KEY_MSG, get_api_key, get_model
+
 load_dotenv()
 
-OPENAI_API_KEY    = os.getenv("CHATGPT_MINI4")
-MODEL             = "gpt-4o-mini"
-MAX_OUTPUT_TOKENS = 80
+MODEL             = get_model()   # GEMINI_MODEL del .env (default gemini-3.5-flash-lite)
+# Holgado a propósito: los modelos Gemini 3 gastan tokens "pensando" y esos tokens cuentan
+# contra el límite. La salida real es un JSON array de 1-3 keywords.
+MAX_OUTPUT_TOKENS = 512
 TEMPERATURE       = 0.1   # Baja temperatura para clasificación determinista
 RETRY_ATTEMPTS    = 3
 RETRY_DELAY       = 5
@@ -189,7 +191,7 @@ def save_tags(targets: list[dict], producto_id: int, tags: list[str]):
 # LLM call (async, con retry + backoff exponencial)
 # ---------------------------------------------------------------------------
 async def generate_tags(
-    client: AsyncOpenAI,
+    client: GeminiClient,
     row: dict,
     available_keywords: list[str],
     semaphore: asyncio.Semaphore,
@@ -209,16 +211,13 @@ async def generate_tags(
     async with semaphore:
         for attempt in range(1, RETRY_ATTEMPTS + 1):
             try:
-                response = await client.chat.completions.create(
-                    model=MODEL,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user",   "content": user_prompt},
-                    ],
+                raw = await client.generate(
+                    SYSTEM_PROMPT,
+                    user_prompt,
                     max_tokens=MAX_OUTPUT_TOKENS,
                     temperature=TEMPERATURE,
+                    json_output=True,   # Gemini devuelve JSON válido (sin ```json)
                 )
-                raw = response.choices[0].message.content.strip()
 
                 # Parsear JSON array
                 tags = json.loads(raw)
@@ -289,8 +288,8 @@ def write_csv_report(all_results: list[dict], *, is_muestra: bool = False) -> Pa
 # Main
 # ---------------------------------------------------------------------------
 async def run(args):
-    if not OPENAI_API_KEY:
-        print("ERROR: Variable de entorno CHATGPT_MINI4 no encontrada.")
+    if not get_api_key():
+        print(MISSING_KEY_MSG)
         sys.exit(1)
 
     from shared.db_multiconnect import get_targets
@@ -348,7 +347,7 @@ async def run(args):
         print("  Nada que procesar (ningún producto tiene categoría mapeada).")
         return
 
-    client    = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    client    = GeminiClient()
     semaphore = asyncio.Semaphore(args.concurrencia)
 
     tasks = [
@@ -424,7 +423,7 @@ def main():
     parser.add_argument("--forzar",       action="store_true",
                         help="Regenera tags incluso para productos que ya los tienen")
     parser.add_argument("--concurrencia", type=int, default=10,
-                        help="Requests paralelos a OpenAI (default: 10)")
+                        help="Requests paralelos a Gemini (default: 10; bájalo si ves errores 429)")
     parser.add_argument("--muestra",      type=int, default=None, metavar="N",
                         help="Procesa solo N productos por categoría y guarda el resultado en CSV (ej: --muestra 50)")
     args = parser.parse_args()

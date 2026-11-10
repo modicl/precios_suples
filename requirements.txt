@@ -15,7 +15,7 @@ requests==2.33.0
 boto3==1.42.34
 
 # AI / LLM
-openai==2.22.0
+google-genai==1.62.0
 # Utils
 python-dotenv==1.2.2
 rich==14.2.0
