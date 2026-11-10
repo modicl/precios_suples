@@ -44,51 +44,9 @@ console = Console()
 SCRAPERS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRAPERS_DIR, ".."))
 
-# ---------------------------------------------------------------------------
-# Lista de scrapers
-# Runners manejan sus partes en paralelo internamente.
-# ---------------------------------------------------------------------------
-SCRAPERS = [
-    # (nombre_display, script_relativo_a_SCRAPERS_DIR)
-    ("ChileSuplementos",      "ChileSuplementosScraperRunner.py"),
-    ("AllNutrition",          "AllNutritionScraperRunner.py"),
-    ("Byon",                  "BYONScraperRunner.py"),
-    ("CruzVerde",             "CruzVerdeScraperRunner.py"),
-    # Decathlon desactivado (sep 2026): Cloudflare bloquea todo decathlon.cl (403).
-    ("DrSimi",                "DrSimiScraper.py"),
-    ("FarmaciaKnop",          "FarmaciaKnopScraperRunner.py"),
-    ("KoteSport",             "KoteSportScraper.py"),
-    ("Suples",                "SuplesScraperRunner.py"),
-    ("SuplementosBullChile",  "SuplementosBullChileScraper.py"),
-    ("SuplementosMayoristas", "SuplementosMayoristasScraper.py"),
-    ("SportNutriShop",        "SportNutriShopScraperRunner.py"),
-    ("SupleTech",             "SupleTechScraper.py"),
-    ("SupleStore",            "SupleStoreScraper.py"),
-    ("OneNutrition",          "OneNutritionScraper.py"),
-    ("MuscleFactory",         "MuscleFactoryScraper.py"),
-    ("FitMarketChile",        "FitMarketChileScraper.py"),
-    ("Strongest",             "StrongestScraper.py"),
-    ("WildFoods",             "WildFoodsScraper.py"),
-    ("WinklerNutrition",      "WinklerNutritionScraper.py"),
-    ("OutletFit",             "OutletFitScraper.py"),
-]
-
-# Reemplazos cuando se usa --api_mode (tiendas VTEX con API directa, sin browser)
-SCRAPERS_API_OVERRIDES = {
-    "SupleTech":             "SupleTechApiScraper.py",
-    "SuplementosMayoristas": "SuplementosMayoristasApiScraper.py",
-}
-
-# Scripts que aceptan --headless como argumento CLI
-RUNNER_SCRIPTS = {
-    "ChileSuplementosScraperRunner.py",
-    "AllNutritionScraperRunner.py",
-    "BYONScraperRunner.py",
-    "SuplesScraperRunner.py",
-    "SportNutriShopScraperRunner.py",
-    "FarmaciaKnopScraperRunner.py",
-    "CruzVerdeScraperRunner.py",
-}
+# Lista de scrapers: única fuente en shared/scraper_registry.py (la comparte main.py de Cloud Run)
+sys.path.insert(0, PROJECT_ROOT)
+from shared.scraper_registry import SCRAPERS, SCRAPERS_API_OVERRIDES, RUNNER_SCRIPTS  # noqa: E402
 
 _print_lock = threading.Lock()
 

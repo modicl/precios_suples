@@ -18,6 +18,14 @@ Variables de entorno requeridas:
   END_INDEX     int  — índice final (inclusivo), default len(SCRAPERS)-1
   DB_HOST_PROD  str  — connection string Neon/Postgres (desde Secret Manager)
 
+Variables opcionales de rendimiento (defaults en main()):
+  MAX_BROWSERS=4          tope global de navegadores (semáforo entre procesos)
+  MAX_SCRAPER_WORKERS=4   tiendas lanzadas en paralelo
+  BLOCK_RESOURCES=1       bloquea imágenes/fuentes/trackers
+  API_MODE=0              1 = SupleTech/Mayoristas por API (sin navegador)
+  Recomendado: UN solo task (sin sharding), porque el pipeline step1→8 corre al final
+  de cada task y procesaría datos parciales.
+
 Variables opcionales (mismas que db_multiconnect.py):
   DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME  — BD local/alternativa
 """
@@ -50,32 +58,15 @@ SCRAPERS_DIR  = ROOT / "scrapers_v2"
 PIPELINE_DIR  = ROOT / "local_processing_testing"
 
 # ---------------------------------------------------------------------------
-# Lista maestra de scrapers (mismo orden que RunAll.py)
-# Modifica este listado para agregar o quitar tiendas.
+# Lista maestra de scrapers: única fuente en shared/scraper_registry.py
+# (la misma que usa RunAll.py en local). Modificar tiendas allí.
 # ---------------------------------------------------------------------------
-SCRAPERS = [
-    # (nombre_display, script relativo a SCRAPERS_DIR)
-    ("ChileSuplementos",       "ChileSuplementosScraperRunner.py"),
-    ("AllNutrition",           "AllNutritionScraper.py"),
-    ("Byon",                   "BYONScraper.py"),
-    ("CruzVerde",              "CruzVerdeScraper.py"),
-    # Decathlon desactivado (sep 2026): Cloudflare bloquea todo decathlon.cl (403).
-    ("DrSimi",                 "DrSimiScraper.py"),
-    ("FarmaciaKnop",           "FarmaciaKnopScraper.py"),
-    ("KoteSport",              "KoteSportScraper.py"),
-    ("Suples",                 "SuplesScraper.py"),
-    ("SuplementosBullChile",   "SuplementosBullChileScraper.py"),
-    ("SuplementosMayoristas",  "SuplementosMayoristasScraper.py"),
-    ("SportNutriShop",         "SportNutriShopScraper.py"),
-    ("SupleTech",              "SupleTechScraper.py"),
-    ("SupleStore",             "SupleStoreScraper.py"),
-    ("OneNutrition",           "OneNutritionScraper.py"),
-    ("MuscleFactory",          "MuscleFactoryScraper.py"),
-    ("FitMarketChile",         "FitMarketChileScraper.py"),
-    ("Strongest",              "StrongestScraper.py"),
-    ("WildFoods",              "WildFoodsScraper.py"),
-    ("WinklerNutrition",       "WinklerNutritionScraper.py"),
-]
+sys.path.insert(0, str(ROOT))
+from shared.scraper_registry import SCRAPERS, SCRAPERS_API_OVERRIDES, RUNNER_SCRIPTS  # noqa: E402
+
+# API_MODE=1: tiendas VTEX por API directa (sin navegador), igual que --api_mode de RunAll
+if os.environ.get("API_MODE", "0") == "1":
+    SCRAPERS = [(n, SCRAPERS_API_OVERRIDES.get(n, s)) for n, s in SCRAPERS]
 
 # Pipeline de inserción — pasos en orden estricto
 PIPELINE_STEPS = [
@@ -142,7 +133,10 @@ def run_scrapers(shard: list[tuple]) -> list[dict]:
     results = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {
-            pool.submit(_run_subprocess, name, SCRAPERS_DIR / script, SCRAPERS_DIR): name
+            pool.submit(
+                _run_subprocess, name, SCRAPERS_DIR / script, SCRAPERS_DIR,
+                ["--headless"] if script in RUNNER_SCRIPTS else None,
+            ): name
             for name, script in shard
         }
         for future in as_completed(futures):
@@ -176,6 +170,11 @@ def run_pipeline() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def main():
+    # ── Defaults de rendimiento para el contenedor (se pueden sobreescribir con env vars) ──
+    os.environ.setdefault("BLOCK_RESOURCES", "1")   # sin imágenes/fuentes/trackers: menos CPU y RAM
+    os.environ.setdefault("MAX_BROWSERS", "4")      # tope global de Chromium simultáneos (todos los procesos)
+    os.environ.setdefault("MAX_SCRAPER_WORKERS", "4")
+
     # ── Leer variables de sharding ──────────────────────────────────────────
     start_idx = int(os.environ.get("START_INDEX", "0"))
     end_idx   = int(os.environ.get("END_INDEX",   str(len(SCRAPERS) - 1)))
