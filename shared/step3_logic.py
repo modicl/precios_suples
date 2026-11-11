@@ -69,6 +69,11 @@ def should_skip_deactivation(seen_count, active_count,
     return seen_count < active_count * min_ratio
 
 
+def _is_low_priority(row):
+    subcat = _key(str(row.get("subcategory", "")))
+    return any(kw in subcat for kw in LOW_PRIORITY_SUBCATS)
+
+
 def dedup_links(rows):
     """
     Un enlace por (producto, tienda) y una sola fila ganadora por (tienda, URL).
@@ -95,6 +100,14 @@ def dedup_links(rows):
             if any(kw in subcat for kw in LOW_PRIORITY_SUBCATS):
                 continue  # fila de baja prioridad: gana la anterior
             links_dedup.pop((existing_pid, tid), None)  # la específica reemplaza
+
+        # Un producto puede traer dos filas para la misma tienda (misma identidad en dos
+        # subcategorías, ver resolve_products): no deja que una fila de baja prioridad
+        # (Ofertas/Packs) reemplace a una específica.
+        prev = links_dedup.get((pid, tid))
+        if prev is not None and _is_low_priority(row) and not _is_low_priority(prev):
+            url_winner[url_key] = pid
+            continue
 
         url_winner[url_key] = pid
         links_dedup[(pid, tid)] = row
@@ -130,3 +143,102 @@ def dedup_prices(price_rows, lowest_price_sites):
         if replace:
             best[key] = p
     return list(best.values())
+
+
+# ---------------------------------------------------------------------------
+# Identidad de producto: (nombre normalizado, marca), SIN subcategoría.
+#
+# Antes la clave era (nombre, marca, subcategoría): el mismo producto clasificado en dos
+# subcategorías nacía como dos filas y el step 4 las fusionaba (y borraba) en cada corrida.
+# Ahora se decide ANTES de insertar: si la identidad ya existe se reutiliza su id.
+# El puntaje del maestro es el mismo del step 4.
+# ---------------------------------------------------------------------------
+LOW_PRIORITY_CATEGORY_KEYWORDS = [
+    "oferta", "pack", "promo", "bundle", "especial",
+    "outlet", "liquidacion", "cyber", "black",
+]
+
+
+def identity_key(name):
+    """Nombre sin tildes, con espacios colapsados y en minúsculas ('Energética  X' == 'energetica x')."""
+    if not isinstance(name, str):
+        return ""
+    s = unicodedata.normalize("NFKD", name)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return " ".join(s.split()).lower()
+
+
+def product_score(cat_name, prod_name, known_categories):
+    """Mismo criterio que get_score del step 4 (categoría, no subcategoría)."""
+    score = 0
+    cat_lower = (cat_name or "").lower()
+    if cat_name in known_categories:
+        score += 10
+    if any(kw in cat_lower for kw in LOW_PRIORITY_CATEGORY_KEYWORDS):
+        score -= 100
+    if prod_name and not prod_name.islower():
+        score += 20
+    return score
+
+
+def master_index(existing, known_categories):
+    """
+    {(identity_key, id_marca): fila maestra} entre los productos ya existentes.
+    existing: iterable de dicts {id, nombre, id_marca, id_subcategoria, cat_name}.
+    Mayor puntaje gana; en empate, el id menor (más antiguo).
+    """
+    best = {}
+    for r in existing:
+        ident = (identity_key(r["nombre"]), r["id_marca"])
+        score = product_score(r.get("cat_name"), r["nombre"], known_categories)
+        cur = best.get(ident)
+        if cur is None or (-score, r["id"]) < (-cur[0], cur[1]["id"]):
+            best[ident] = (score, r)
+    return {k: v[1] for k, v in best.items()}
+
+
+def resolve_products(batch, existing, known_categories):
+    """
+    Decide qué hacer con cada identidad (nombre normalizado, marca) del lote.
+
+    batch:    dicts {nombre, id_marca, id_subcategoria, cat_name, url_imagen, url_thumb_imagen}
+    existing: dicts {id, nombre, id_marca, id_subcategoria, cat_name} (productos ya en BD)
+    Retorna dict con:
+      insert          — filas nuevas (la mejor subcategoría del lote, una por identidad)
+      touch           — maestro existente + imágenes del lote (se pasa por el mismo upsert
+                        para refrescar imágenes sin crear filas)
+      subcat_updates  — [(id_producto, nueva_subcategoria)] solo si el lote trae una
+                        categoría con puntaje ESTRICTAMENTE mayor (ej: sale de Packs/Ofertas)
+      collapsed       — filas del lote absorbidas por otra de la misma identidad
+    """
+    masters = master_index(existing, known_categories)
+
+    groups = {}
+    for b in batch:
+        groups.setdefault((identity_key(b["nombre"]), b["id_marca"]), []).append(b)
+
+    insert, touch, subcat_updates, collapsed = [], [], [], 0
+    for ident, rows in groups.items():
+        collapsed += len(rows) - 1
+        best = rows[0]
+        best_score = product_score(best.get("cat_name"), best["nombre"], known_categories)
+        for r in rows[1:]:
+            sc = product_score(r.get("cat_name"), r["nombre"], known_categories)
+            if sc > best_score:          # empate: gana la primera fila del lote
+                best, best_score = r, sc
+
+        master = masters.get(ident)
+        if master is None:
+            insert.append(best)
+            continue
+
+        touch.append({
+            "id": master["id"], "nombre": master["nombre"], "id_marca": master["id_marca"],
+            "id_subcategoria": master["id_subcategoria"],
+            "url_imagen": best.get("url_imagen"), "url_thumb_imagen": best.get("url_thumb_imagen"),
+        })
+        master_score = product_score(master.get("cat_name"), master["nombre"], known_categories)
+        if best_score > master_score and best["id_subcategoria"] != master["id_subcategoria"]:
+            subcat_updates.append((master["id"], best["id_subcategoria"]))
+
+    return {"insert": insert, "touch": touch, "subcat_updates": subcat_updates, "collapsed": collapsed}

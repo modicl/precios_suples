@@ -19,6 +19,10 @@ from shared.step3_logic import (  # noqa: E402
     dedup_links,
     dedup_prices,
     should_skip_deactivation,
+    identity_key,
+    product_score,
+    master_index,
+    resolve_products,
 )
 
 
@@ -166,6 +170,102 @@ class ShouldSkipDeactivationTests(unittest.TestCase):
 
     def test_tienda_nueva_sin_activos(self):
         self.assertFalse(should_skip_deactivation(seen_count=50, active_count=0))
+
+
+CATS = {"Proteinas", "Creatinas", "Ofertas", "Packs"}
+
+
+def _b(nombre, sub, cat, marca=1, img=None):
+    return {"nombre": nombre, "id_marca": marca, "id_subcategoria": sub, "cat_name": cat,
+            "url_imagen": img, "url_thumb_imagen": None}
+
+
+def _e(id_, nombre, sub, cat, marca=1):
+    return {"id": id_, "nombre": nombre, "id_marca": marca, "id_subcategoria": sub, "cat_name": cat}
+
+
+class IdentityKeyTests(unittest.TestCase):
+    def test_ignora_tildes_espacios_y_mayusculas(self):
+        self.assertEqual(identity_key("Energética  Spike  Energy"), identity_key("energetica spike energy"))
+
+    def test_nombres_distintos_no_colisionan(self):
+        self.assertNotEqual(identity_key("Whey 2 lb"), identity_key("Whey 5 lb"))
+
+    def test_no_string(self):
+        self.assertEqual(identity_key(None), "")
+
+
+class ResolveProductsTests(unittest.TestCase):
+    def test_producto_existente_se_reutiliza_aunque_el_lote_use_otra_subcategoria(self):
+        # Caso real: 100% beef aminos entra como 'Otros Aminoacidos' pero el maestro ya existe
+        existing = [_e(101, "Whey Gold", 10, "Proteinas")]
+        plan = resolve_products([_b("Whey Gold", 11, "Proteinas")], existing, CATS)
+        self.assertEqual(plan["insert"], [])
+        self.assertEqual([t["id"] for t in plan["touch"]], [101])
+        self.assertEqual(plan["subcat_updates"], [])   # mismo puntaje: no cambia la subcategoria
+
+    def test_producto_nuevo_se_inserta_una_sola_vez(self):
+        batch = [_b("Creatina X", 20, "Creatinas"), _b("Creatina X", 21, "Creatinas")]
+        plan = resolve_products(batch, [], CATS)
+        self.assertEqual(len(plan["insert"]), 1)
+        self.assertEqual(plan["collapsed"], 1)
+
+    def test_en_el_lote_gana_la_categoria_que_no_es_oferta(self):
+        batch = [_b("Whey Gold", 30, "Ofertas"), _b("Whey Gold", 10, "Proteinas")]
+        plan = resolve_products(batch, [], CATS)
+        self.assertEqual(plan["insert"][0]["id_subcategoria"], 10)
+
+    def test_tildes_y_espacios_unen_productos(self):
+        batch = [_b("Multivitamínico Forte", 40, "Proteinas"), _b("Multivitaminico  Forte", 40, "Proteinas")]
+        plan = resolve_products(batch, [], CATS)
+        self.assertEqual(len(plan["insert"]), 1)
+
+    def test_variante_con_tildes_reutiliza_el_existente(self):
+        existing = [_e(7, "Energetica Spike", 5, "Proteinas")]
+        plan = resolve_products([_b("Energética Spike", 5, "Proteinas")], existing, CATS)
+        self.assertEqual(plan["insert"], [])
+        self.assertEqual(plan["touch"][0]["id"], 7)
+
+    def test_existente_atrapado_en_packs_sube_a_la_categoria_normal(self):
+        existing = [_e(9, "Whey Gold", 90, "Packs")]
+        plan = resolve_products([_b("Whey Gold", 10, "Proteinas")], existing, CATS)
+        self.assertEqual(plan["subcat_updates"], [(9, 10)])
+
+    def test_existente_normal_no_baja_a_ofertas(self):
+        existing = [_e(9, "Whey Gold", 10, "Proteinas")]
+        plan = resolve_products([_b("Whey Gold", 90, "Ofertas")], existing, CATS)
+        self.assertEqual(plan["subcat_updates"], [])
+        self.assertEqual(plan["touch"][0]["id_subcategoria"], 10)
+
+    def test_marcas_distintas_no_se_mezclan(self):
+        plan = resolve_products([_b("Whey", 1, "Proteinas", marca=1), _b("Whey", 1, "Proteinas", marca=2)], [], CATS)
+        self.assertEqual(len(plan["insert"]), 2)
+
+    def test_duplicados_legados_el_maestro_es_el_de_menor_id(self):
+        existing = [_e(50, "Energetica X", 5, "Proteinas"), _e(20, "Energética X", 5, "Proteinas")]
+        masters = master_index(existing, CATS)
+        self.assertEqual(masters[(identity_key("energetica x"), 1)]["id"], 20)
+
+    def test_puntaje_replica_el_del_step4(self):
+        self.assertEqual(product_score("Proteinas", "Whey", CATS), 30)
+        self.assertEqual(product_score("Ofertas", "Whey", CATS), -70)
+        self.assertEqual(product_score("Proteinas", "whey", CATS), 10)
+
+
+class DedupLinksMismoProductoTests(unittest.TestCase):
+    def _row(self, pid, url, subcat, tid=1):
+        return {"id_producto": pid, "id_tienda": tid, "url_link": url,
+                "subcategory": subcat, "descripcion": ""}
+
+    def test_misma_identidad_en_dos_subcategorias_conserva_la_url_normal(self):
+        rows = [self._row(10, "https://x/oferta", "Ofertas"), self._row(10, "https://x/normal", "Proteina")]
+        links, _, _ = dedup_links(rows)
+        self.assertEqual(links[(10, 1)]["url_link"], "https://x/normal")
+
+    def test_la_fila_de_oferta_posterior_no_reemplaza_a_la_normal(self):
+        rows = [self._row(10, "https://x/normal", "Proteina"), self._row(10, "https://x/oferta", "Ofertas")]
+        links, _, _ = dedup_links(rows)
+        self.assertEqual(links[(10, 1)]["url_link"], "https://x/normal")
 
 
 if __name__ == "__main__":

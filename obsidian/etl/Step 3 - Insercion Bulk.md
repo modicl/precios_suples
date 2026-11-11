@@ -38,6 +38,20 @@ Carga en memoria:
 
 ---
 
+### Identidad de producto (2026-11-11)
+
+La identidad de un producto es **(nombre normalizado, marca)**, sin subcategoría ni tildes/espacios (`identity_key` en `shared/step3_logic.py`). Antes la clave era `(nombre, marca, subcategoría)`: el mismo producto clasificado en dos subcategorías nacía como dos filas y el [[Step 4 - Deduplicacion]] las fusionaba y borraba en cada corrida.
+
+Ahora la Fase 1 llama a `resolve_products` **antes** de insertar:
+- si la identidad ya existe, se reutiliza su id (el maestro se elige con el mismo puntaje del step 4: categoría tipo Ofertas/Packs −100, nombre no todo minúsculas +20, empate → id menor);
+- dentro del lote gana la mejor subcategoría;
+- un maestro atrapado en Packs/Ofertas sube a la categoría normal si el lote la trae (con guarda contra la clave única);
+- Fases 2 y 3 buscan el id por identidad. Si una identidad trae dos URLs para la misma tienda, el enlace conserva la de subcategoría específica y solo esa URL aporta precio.
+
+**Validación (copia temporal de la BD local, CSV del 10-nov):** el flujo viejo dejaba 282 grupos duplicados tras el step 3 (el step 4 los borraba: 296 productos); el nuevo deja 0 y es idempotente (segunda corrida: 0 productos nuevos). Contra "viejo + step 4": 0 productos con distinta subcategoría, 0 enlaces apuntando a otro producto, +18 fusiones por tildes/espacios, y **+85 enlaces activos**: en el flujo viejo el step 4 borraba el enlace nuevo (URL vigente) del duplicado cuando el maestro ya tenía enlace en esa tienda, y el maestro quedaba con la URL vieja desactivada.
+
+---
+
 ### Fase 1: Productos (Bulk Upsert)
 
 ```sql

@@ -10,8 +10,11 @@ from datetime import datetime
 # Add root to path to find tools
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared.db_multiconnect import get_targets
-from shared.step3_logic import (latest_scrape_mask, dedup_links, dedup_prices,
-                                should_skip_deactivation, DEACTIVATION_MIN_RATIO)
+from shared.step3_logic import (
+    latest_scrape_mask, dedup_links, dedup_prices,
+    should_skip_deactivation, DEACTIVATION_MIN_RATIO,
+    identity_key, master_index, resolve_products,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -128,10 +131,10 @@ def insert_data_bulk(engine, df, db_name="DB"):
         print("Cargando mapas de referencia (Categorias, Marcas, Tiendas)...")
 
         # Categorias
-        cat_map = {
-            make_key(row.nombre_categoria): row.id_categoria
-            for row in conn.execute(sa.text("SELECT id_categoria, nombre_categoria FROM categorias")).fetchall()
-        }
+        cat_rows = conn.execute(sa.text("SELECT id_categoria, nombre_categoria FROM categorias")).fetchall()
+        cat_map = {make_key(row.nombre_categoria): row.id_categoria for row in cat_rows}
+        cat_name_by_id = {row.id_categoria: row.nombre_categoria for row in cat_rows}
+        known_categories = set(cat_name_by_id.values())
 
         # Subcategorias
         all_subs = conn.execute(sa.text(
@@ -140,6 +143,7 @@ def insert_data_bulk(engine, df, db_name="DB"):
 
         subcat_map    = {}  # key -> id_sub
         fallback_map  = {}  # id_cat -> id_sub ("Otros")
+        cat_name_by_sub = {row.id_subcategoria: cat_name_by_id.get(row.id_categoria) for row in all_subs}
 
         for row in all_subs:
             subcat_map[make_key(row.nombre_subcategoria)] = row.id_subcategoria
@@ -274,7 +278,41 @@ def insert_data_bulk(engine, df, db_name="DB"):
                 db_brand_by_name.update(batch_brand_by_name)
         # ────────────────────────────────────────────────────────────────────
 
-        batch_products = list(products_dedup.values())
+        # ── Identidad (nombre normalizado, marca) SIN subcategoría ─────────────
+        # Si el producto ya existe se reutiliza su id (no se crea otra fila por subcategoría);
+        # dentro del lote gana la mejor subcategoría (mismo puntaje que el step 4).
+        existing_rows = [
+            {"id": r.id_producto, "nombre": r.nombre_producto, "id_marca": r.id_marca,
+             "id_subcategoria": r.id_subcategoria, "cat_name": cat_name_by_sub.get(r.id_subcategoria)}
+            for r in conn.execute(sa.text(
+                "SELECT id_producto, nombre_producto, id_marca, id_subcategoria FROM productos"
+            )).fetchall()
+        ]
+        plan = resolve_products(
+            [{"nombre": prod["nombre_producto"], "id_marca": prod["id_marca"],
+              "id_subcategoria": prod["id_subcategoria"],
+              "cat_name": cat_name_by_sub.get(prod["id_subcategoria"]),
+              "url_imagen": prod["url_imagen"], "url_thumb_imagen": prod["url_thumb_imagen"]}
+             for prod in products_dedup.values()],
+            existing_rows, known_categories,
+        )
+        batch_products = [
+            {"nombre_producto": c["nombre"], "url_imagen": c["url_imagen"],
+             "url_thumb_imagen": c["url_thumb_imagen"], "id_marca": c["id_marca"],
+             "id_subcategoria": c["id_subcategoria"]}
+            for c in plan["insert"]
+        ] + [
+            # maestro existente: pasa por el mismo upsert (conflicto exacto) para refrescar imágenes
+            {"nombre_producto": t["nombre"], "url_imagen": t["url_imagen"],
+             "url_thumb_imagen": t["url_thumb_imagen"], "id_marca": t["id_marca"],
+             "id_subcategoria": t["id_subcategoria"]}
+            for t in plan["touch"]
+        ]
+        print(f"[{db_name}] [Identidad] {len(plan['insert'])} producto(s) nuevo(s), "
+              f"{len(plan['touch'])} reutilizado(s), {plan['collapsed']} fila(s) del lote colapsadas "
+              f"(mismo nombre+marca en otra subcategoría), "
+              f"{len(plan['subcat_updates'])} subcategoría(s) mejorada(s).")
+        # ────────────────────────────────────────────────────────────────────────
         if batch_products:
             print(f"[{db_name}] Insertando/Actualizando {len(batch_products)} productos únicos...")
             try:
@@ -307,16 +345,37 @@ def insert_data_bulk(engine, df, db_name="DB"):
             except Exception as e:
                 print(f"[{db_name}] [ERROR CRITICO] Fallo en bulk insert productos: {e}")
 
-        # Retrieve product ID map
+        # Sube de subcategoría a un producto atrapado en Packs/Ofertas cuando el lote lo trae en
+        # una categoría normal. Protegido contra choque con la clave única (nombre, marca, subcat).
+        if plan["subcat_updates"]:
+            raw_sub = engine.raw_connection()
+            try:
+                with raw_sub.cursor() as cur:
+                    for pid_up, new_sub in plan["subcat_updates"]:
+                        cur.execute("""
+                            UPDATE productos p SET id_subcategoria = %s
+                            WHERE p.id_producto = %s
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM productos q
+                                  WHERE q.id_marca = p.id_marca
+                                    AND q.nombre_producto = p.nombre_producto
+                                    AND q.id_subcategoria = %s)
+                        """, (new_sub, pid_up, new_sub))
+                raw_sub.commit()
+            finally:
+                raw_sub.close()
+
+        # Retrieve product ID map: identidad (nombre normalizado, marca) -> id del maestro
         print("Recuperando IDs de productos...")
-        all_prods = conn.execute(sa.text(
-            "SELECT id_producto, nombre_producto, id_marca, id_subcategoria FROM productos"
-        )).fetchall()
-        prod_id_map = {
-            (make_key(row.nombre_producto), row.id_marca, row.id_subcategoria): row.id_producto
-            for row in all_prods
-        }
-        print(f"Mapa de productos cargado: {len(prod_id_map)} entradas.")
+        all_prods = [
+            {"id": r.id_producto, "nombre": r.nombre_producto, "id_marca": r.id_marca,
+             "id_subcategoria": r.id_subcategoria, "cat_name": cat_name_by_sub.get(r.id_subcategoria)}
+            for r in conn.execute(sa.text(
+                "SELECT id_producto, nombre_producto, id_marca, id_subcategoria FROM productos"
+            )).fetchall()
+        ]
+        prod_id_by_ident = {k: r["id"] for k, r in master_index(all_prods, known_categories).items()}
+        print(f"Mapa de productos cargado: {len(prod_id_by_ident)} identidades.")
 
         # ------------------------------------------------------------------ #
         # FASE 2: PRODUCTO_TIENDA (Bulk Upsert)                               #
@@ -343,8 +402,7 @@ def insert_data_bulk(engine, df, db_name="DB"):
             if not s_id or not t_id:
                 continue
 
-            p_key = make_key(p_display)
-            pid   = prod_id_map.get((p_key, b_id, s_id))
+            pid = prod_id_by_ident.get((identity_key(p_display), b_id))
             if not pid:
                 miss_pid_count += 1
                 if miss_pid_count <= 5:
@@ -576,6 +634,7 @@ def insert_data_bulk(engine, df, db_name="DB"):
 
         price_rows: list = []
         miss_ptid_count = 0
+        secondary_url_prices = 0
 
         # Se recorren TODOS los días: el scrapeo más reciente define el estado actual y
         # los anteriores rellenan historial (la inserción es idempotente, ver más abajo).
@@ -603,8 +662,7 @@ def insert_data_bulk(engine, df, db_name="DB"):
             if not s_id or not t_id:
                 continue
 
-            p_key = make_key(p_display)
-            pid   = prod_id_map.get((p_key, b_id, s_id))
+            pid = prod_id_by_ident.get((identity_key(p_display), b_id))
             if not pid:
                 continue
 
@@ -616,6 +674,14 @@ def insert_data_bulk(engine, df, db_name="DB"):
                 winner = url_winner.get((t_id, make_key(row['link'])))
                 if winner is not None:
                     pid = winner
+
+            # Un producto ahora puede traer dos filas (misma identidad en dos subcategorías) con
+            # URLs distintas para la misma tienda: solo la URL que quedó como enlace aporta precio.
+            if is_latest:
+                kept = links_dedup.get((pid, t_id))
+                if kept is not None and make_key(kept["url_link"]) != make_key(row['link']):
+                    secondary_url_prices += 1
+                    continue
 
             ptid = link_id_map.get((pid, t_id))
             if not ptid:
@@ -634,6 +700,8 @@ def insert_data_bulk(engine, df, db_name="DB"):
                 "site_key":           make_key(str(row.get('site_name', ''))),
             })
 
+        if secondary_url_prices:
+            print(f"  [Identidad] {secondary_url_prices} precio(s) de URLs secundarias omitidos (el producto conserva un solo enlace por tienda).")
         prices_batch = dedup_prices(price_rows, LOWEST_PRICE_SITES)
         if len(prices_batch) != len(price_rows):
             print(f"  Precios deduplicados por (enlace, día): {len(price_rows)} -> {len(prices_batch)}.")
