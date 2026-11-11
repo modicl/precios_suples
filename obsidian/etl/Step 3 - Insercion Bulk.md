@@ -48,6 +48,8 @@ Ahora la Fase 1 llama a `resolve_products` **antes** de insertar:
 - un maestro atrapado en Packs/Ofertas sube a la categoría normal si el lote la trae (con guarda contra la clave única);
 - Fases 2 y 3 buscan el id por identidad. Si una identidad trae dos URLs para la misma tienda, el enlace conserva la de subcategoría específica y solo esa URL aporta precio.
 
+**Step 4 (misma fecha):** pasó a agrupar por la misma identidad (sin tildes ni espacios dobles) en vez de `lower(nombre)`, así elimina también los 26 grupos históricos que la clave vieja no veía. Decisión del usuario: `favoritos`, `alertas` y `notificaciones` (ON DELETE CASCADE) aún no están implementadas al 100 %, por lo que borrar duplicados no se considera riesgo por ahora; revisar al lanzarlas.
+
 **Validación (copia temporal de la BD local, CSV del 10-nov):** el flujo viejo dejaba 282 grupos duplicados tras el step 3 (el step 4 los borraba: 296 productos); el nuevo deja 0 y es idempotente (segunda corrida: 0 productos nuevos). Contra "viejo + step 4": 0 productos con distinta subcategoría, 0 enlaces apuntando a otro producto, +18 fusiones por tildes/espacios, y **+85 enlaces activos**: en el flujo viejo el step 4 borraba el enlace nuevo (URL vigente) del duplicado cuando el maestro ya tenía enlace en esa tienda, y el maestro quedaba con la URL vieja desactivada.
 
 ---

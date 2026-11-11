@@ -2,7 +2,7 @@
 step4_deduplication.py — Deduplica productos en la BD.
 
 Lógica de dedup:
-  - Un "grupo de duplicados" = mismas (lower(nombre_producto), id_marca).
+  - Un "grupo de duplicados" = misma identidad (nombre sin tildes/espacios dobles en minúsculas, id_marca).
     Mismo nombre+marca en DISTINTAS subcategorías = duplicados (se fusionan al mejor).
   - El "maestro" se elige por puntaje:
       +10  si la categoría del producto está en IMPORTANT_CATEGORIES (live desde DB)
@@ -27,6 +27,10 @@ from collections import defaultdict
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared.db_multiconnect import get_targets
+from shared.step3_logic import identity_key
+from collections import namedtuple
+
+_Grupo = namedtuple("_Grupo", ["ids", "names"])
 
 LOW_PRIORITY_KEYWORDS = [
     "oferta", "pack", "promo", "bundle", "especial",
@@ -114,7 +118,7 @@ def fetch_links_bulk(conn, product_ids):
 
 def fix_duplicates(engine, dry_run=False, db_name=""):
     mode_label = "[DRY-RUN] " if dry_run else ""
-    print(f"\n--- {mode_label}Deduplicando Productos [{db_name}] (insensible a mayúsculas, cross-subcategoría) ---")
+    print(f"\n--- {mode_label}Deduplicando Productos [{db_name}] (insensible a mayúsculas/tildes/espacios, cross-subcategoría) ---")
 
     with engine.begin() as conn:
         # Live categories for scoring
@@ -122,21 +126,19 @@ def fix_duplicates(engine, dry_run=False, db_name=""):
         print(f"  Categorías cargadas desde BD: {len(important_categories)}")
 
         # 1. Buscar grupos duplicados
-        #    Clave: (lower(nombre_producto), id_marca)
-        #    Mismo nombre+marca en DISTINTA subcategoría = duplicados (se fusionan al mejor).
+        #    Clave: (identity_key(nombre_producto), id_marca): sin tildes, espacios colapsados y
+        #    en minúsculas (misma identidad que usa el step 3). Mismo nombre+marca en DISTINTA
+        #    subcategoría = duplicados (se fusionan al mejor).
         print("  Buscando grupos de duplicados...")
-        grupos = conn.execute(
-            sa.text("""
-                SELECT
-                    lower(nombre_producto)  AS clean_name,
-                    id_marca,
-                    array_agg(id_producto)     AS ids,
-                    array_agg(nombre_producto) AS names
-                FROM productos
-                GROUP BY lower(nombre_producto), id_marca
-                HAVING count(*) > 1
-            """)
-        ).fetchall()
+        por_identidad = defaultdict(list)
+        for r in conn.execute(sa.text(
+            "SELECT id_producto, nombre_producto, id_marca FROM productos"
+        )).fetchall():
+            por_identidad[(identity_key(r.nombre_producto), r.id_marca)].append(r)
+        grupos = [
+            _Grupo(ids=[r.id_producto for r in rows], names=[r.nombre_producto for r in rows])
+            for rows in por_identidad.values() if len(rows) > 1
+        ]
 
         if not grupos:
             print("  No se encontraron duplicados.")
