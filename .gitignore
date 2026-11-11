@@ -1,5 +1,6 @@
 # Datos
 *.csv
+!diccionario_categorias.csv
 
 # Python
 __pycache__/
