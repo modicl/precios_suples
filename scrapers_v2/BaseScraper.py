@@ -12,6 +12,7 @@ import json
 import time
 import random
 import tempfile
+from urllib.parse import urlparse
 from datetime import datetime
 from playwright.sync_api import sync_playwright, Page, Playwright
 import boto3
@@ -448,6 +449,12 @@ class BaseScraper:
             self._log_info(f"Error HeadObject para {s3_resized_key}: {e}")
             return False
 
+    # Corte rápido de descargas de imágenes por dominio: si un sitio rechaza seguido
+    # (ej: 403/429 a IPs de datacenter), se deja de intentar el resto de la corrida.
+    IMG_FAIL_LIMIT = int(os.environ.get("IMG_FAIL_LIMIT", "8"))
+    _img_fail_streak = {}     # dominio -> fallos consecutivos
+    _img_blocked_hosts = set()
+
     def download_image(self, url: str, subfolder: str = "") -> str:
         """
         Gestiona la imagen con estrategia Fire and Forget:
@@ -486,6 +493,11 @@ class BaseScraper:
                 print(f"[green]   [S3 CACHE] Imagen ya existe (resized): {filename}[/green]")
                 return s3_resized_url
 
+            # Dominio bloqueado en esta corrida: no gastar tiempo reintentando
+            host = urlparse(url).netloc
+            if host in self._img_blocked_hosts:
+                return ""
+
             # 3. Descarga y Subida (Stream) a ORIGINALS
             try:
                 headers = {
@@ -506,7 +518,8 @@ class BaseScraper:
                             import time
                             time.sleep(2)
 
-                if response and response.status_code == 200:
+                if response is not None and response.status_code == 200:
+                    self._img_fail_streak[host] = 0
                     response.raw.decode_content = True
                     
                     # Detectar content-type real si es posible, o fallback
@@ -536,10 +549,18 @@ class BaseScraper:
                         
                     return s3_resized_url
                 else:
-                    status = response.status_code if response else 'Unknown/Timeout'
+                    status = response.status_code if response is not None else 'Timeout/sin respuesta'
                     msg = f"Error {status} descargando: {url}"
                     print(f"[yellow]{msg}[/yellow]")
                     self._log_info(msg)
+                    streak = self._img_fail_streak.get(host, 0) + 1
+                    self._img_fail_streak[host] = streak
+                    if streak >= self.IMG_FAIL_LIMIT:
+                        self._img_blocked_hosts.add(host)
+                        warn = (f"{streak} fallos seguidos descargando imágenes de {host} "
+                                f"(último: {status}). Se omiten las descargas de ese dominio en esta corrida.")
+                        print(f"[red]{warn}[/red]")
+                        self._log_info(warn)
                     return ""
 
             except Exception as e:
