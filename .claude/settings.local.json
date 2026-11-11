@@ -44,7 +44,15 @@
       "Bash(./venv/Scripts/python.exe local_processing_testing/step4_deduplication.py)",
       "Bash(./venv/Scripts/python.exe local_processing_testing/step5_generate_descriptions.py)",
       "Bash(./venv/Scripts/python.exe local_processing_testing/step6_tag_keywords.py)",
-      "Bash(./venv/Scripts/python.exe local_processing_testing/step8_trigger_notificaciones.py)"
+      "Bash(./venv/Scripts/python.exe local_processing_testing/step8_trigger_notificaciones.py)",
+      "Bash(gunzip -c respaldo.sql.gz)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(tasklist /FI \"IMAGENAME eq python.exe\" /FO TABLE)",
+      "Bash(wmic process *)",
+      "WebFetch(domain:www.chilesuplementos.cl)",
+      "Bash(del \"c:\\\\Users\\\\Villa\\\\Documents\\\\proyectos_python\\\\precios_suples\\\\_inspect_chilesuplementos.py\")"
     ]
   }
 }
