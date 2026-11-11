@@ -1,0 +1,15 @@
+# Cloud Build: construye la imagen del scraper y la sube a Artifact Registry.
+# Se usa desde un activador (trigger) de Cloud Build apuntando a este archivo.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/scraper/scraper:latest
+      - .
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/scraper/scraper:latest
+timeout: 1800s
+options:
+  # Requerido cuando el activador usa una cuenta de servicio propia (sin bucket de logs).
+  logging: CLOUD_LOGGING_ONLY
