@@ -32,7 +32,7 @@ from dotenv import load_dotenv
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from shared.llm_client import GeminiClient, MISSING_KEY_MSG, get_api_key, get_model, setup_llm_logger
+from shared.llm_client import print_progress, GeminiClient, MISSING_KEY_MSG, get_api_key, get_model, setup_llm_logger
 
 # ---------------------------------------------------------------------------
 # Config
@@ -139,6 +139,30 @@ def fetch_products(conn, *, force: bool) -> list[dict]:
     """)
 
     return [dict(r) for r in cur.fetchall()]
+
+
+SAVE_BATCH = 100   # descripciones por commit: si el job muere, solo se pierde el lote en curso
+
+
+def save_batch(targets: list, items: dict, logger=None) -> int:
+    """Guarda {id_producto: descripcion} en TODOS los targets con una conexion y un commit por target."""
+    if not items:
+        return 0
+    for target in targets:
+        try:
+            conn = get_conn(target["url"])
+            cur = conn.cursor()
+            cur.executemany(
+                "UPDATE productos SET descripcion_llm = %s WHERE id_producto = %s",
+                [(d, pid) for pid, d in items.items()],
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"\n  [WARN] Error guardando lote en {target['name']}: {e}")
+            if logger:
+                logger.error(f"BD [{target['name']}] ERROR guardando lote de {len(items)}: {e}")
+    return len(items)
 
 
 def save_description(conn, producto_id: int, descripcion: str):
@@ -250,6 +274,8 @@ async def run(args, targets: list):
     error_count = 0
     errors      = []
     results     = {}   # {id_producto: descripcion}
+    pending     = {}   # lote aun sin guardar en BD
+    saved       = 0
     t_start     = time.time()
 
     for i, coro in enumerate(asyncio.as_completed(tasks), 1):
@@ -264,13 +290,18 @@ async def run(args, targets: list):
             ok_count += 1
             status = "OK   "
             results[pid] = desc
+            if not args.dry_run:
+                pending[pid] = desc
+                if len(pending) >= SAVE_BATCH:
+                    saved += save_batch(targets, pending, logger)
+                    pending = {}
 
         rps = i / elapsed if elapsed > 0 else 0
         eta = (total - i) / rps if rps > 0 else 0
-        print(
+        print_progress(
             f"  [{i:>4}/{total}] [{status}] id={pid:<6} "
             f"({elapsed:.0f}s elapsed, ETA {eta:.0f}s)",
-            end="\r" if not args.dry_run else "\n",
+            i, total, newline=args.dry_run,
         )
 
     elapsed_total = time.time() - t_start
@@ -287,21 +318,11 @@ async def run(args, targets: list):
         for pid, err in errors:
             print(f"    id={pid}: {err[:120]}")
 
-    # 3. Guardar los mismos resultados en TODOS los targets
+    # 3. Guardar el ultimo lote pendiente (los anteriores se guardaron durante la generacion)
     if not args.dry_run and results:
-        print(f"\n  Guardando {len(results)} descripciones en {len(targets)} BD(s)...")
-        for target in targets:
-            print(f"    [{target['name']}]...")
-            try:
-                conn = get_conn(target["url"])
-                for pid, desc in results.items():
-                    save_description(conn, pid, desc)
-                conn.close()
-                print(f"    [{target['name']}] OK")
-                logger.info(f"BD [{target['name']}] OK: {len(results)} descripciones guardadas")
-            except Exception as e:
-                print(f"    [{target['name']}] ERROR: {e}")
-                logger.error(f"BD [{target['name']}] ERROR guardando descripciones: {e}")
+        saved += save_batch(targets, pending, logger)
+        print(f"\n  Guardadas {saved} descripciones en {len(targets)} BD(s) (lotes de {SAVE_BATCH})")
+        logger.info(f"BD guardada: {saved} descripciones en {[t['name'] for t in targets]}")
 
     client.log_summary(
         f"productos={total} generados={ok_count} fallidos={error_count} "

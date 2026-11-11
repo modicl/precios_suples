@@ -41,7 +41,7 @@ from dotenv import load_dotenv
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from shared.llm_client import GeminiClient, MISSING_KEY_MSG, get_api_key, get_model, setup_llm_logger
+from shared.llm_client import print_progress, GeminiClient, MISSING_KEY_MSG, get_api_key, get_model, setup_llm_logger
 
 load_dotenv()
 
@@ -168,6 +168,27 @@ def fetch_products(conn, *, force: bool) -> list[dict]:
         ORDER BY p.id_producto
     """)
     return [dict(r) for r in cur.fetchall()]
+
+
+SAVE_BATCH = 100   # tags por commit: si el job muere, solo se pierde el lote en curso
+
+
+def save_tags_batch(targets: list[dict], items: dict):
+    """Guarda {id_producto: tags} en todos los targets con una conexion y un commit por target."""
+    if not items:
+        return
+    for target in targets:
+        try:
+            conn = get_conn(target["url"])
+            cur = conn.cursor()
+            cur.executemany(
+                "UPDATE productos SET tags = %s WHERE id_producto = %s",
+                [(tags, pid) for pid, tags in items.items()],
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"\n  [WARN] Error guardando lote de tags en {target['name']}: {e}")
 
 
 def save_tags(targets: list[dict], producto_id: int, tags: list[str]):
@@ -378,6 +399,7 @@ async def run(args):
     error_count = 0
     errors      = []
     all_results = []   # Para el reporte CSV
+    pending_tags = {}  # lote aun sin guardar en BD
     t_start     = time.time()
 
     for i, coro in enumerate(asyncio.as_completed(tasks), 1):
@@ -393,7 +415,10 @@ async def run(args):
             ok_count += 1
             status = "OK   "
             if not args.dry_run:
-                save_tags(targets, pid, tags)
+                pending_tags[pid] = tags
+                if len(pending_tags) >= SAVE_BATCH:
+                    save_tags_batch(targets, pending_tags)
+                    pending_tags = {}
             all_results.append({
                 **row,
                 "tags":               tags,
@@ -402,12 +427,14 @@ async def run(args):
 
         rps = i / elapsed if elapsed > 0 else 0
         eta = (total - i) / rps if rps > 0 else 0
-        print(
+        print_progress(
             f"  [{i:>4}/{total}] [{status}] id={pid:<6} "
             f"({elapsed:.0f}s elapsed, ETA {eta:.0f}s)",
-            end="\r" if not args.dry_run else "\n",
+            i, total, newline=args.dry_run,
         )
 
+    if pending_tags and not args.dry_run:
+        save_tags_batch(targets, pending_tags)   # ultimo lote
     elapsed_total = time.time() - t_start
     print()
     print(f"\n{'='*50}")

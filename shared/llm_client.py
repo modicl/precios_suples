@@ -59,9 +59,30 @@ def setup_llm_logger(step: str) -> tuple[logging.Logger, str]:
     logger.setLevel(logging.INFO)
     logger.propagate = False   # no duplicar en el root logger
     handler = logging.FileHandler(path, encoding="utf-8")
-    handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S"))
+    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S")
+    handler.setFormatter(fmt)
     logger.addHandler(handler)
+    # Sin terminal (Cloud Run / main.py): el contenedor es efimero, asi que el log del LLM
+    # tambien sale por stdout para quedar en Cloud Logging. En terminal se mantiene solo el archivo.
+    if os.environ.get("LLM_LOG_STDOUT", "0" if sys.stdout.isatty() else "1") == "1":
+        sh = logging.StreamHandler(sys.stdout)
+        sh.setFormatter(fmt)
+        logger.addHandler(sh)
     return logger, path
+
+
+def print_progress(line: str, i: int, total: int, every: int = 100, newline: bool = False):
+    """
+    Progreso de una tarea larga. En terminal usa retorno de carro (sobrescribe la linea);
+    sin terminal (Cloud Run) imprime una linea normal cada `every` items y al final, porque el
+    retorno de carro hace que Cloud Logging junte todo en una linea gigante que llega con retraso.
+    """
+    if newline:
+        print(line)
+    elif sys.stdout.isatty():
+        print(line, end="\r")
+    elif i % every == 0 or i == total:
+        print(line, flush=True)
 
 
 def _null_logger() -> logging.Logger:

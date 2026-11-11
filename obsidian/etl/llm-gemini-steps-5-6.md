@@ -30,3 +30,9 @@ Cómo revisarlo rápido: `grep -c " OK " <log>`, `grep -E "FALLO|INCOMPLETA|VACI
 Una respuesta con `finish_reason` distinto de `STOP` (ej. `MAX_TOKENS`) se trata como error y se reintenta: antes habría guardado descripciones cortadas en la BD.
 
 Relacionado: [[optimizacion-cpu-scraping-v1]] (misma rama `optimizado-v1`).
+
+## Ejecución en Cloud Run (2026-11-11)
+Primera corrida completa en [[cloud-run-jobs-migracion]]: step 5 (4.280 productos, 11 min) y step 6 (4.295 productos, 19 min). Problemas vistos y cambios:
+- **Logs perdidos:** el contenedor es efímero, así que `logs/llm/*.log` desaparecía. Sin terminal, `setup_llm_logger` ahora también escribe a stdout (`LLM_LOG_STDOUT=1|0` para forzarlo).
+- **Progreso:** el `\r` hacía que Cloud Logging juntara todo en una línea gigante recibida con minutos de retraso. `print_progress` usa `\r` solo con terminal; sin terminal imprime una línea cada 100 ítems.
+- **Guardado por lotes (100):** step 5 guardaba todo al final (si el job moría se perdían las descripciones ya pagadas) y step 6 abría una conexión por producto. Ambos usan ahora `executemany` con un commit por lote.
