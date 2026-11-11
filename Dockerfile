@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright/python:v1.57.0-jammy
+FROM mcr.microsoft.com/playwright/python:v1.57.0-noble
 
 # Logs en tiempo real en Cloud Run (sin buffering de Python)
 ENV PYTHONUNBUFFERED=1
